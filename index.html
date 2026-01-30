@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Desktop Pet</title>
+  <link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <div class="mood-indicator" :class="moodClass">
+        {{ moodText }}
+      </div>
+      <button class="icon-btn" @click="showSettings = true" title="设置">⚙️</button>
+    </div>
+
+    <!-- 宠物显示区域 -->
+    <div class="pet-container"
+         @mousedown="startDrag"
+         @mouseup="stopDrag"
+         @click="handlePetClick">
+      <div class="pet-emoji" :class="{ 'low-mood': isLowMood }">
+        {{ currentPet }}
+      </div>
+
+      <!-- 对话气泡 -->
+      <div class="bubble" v-if="showBubble">
+        <div class="bubble-content">
+          {{ currentMessage }}
+        </div>
+        <div class="bubble-arrow"></div>
+      </div>
+
+      <!-- 输入框 -->
+      <div class="input-container" v-if="showInput">
+        <input
+          type="text"
+          v-model="userInput"
+          @keyup.enter="sendMessage"
+          placeholder="和我说点什么..."
+          ref="messageInput"
+          class="message-input"
+        />
+        <button @click="sendMessage" class="send-btn">发送</button>
+      </div>
+    </div>
+
+    <!-- 底部按钮 -->
+    <div class="bottom-bar">
+      <button class="btn" @click="showHistory = true">
+        📜 对话历史
+      </button>
+      <button class="btn" @click="showSettings = true">
+        ⚙️ 设置
+      </button>
+    </div>
+
+    <!-- 历史记录面板 -->
+    <div class="modal" v-if="showHistory" @click.self="showHistory = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>对话历史</h2>
+          <button class="close-btn" @click="showHistory = false">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="history-list">
+            <div
+              v-for="(msg, index) in chatHistory"
+              :key="index"
+              class="history-item"
+              :class="msg.role"
+            >
+              <span class="role">{{ msg.role === 'user' ? '你' : '宠物' }}</span>
+              <span class="content">{{ msg.content }}</span>
+              <span class="time">{{ formatTime(msg.timestamp) }}</span>
+            </div>
+            <div v-if="chatHistory.length === 0" class="empty-state">
+              还没有对话记录哦~
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-danger" @click="clearHistory">清空历史</button>
+          <button class="btn btn-secondary" @click="showHistory = false">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设置面板 -->
+    <div class="modal" v-if="showSettings" @click.self="showSettings = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>设置</h2>
+          <button class="close-btn" @click="showSettings = false">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-group">
+            <h3>选择宠物</h3>
+            <div class="pet-selector">
+              <div
+                v-for="pet in pets"
+                :key="pet"
+                class="pet-option"
+                :class="{ active: currentPet === pet }"
+                @click="selectPet(pet)"
+              >
+                {{ pet }}
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <h3>选择性格</h3>
+            <div class="personality-selector">
+              <div
+                v-for="(p, key) in personalities"
+                :key="key"
+                class="personality-option"
+                :class="{ active: currentPersonality === key }"
+                @click="selectPersonality(key)"
+              >
+                <div class="personality-emoji">{{ p.emoji }}</div>
+                <div class="personality-info">
+                  <div class="personality-name">{{ p.name }}</div>
+                  <div class="personality-desc">{{ p.desc }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <h3>功能开关</h3>
+            <label class="toggle-label">
+              <input type="checkbox" v-model="settings.autoSpeak" />
+              <span>主动说话</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-danger" @click="resetData">重置所有数据</button>
+          <button class="btn" @click="showSettings = false">完成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="src/storage.js"></script>
+  <script src="src/prompts.js"></script>
+  <script src="src/api.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
