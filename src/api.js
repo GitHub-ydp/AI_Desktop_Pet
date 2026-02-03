@@ -1,16 +1,27 @@
 // API 模块
 
-// 从环境变量获取 API 密钥（通过主进程安全获取）
-const getAPIKey = () => {
+// 从环境变量获取 API 配置（通过主进程安全获取）
+const getAPIConfig = async () => {
   try {
-    return window.electron?.getAPIKey() || '';
+    return await window.electron?.getAPIKey() || {
+      deepseek: '',
+      qwen: '',
+      primary: 'qwen'
+    };
   } catch (error) {
-    console.error('Failed to get API key:', error);
-    return '';
+    console.error('Failed to get API config:', error);
+    return {
+      deepseek: '',
+      qwen: '',
+      primary: 'qwen'
+    };
   }
 };
 
-const API_URL = 'https://api.deepseek.com/v1/chat/completions';
+const API_URLS = {
+  deepseek: 'https://api.deepseek.com/v1/chat/completions',
+  qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
+};
 let isCallingAPI = false;
 
 // 记忆系统 - 通过 IPC 与主进程通信
@@ -137,20 +148,75 @@ async function fetchWithTimeout(url, options, timeout = 15000) {
   });
 }
 
-async function callDeepSeekAPI(messages, personality) {
+async function callAIProvider(messages, personality) {
   if (isCallingAPI) return '请稍等，我还在思考~';
 
   isCallingAPI = true;
 
   try {
-    const apiKey = getAPIKey();
+    const config = await getAPIConfig();
 
-    if (!apiKey) {
-      console.error('API key not configured');
+    // 优先使用通义千问（如果配置了）
+    if (config.primary === 'qwen' && config.qwen) {
+      return await callQwenAPI(messages, personality, config.qwen);
+    } else if (config.deepseek) {
+      return await callDeepSeekAPI(messages, personality, config.deepseek);
+    } else {
+      console.error('No API key configured');
       return getMockResponse(personality, messages);
     }
+  } catch (error) {
+    console.log('API error, using mock response');
+    return getMockResponse(personality, messages);
+  } finally {
+    isCallingAPI = false;
+  }
+}
 
-    const response = await fetchWithTimeout(API_URL, {
+// 调用通义千问 API
+async function callQwenAPI(messages, personality, apiKey) {
+  try {
+    const response = await fetchWithTimeout(API_URLS.qwen, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'qwen-plus',
+        input: {
+          messages
+        },
+        parameters: {
+          result_format: 'message',
+          max_tokens: 100,
+          temperature: 0.8
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Qwen API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.output.choices[0].message.content.trim();
+  } catch (error) {
+    console.error('Qwen API failed:', error);
+    // 降级到 DeepSeek（如果可用）
+    const config = await getAPIConfig();
+    if (config.deepseek) {
+      console.log('Falling back to DeepSeek API');
+      return await callDeepSeekAPI(messages, personality, config.deepseek);
+    }
+    throw error;
+  }
+}
+
+// 调用 DeepSeek API
+async function callDeepSeekAPI(messages, personality, apiKey) {
+  try {
+    const response = await fetchWithTimeout(API_URLS.deepseek, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -158,25 +224,21 @@ async function callDeepSeekAPI(messages, personality) {
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
-        messages: messages,
+        messages,
         max_tokens: 100,
         temperature: 0.8
       })
     });
 
     if (!response.ok) {
-      // API 出错时使用模拟回复
-      return getMockResponse(personality, messages);
+      throw new Error(`DeepSeek API error: ${response.status}`);
     }
 
     const data = await response.json();
     return data.choices[0].message.content.trim();
-
   } catch (error) {
-    console.log('API error, using mock response');
-    return getMockResponse(personality, messages);
-  } finally {
-    isCallingAPI = false;
+    console.error('DeepSeek API failed:', error);
+    throw error;
   }
 }
 
@@ -250,7 +312,7 @@ async function chatWithAI(userMessage, personality, chatHistory) {
   // 异步保存用户消息到记忆系统
   saveConversationToMemory('user', userMessage, { personality });
 
-  const response = await callDeepSeekAPI(messages, personality);
+  const response = await callAIProvider(messages, personality);
 
   // 异步保存 AI 回复到记忆系统
   saveConversationToMemory('assistant', response, { personality });
@@ -295,9 +357,10 @@ function getMockResponse(personality, messages) {
 
 window.PetAPI = {
   chatWithAI,
-  isConfigured: () => {
-    const apiKey = getAPIKey();
-    return apiKey && apiKey.length > 0;
+  isConfigured: async () => {
+    const config = await getAPIConfig();
+    return (config.qwen && config.qwen.length > 0) ||
+           (config.deepseek && config.deepseek.length > 0);
   },
   // 查看记忆
   getMemoryFacts: getUserFacts,
@@ -305,5 +368,14 @@ window.PetAPI = {
   clearMemory: () => {
     localStorage.removeItem(MEMORY_KEY);
     console.log('记忆已清空');
+  },
+  // 获取提供商信息
+  getProvidersInfo: async () => {
+    try {
+      return await window.electron?.getProvidersInfo() || {};
+    } catch (error) {
+      console.error('Failed to get providers info:', error);
+      return {};
+    }
   }
 };

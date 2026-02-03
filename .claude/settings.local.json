@@ -33,7 +33,17 @@
       "Bash(npm rebuild:*)",
       "mcp__zread__get_repo_structure",
       "Bash(sqlite3:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(git remote add origin:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(git remote remove:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(ssh:*)",
+      "Bash(git archive:*)",
+      "mcp__web-search-prime__webSearchPrime",
+      "mcp__zread__read_file",
+      "mcp__zread__search_doc"
     ]
   }
 }

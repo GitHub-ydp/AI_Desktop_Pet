@@ -1,10 +1,36 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
 const path = require('path');
 const MemoryMainProcess = require('./main-process/memory');
+const providerFactory = require('./main-process/providers/factory');
 
 let mainWindow = null;
 let tray = null;
 let memorySystem = null;
+
+// 加载环境变量
+function loadEnv() {
+  try {
+    // 尝试读取 .env 文件（如果存在）
+    const fs = require('fs');
+    const envPath = path.join(app.getPath('userData'), '.env');
+
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf-8');
+      envContent.split('\n').forEach(line => {
+        const [key, ...valueParts] = line.split('=');
+        if (key && valueParts.length > 0) {
+          const value = valueParts.join('=').trim();
+          if (value && !value.startsWith('#')) {
+            process.env[key.trim()] = value;
+          }
+        }
+      });
+      console.log('Environment variables loaded from .env');
+    }
+  } catch (error) {
+    console.warn('Failed to load .env file:', error.message);
+  }
+}
 
 // 创建主窗口
 function createWindow() {
@@ -126,11 +152,32 @@ app.whenReady().then(async () => {
   console.log('Setting auto launch...');
   setAutoLaunch();
 
-  // 初始化记忆系统
+  // 初始化提供商系统
+  console.log('Initializing AI providers...');
+  try {
+    const providersInitialized = providerFactory.initialize({
+      qwenApiKey: process.env.QWEN_API_KEY || '',
+      deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
+      primary: process.env.PRIMARY_PROVIDER || 'qwen',
+      qwenModel: process.env.QWEN_MODEL || 'qwen-plus',
+      qwenEmbeddingModel: process.env.QWEN_EMBEDDING_MODEL || 'text-embedding-v2'
+    });
+
+    if (providersInitialized) {
+      console.log('AI providers initialized successfully');
+      console.log('Providers info:', providerFactory.getProvidersInfo());
+    } else {
+      console.warn('No AI providers initialized, app may not function properly');
+    }
+  } catch (error) {
+    console.error('Failed to initialize AI providers:', error);
+  }
+
+  // 初始化记忆系统（传入提供商工厂）
   console.log('Initializing memory system...');
   try {
     memorySystem = new MemoryMainProcess({
-      apiKey: process.env.DEEPSEEK_API_KEY || ''
+      providerFactory: providerFactory
     });
     await memorySystem.initialize();
     // 注册 IPC handlers
@@ -185,7 +232,16 @@ ipcMain.handle('get-app-version', () => {
 
 // 安全地获取 API 密钥（从环境变量）
 ipcMain.handle('get-api-key', () => {
-  return process.env.DEEPSEEK_API_KEY || '';
+  return {
+    deepseek: process.env.DEEPSEEK_API_KEY || '',
+    qwen: process.env.QWEN_API_KEY || '',
+    primary: process.env.PRIMARY_PROVIDER || 'qwen'
+  };
+});
+
+// 获取提供商信息
+ipcMain.handle('get-providers-info', () => {
+  return providerFactory.getProvidersInfo();
 });
 
 // 防止多实例运行

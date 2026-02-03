@@ -1,16 +1,14 @@
 // 嵌入服务
-// 负责生成文本向量嵌入
+// 负责生成文本向量嵌入（使用提供商系统）
 // CommonJS 版本 - 用于主进程
 
 const { MEMORY_CONFIG } = require('./config');
 const crypto = require('crypto');
-const https = require('https');
+const providerFactory = require('./providers/factory');
 
 class EmbeddingService {
   constructor(options = {}) {
     this.config = {
-      apiKey: options.apiKey || '',
-      model: options.model || MEMORY_CONFIG.embeddings.model,
       dimensions: options.dimensions || MEMORY_CONFIG.embeddings.dimensions,
       batchSize: options.batchSize || MEMORY_CONFIG.embeddings.batchSize,
       timeout: options.timeout || MEMORY_CONFIG.embeddings.timeout,
@@ -18,6 +16,7 @@ class EmbeddingService {
       retryDelay: options.retryDelay || MEMORY_CONFIG.embeddings.retryDelay
     };
     this.storage = options.storage || null;
+    this.providerFactory = options.providerFactory || providerFactory;
     this.cacheHits = 0;
     this.cacheMisses = 0;
   }
@@ -25,6 +24,20 @@ class EmbeddingService {
   // 设置存储实例
   setStorage(storage) {
     this.storage = storage;
+  }
+
+  // 获取嵌入提供商
+  getEmbeddingProvider() {
+    if (!this.providerFactory) {
+      throw new Error('Provider factory not initialized');
+    }
+
+    const provider = this.providerFactory.getEmbeddingProvider();
+    if (!provider) {
+      throw new Error('No embedding provider available. Please configure QWEN_API_KEY.');
+    }
+
+    return provider;
   }
 
   // 生成文本嵌入（带缓存）
@@ -42,12 +55,14 @@ class EmbeddingService {
 
     this.cacheMisses++;
 
-    // 调用 API 生成嵌入
-    const embedding = await this.callEmbeddingAPI(text);
+    // 使用提供商生成嵌入
+    const provider = this.getEmbeddingProvider();
+    const embedding = await provider.embed(text);
 
     // 保存到缓存
     if (this.storage && embedding) {
-      this.storage.saveEmbeddingCache(hash, embedding, this.config.model);
+      const modelName = provider.getInfo().models.embedding;
+      this.storage.saveEmbeddingCache(hash, embedding, modelName);
     }
 
     return embedding;
@@ -55,6 +70,10 @@ class EmbeddingService {
 
   // 批量生成嵌入
   async embedBatch(texts) {
+    if (!texts || texts.length === 0) {
+      return [];
+    }
+
     const results = [];
     const toFetch = [];
     const hashes = [];
@@ -78,9 +97,10 @@ class EmbeddingService {
       results.push(null);
     }
 
-    // 批量调用 API
+    // 批量调用提供商 API
     if (toFetch.length > 0) {
-      const embeddings = await this.callBatchEmbeddingAPI(toFetch.map(t => t.text));
+      const provider = this.getEmbeddingProvider();
+      const embeddings = await provider.embedBatch(toFetch.map(t => t.text));
 
       for (let i = 0; i < toFetch.length; i++) {
         const { text, index } = toFetch[i];
@@ -90,7 +110,8 @@ class EmbeddingService {
 
         // 保存到缓存
         if (this.storage && embedding) {
-          this.storage.saveEmbeddingCache(hashes[index], embedding, this.config.model);
+          const modelName = provider.getInfo().models.embedding;
+          this.storage.saveEmbeddingCache(hashes[index], embedding, modelName);
         }
       }
     }
@@ -98,204 +119,9 @@ class EmbeddingService {
     return results;
   }
 
-  // 调用嵌入 API
-  async callEmbeddingAPI(text) {
-    const url = 'https://api.deepseek.com/v1/embeddings';
-
-    // DeepSeek 可能没有嵌入 API，直接使用 fallback
-    // 如果将来支持，可以取消注释下面的代码
-    /*
-    for (let attempt = 0; attempt < this.config.retryAttempts; attempt++) {
-      try {
-        const response = await this.fetchWithTimeout(url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.config.apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'text-embedding-ada-002', // 临时使用，等待 DeepSeek 官方嵌入模型
-            input: text
-          })
-        }, this.config.timeout);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data.data[0].embedding;
-
-      } catch (error) {
-        console.error(`Embedding API attempt ${attempt + 1} failed:`, error);
-
-        if (attempt < this.config.retryAttempts - 1) {
-          await this.delay(this.config.retryDelay * (attempt + 1));
-        } else {
-          // 最后一次尝试失败，返回模拟嵌入
-          console.warn('Using fallback embedding for text:', text.substring(0, 50));
-          return this.getFallbackEmbedding(text);
-        }
-      }
-    }
-    */
-
-    // 直接使用 fallback，避免 API 调用失败
-    return this.getFallbackEmbedding(text);
-  }
-
-  // 批量调用嵌入 API（真正的批量实现）
-  async callBatchEmbeddingAPI(texts) {
-    if (!texts || texts.length === 0) {
-      return [];
-    }
-
-    // DeepSeek 支持批量嵌入 API
-    const url = 'https://api.deepseek.com/v1/embeddings';
-
-    // 批次处理（DeepSeek 单次最多支持多少条需要确认，这里假设 20 条）
-    const MAX_BATCH_SIZE = 20;
-
-    // 如果数量少，直接批量调用
-    if (texts.length <= MAX_BATCH_SIZE) {
-      return await this.fetchBatchEmbeddings(url, texts);
-    }
-
-    // 分批并行处理
-    const batches = [];
-    for (let i = 0; i < texts.length; i += MAX_BATCH_SIZE) {
-      batches.push(texts.slice(i, i + MAX_BATCH_SIZE));
-    }
-
-    // 并行调用所有批次
-    const results = await Promise.all(
-      batches.map(batch => this.fetchBatchEmbeddings(url, batch))
-    );
-
-    // 合并结果
-    return results.flat();
-  }
-
-  // 获取批量嵌入
-  async fetchBatchEmbeddings(url, texts) {
-    for (let attempt = 0; attempt < this.config.retryAttempts; attempt++) {
-      try {
-        const response = await this.fetchWithTimeout(url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.config.apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'text-embedding-ada-002', // 临时使用，等待 DeepSeek 官方嵌入模型
-            input: texts  // 批量输入
-          })
-        }, this.config.timeout);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        // 返回所有嵌入向量
-        return data.data.map(item => item.embedding);
-
-      } catch (error) {
-        console.error(`Batch embedding API attempt ${attempt + 1} failed:`, error);
-
-        if (attempt < this.config.retryAttempts - 1) {
-          await this.delay(this.config.retryDelay * (attempt + 1));
-        } else {
-          // 最后一次尝试失败，返回模拟嵌入
-          console.warn(`Using fallback embeddings for batch of ${texts.length} texts`);
-          return texts.map(text => this.getFallbackEmbedding(text));
-        }
-      }
-    }
-  }
-
-  // 带超时的 fetch（使用 https 模块）
-  fetchWithTimeout(url, options, timeout) {
-    return new Promise((resolve, reject) => {
-      const urlObj = new URL(url);
-      const requestOptions = {
-        method: options.method,
-        headers: options.headers,
-        timeout: timeout
-      };
-
-      const req = https.request(urlObj, requestOptions, (res) => {
-        let data = '';
-
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-
-        res.on('end', () => {
-          clearTimeout(timer);
-          try {
-            const jsonData = JSON.parse(data);
-            resolve({
-              ok: res.statusCode >= 200 && res.statusCode < 300,
-              status: res.statusCode,
-              json: async () => jsonData
-            });
-          } catch (e) {
-            resolve({
-              ok: res.statusCode >= 200 && res.statusCode < 300,
-              status: res.statusCode,
-              json: async () => { throw e; }
-            });
-          }
-        });
-      });
-
-      req.on('error', (err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-
-      if (options.body) {
-        req.write(options.body);
-      }
-
-      req.end();
-
-      const timer = setTimeout(() => {
-        req.destroy();
-        reject(new Error('timeout'));
-      }, timeout);
-    });
-  }
-
   // 文本哈希（用于缓存）
   hashText(text) {
     return crypto.createHash('md5').update(text).digest('hex');
-  }
-
-  // 延迟函数
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  // 后备嵌入（当 API 失败时使用）
-  getFallbackEmbedding(text) {
-    // 简单的字符级哈希嵌入
-    const dimensions = this.config.dimensions;
-    const embedding = new Array(dimensions).fill(0);
-
-    // 使用字符的 Unicode 值生成简单的向量
-    for (let i = 0; i < text.length && i < dimensions; i++) {
-      const charCode = text.charCodeAt(i);
-      embedding[i] = (charCode % 100) / 100; // 归一化到 0-1
-    }
-
-    // 填充剩余维度
-    for (let i = text.length; i < dimensions; i++) {
-      embedding[i] = (i % 10) / 100;
-    }
-
-    return embedding;
   }
 
   // 计算余弦相似度
@@ -331,6 +157,19 @@ class EmbeddingService {
   resetCacheStats() {
     this.cacheHits = 0;
     this.cacheMisses = 0;
+  }
+
+  // 获取提供商信息
+  getProviderInfo() {
+    try {
+      const provider = this.getEmbeddingProvider();
+      return provider.getInfo();
+    } catch (error) {
+      return {
+        error: error.message,
+        available: false
+      };
+    }
   }
 }
 

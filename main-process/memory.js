@@ -9,20 +9,25 @@ const FactExtractor = require('./extractor');
 const ContextBuilder = require('./context');
 const TextChunker = require('./chunker');
 const { MEMORY_CONFIG } = require('./config');
+const providerFactory = require('./providers/factory');
 
 class MemoryMainProcess {
   constructor(options = {}) {
     this.options = {
       databasePath: options.databasePath || null,
-      apiKey: options.apiKey || '',
+      providerFactory: options.providerFactory || providerFactory,
       personality: options.personality || 'healing'
     };
 
     // 模块实例
     this.storage = new MemoryStorage(this.options.databasePath);
-    this.embeddingService = new EmbeddingService({ apiKey: this.options.apiKey });
+    this.embeddingService = new EmbeddingService({
+      providerFactory: this.options.providerFactory
+    });
     this.searchEngine = new MemorySearchEngine();
-    this.factExtractor = new FactExtractor({ apiKey: this.options.apiKey });
+    this.factExtractor = new FactExtractor({
+      providerFactory: this.options.providerFactory
+    });
     this.contextBuilder = new ContextBuilder();
     this.textChunker = new TextChunker();
 
