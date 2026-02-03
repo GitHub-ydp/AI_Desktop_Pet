@@ -1,6 +1,15 @@
 // API 模块
 
-const API_KEY = 'sk-13728a2d69ca41698bb5ad752194a14f';
+// 从环境变量获取 API 密钥（通过主进程安全获取）
+const getAPIKey = () => {
+  try {
+    return window.electron?.getAPIKey() || '';
+  } catch (error) {
+    console.error('Failed to get API key:', error);
+    return '';
+  }
+};
+
 const API_URL = 'https://api.deepseek.com/v1/chat/completions';
 let isCallingAPI = false;
 
@@ -134,10 +143,17 @@ async function callDeepSeekAPI(messages, personality) {
   isCallingAPI = true;
 
   try {
+    const apiKey = getAPIKey();
+
+    if (!apiKey) {
+      console.error('API key not configured');
+      return getMockResponse(personality, messages);
+    }
+
     const response = await fetchWithTimeout(API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -279,7 +295,10 @@ function getMockResponse(personality, messages) {
 
 window.PetAPI = {
   chatWithAI,
-  isConfigured: () => API_KEY !== 'YOUR_DEEPSEEK_API_KEY_HERE',
+  isConfigured: () => {
+    const apiKey = getAPIKey();
+    return apiKey && apiKey.length > 0;
+  },
   // 查看记忆
   getMemoryFacts: getUserFacts,
   // 清空记忆

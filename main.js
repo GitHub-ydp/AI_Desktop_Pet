@@ -183,6 +183,11 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+// 安全地获取 API 密钥（从环境变量）
+ipcMain.handle('get-api-key', () => {
+  return process.env.DEEPSEEK_API_KEY || '';
+});
+
 // 防止多实例运行
 const gotTheLock = app.requestSingleInstanceLock();
 

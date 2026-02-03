@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electron', {
   moveWindow: (deltaX, deltaY) => ipcRenderer.invoke('move-window', deltaX, deltaY),
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getAPIKey: () => ipcRenderer.invoke('get-api-key'),
   onWindowMove: (callback) => {
     ipcRenderer.on('window-move', callback);
   }
