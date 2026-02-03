@@ -62,10 +62,109 @@ User Interaction → app-vanilla.js → PetStorage/PetAPI → UI Updates
 
 **Mood System:** 0-100 scale stored in LocalStorage. Mood decays 10 points every 2 hours without interaction. Interactions increase mood.
 
-**Storage:** All data in LocalStorage with keys:
-- `pet_data` - emoji, personality, mood, lastInteraction
-- `chat_history` - up to 500 messages
-- `settings` - autoSpeak toggle, etc.
+**Memory System (NEW):** Persistent memory system with SQLite database (`main-process/`):
+- Conversations storage with timestamp, role, personality, mood
+- Text chunking for efficient retrieval
+- Keyword-based semantic search with temporal decay
+- Time-aware memory weighting (recent memories prioritized)
+- Mood-similar memory boosting
+- LRU cache eviction (prepared for future embedding use)
+
+**Storage:**
+- **LocalStorage:** `pet_data`, `chat_history`, `settings` (legacy)
+- **SQLite:** `pet-memory.db` (conversations, memory_chunks, memory_facts, embedding_cache)
+
+## Memory System Architecture (2025-01 Implementation)
+
+### Overview
+The memory system enables the AI pet to remember and recall past conversations, creating a sense of continuity and personalization. Unlike traditional chatbots that only see the current message, our pet can reference historical context.
+
+### Core Components
+
+#### 1. Database Schema (`main-process/schema.sql`)
+```
+conversations         - Full conversation records
+memory_chunks        - Text chunks for search (simplified: one chunk per conversation)
+memory_facts         - Extracted structured information (prepared for future use)
+embedding_cache      - Vector embedding cache (prepared for future embedding API)
+```
+
+#### 2. Search Engine (`main-process/search.js`)
+- **Keyword Search**: Fast (<1ms) text-based matching
+- **Temporal Decay**: Recent memories weighted higher
+  - 24h: 1.5x boost
+  - 7 days: 1.2x boost
+  - 30+ days: 0.7x penalty
+- **Mood Similarity**: Memories with similar moods get 1.2x boost
+
+#### 3. Memory Lifecycle (`main-process/memory.js`)
+1. User sends message → Save to `conversations` table
+2. Sync → Create chunk in `memory_chunks` table
+3. AI responds → Save both sides
+4. Next query → Search `conversations` → Return relevant context
+
+#### 4. Context Builder (`main-process/context.js`)
+- Formats retrieved memories into AI-friendly context
+- Personality-aware presentation
+- Emotion hints for mood/personality
+
+### Technical Decisions
+
+**Why Keyword Search?**
+- Original plan: Vector embeddings with cosine similarity
+- Challenge: DeepSeek embedding API returns 404
+- Solution: Keyword matching with temporal decay
+- Result: <1ms response time, good relevance
+
+**Why Simplified Chunking?**
+- Original plan: Smart text chunking with overlap
+- Challenge: `textChunker.chunk()` caused application freeze
+- Solution: Save entire conversation as single chunk
+- Result: Stable, no freezing
+
+**Why No FTS5?**
+- Challenge: SQLite compiled without FTS5 module
+- Solution: Direct SQL queries with LIKE filtering
+- Result: Works reliably, good performance
+
+### Database Location
+```
+Windows: C:\Users\<User>\AppData\Roaming\ai-desktop-pet\pet-memory.db
+```
+
+### Memory Search Flow
+```
+1. User sends message → "我叫什么名字？"
+2. Search engine queries conversations table
+3. Keyword matching: "名字" "叫"
+4. Apply temporal decay (boost recent memories)
+5. Apply mood similarity (if mood data available)
+6. Sort by score and return top 3
+7. Context builder formats for AI
+8. AI uses context to generate personalized response
+```
+
+### Configuration (`main-process/config.js`)
+```javascript
+temporal: {
+  halfLife: 168,        // 7-day half-life
+  minWeight: 0.1,       // 10% floor
+  recentThreshold: 24,  // 24-hour threshold
+  moodModulation: {
+    enabled: true,
+    highMoodThreshold: 80,
+    lowMoodThreshold: 40
+  }
+},
+cache: {
+  maxSize: 5000,
+  evictionBatch: 100
+},
+emotional: {
+  enabled: true,
+  moodWeighting: true
+}
+```
 
 ## Important Implementation Notes
 

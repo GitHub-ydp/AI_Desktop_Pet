@@ -8,7 +8,31 @@
       "Bash(npm install:*)",
       "Bash(tasklist:*)",
       "Bash(findstr:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(npm start)",
+      "Bash(taskkill:*)",
+      "Bash(pkill:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm config set:*)",
+      "Bash(set:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(node:*)",
+      "Bash(powershell:*)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(wmic:*)",
+      "Bash(git config:*)",
+      "WebSearch",
+      "Bash(git clone:*)",
+      "Bash(dir:*)",
+      "Bash(start cmd /k \"npm start\")",
+      "Bash(start \"\" npm start)",
+      "Bash(npx electron-rebuild:*)",
+      "Bash(npm rebuild:*)",
+      "mcp__zread__get_repo_structure",
+      "Bash(sqlite3:*)"
     ]
   }
 }
