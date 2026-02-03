@@ -32,7 +32,8 @@
       "Bash(npx electron-rebuild:*)",
       "Bash(npm rebuild:*)",
       "mcp__zread__get_repo_structure",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(git rm:*)"
     ]
   }
 }
