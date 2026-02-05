@@ -9,7 +9,9 @@
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux"
+    "build:linux": "electron-builder --linux",
+    "rebuild": "electron-rebuild",
+    "postinstall": "electron-rebuild"
   },
   "keywords": [
     "electron",
@@ -20,11 +22,14 @@
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
     "electron": "^40.1.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
+    "lottie-web": "^5.13.0",
     "sqlite-vec": "^0.1.7-alpha.2",
     "vue": "^3.4.0"
   },

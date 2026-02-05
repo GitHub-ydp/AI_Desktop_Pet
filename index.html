@@ -16,7 +16,8 @@
 
     <!-- 宠物 -->
     <div class="pet-wrapper" id="petWrapper">
-      <div class="pet-emoji" id="petEmoji">🐱</div>
+      <div class="pet-lottie" id="petLottie"></div>
+      <div class="pet-emoji" id="petEmoji" style="display: none;">🐱</div>
     </div>
 
     <!-- 快捷菜单 -->
@@ -26,119 +27,81 @@
       <div class="quick-menu-item" onclick="openHistory()" title="历史">📜</div>
       <div class="quick-menu-item" onclick="closeQuickMenu()" title="关闭">❌</div>
     </div>
-
-    <!-- 设置面板 -->
-    <div class="modal" id="settingsModal" style="display: none;" onclick="closeSettingsOnBackdrop(event)">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>设置</h2>
-          <button class="close-btn" onclick="closeSettings()">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="setting-group">
-            <h3>选择宠物</h3>
-            <div class="pet-selector" id="petSelector">
-              <div class="pet-option" data-pet="🐱" onclick="selectPet('🐱')">🐱</div>
-              <div class="pet-option" data-pet="🐶" onclick="selectPet('🐶')">🐶</div>
-              <div class="pet-option" data-pet="🐰" onclick="selectPet('🐰')">🐰</div>
-              <div class="pet-option" data-pet="🦊" onclick="selectPet('🦊')">🦊</div>
-              <div class="pet-option" data-pet="🐻" onclick="selectPet('🐻')">🐻</div>
-            </div>
-          </div>
-
-          <div class="setting-group">
-            <h3>选择性格</h3>
-            <div class="personality-selector" id="personalitySelector">
-              <div class="personality-option" data-personality="healing" onclick="selectPersonality('healing')">
-                <div class="personality-emoji">💕</div>
-                <div class="personality-info">
-                  <div class="personality-name">治愈陪伴型</div>
-                  <div class="personality-desc">温柔体贴，关心你的情绪</div>
-                </div>
-              </div>
-              <div class="personality-option" data-personality="funny" onclick="selectPersonality('funny')">
-                <div class="personality-emoji">😂</div>
-                <div class="personality-info">
-                  <div class="personality-name">搞笑逗比型</div>
-                  <div class="personality-desc">幽默风趣，爱讲段子</div>
-                </div>
-              </div>
-              <div class="personality-option" data-personality="cool" onclick="selectPersonality('cool')">
-                <div class="personality-emoji">😤</div>
-                <div class="personality-info">
-                  <div class="personality-name">毒舌傲娇型</div>
-                  <div class="personality-desc">嘴硬心软，傲娇可爱</div>
-                </div>
-              </div>
-              <div class="personality-option" data-personality="assistant" onclick="selectPersonality('assistant')">
-                <div class="personality-emoji">📋</div>
-                <div class="personality-info">
-                  <div class="personality-name">贴心助理型</div>
-                  <div class="personality-desc">专业高效，实用主义</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="setting-group">
-            <h3>功能开关</h3>
-            <label class="toggle-label">
-              <input type="checkbox" id="autoSpeakCheck" onchange="toggleAutoSpeak()" />
-              <span>主动说话</span>
-            </label>
-          </div>
-
-          <div class="setting-group">
-            <h3>状态</h3>
-            <div class="mood-display" id="moodDisplay">💚 超级开心</div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-danger" onclick="resetData()">重置所有数据</button>
-          <button class="btn" onclick="closeSettings()">完成</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 历史记录面板 -->
-    <div class="modal" id="historyModal" style="display: none;" onclick="closeHistoryOnBackdrop(event)">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>对话历史</h2>
-          <button class="close-btn" onclick="closeHistory()">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="history-list" id="historyList">
-            <div class="empty-state">还没有对话记录哦~</div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-danger" onclick="clearHistory()">清空历史</button>
-          <button class="btn" onclick="closeHistory()">关闭</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 对话输入框 -->
-    <div class="modal" id="chatModal" style="display: none;" onclick="closeChatOnBackdrop(event)">
-      <div class="modal-content" style="max-width: 320px;">
-        <div class="modal-header">
-          <h2>和宠物说话</h2>
-          <button class="close-btn" onclick="closeChat()">×</button>
-        </div>
-        <div class="modal-body">
-          <input type="text" id="chatInput" class="chat-input" placeholder="输入你想说的话..." onkeyup="if(event.key==='Enter')sendChatMessage()">
-        </div>
-        <div class="modal-footer">
-          <button class="btn" onclick="sendChatMessage()">发送</button>
-        </div>
-      </div>
-    </div>
   </div>
 
+  <!-- Lottie 动画库 -->
+  <script src="assets/lib/lottie.min.js"></script>
+  
   <script src="src/storage.js"></script>
   <script src="src/prompts.js"></script>
   <script src="src/api.js"></script>
+  <script src="fix-memory.js"></script>
+  <script src="src/reminder-extractor.js"></script>
+  <script src="src/lottie-controller.js"></script>
+  <script src="src/animations.js"></script>
+  <script src="src/rotary-menu.js"></script>
   <script src="src/app-vanilla.js"></script>
+
+  <!-- 工具系统测试脚本 - 按 Ctrl+Shift+I 打开控制台查看 -->
+  <script>
+    // 延迟执行，确保所有API都已加载
+    setTimeout(async () => {
+      console.log('\n[TOOL] 工具系统测试开始\n');
+      console.log('='.repeat(60));
+
+      // 测试1: 检查API
+      console.log('[TEST] 测试1: 检查 PetTools API');
+      if (typeof window.PetTools === 'undefined') {
+        console.error('[ERROR] PetTools API 未找到！');
+        console.log('请检查：');
+        console.log('1. 应用是否完全启动？');
+        console.log('2. preload.js 是否正确配置？');
+        console.log('3. 主进程工具系统是否初始化成功？');
+      } else {
+        console.log('[OK] PetTools API 已加载');
+
+        // 测试2: 列出工具
+        console.log('\n[TEST] 测试2: 列出所有工具');
+        try {
+          const tools = await window.PetTools.list();
+          console.log(`[OK] 找到 ${tools.length} 个工具:`);
+          tools.forEach(tool => {
+            const safe = tool.safe ? '[SAFE]' : '[WARN]';
+            const approval = tool.requiresApproval ? '[LOCK]' : '[OPEN]';
+            console.log(`  ${safe} ${approval} ${tool.name} - ${tool.description}`);
+          });
+
+          // 测试3: 执行工具
+          console.log('\n[TEST] 测试3: 执行 system.info');
+          const result = await window.PetTools.execute('system.info', {
+            info_type: 'all'
+          });
+          if (result.success) {
+            console.log('[OK] 执行成功！');
+            console.log(`  OS: ${result.result.os.platform} ${result.result.os.release}`);
+            console.log(`  CPU: ${result.result.cpu.cores} 核心`);
+            console.log(`  内存: ${result.result.memory.total}`);
+          } else {
+            console.error('[ERROR] 执行失败:', result.error);
+          }
+
+          // 测试4: 查看历史
+          console.log('\n[TEST] 测试4: 查看执行历史');
+          const history = await window.PetTools.getHistory({ limit: 5 });
+          console.log(`[OK] 找到 ${history.length} 条记录`);
+
+          console.log('\n' + '='.repeat(60));
+          console.log('[SUCCESS] 所有测试完成！工具系统工作正常！');
+          console.log('\n[TIP] 你可以继续测试：');
+          console.log('- window.PetTools.list()');
+          console.log('- window.PetTools.execute("system.uptime", {})');
+          console.log('- window.PetTools.getHistory()');
+        } catch (error) {
+          console.error('[ERROR] 测试失败:', error.message);
+        }
+      }
+      console.log('');
+    }, 2000);
+  </script>
 </body>
 </html>

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设置</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .window-header {
+      background: white;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #e0e0e0;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      -webkit-app-region: drag;
+    }
+
+    .window-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .close-btn {
+      background: #ff5f57;
+      border: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: transform 0.2s;
+    }
+
+    .close-btn:hover {
+      transform: scale(1.2);
+    }
+
+    .settings-container {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .setting-group {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .setting-group h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+    }
+
+    .pet-selector, .personality-selector {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pet-option {
+      font-size: 48px;
+      cursor: pointer;
+      padding: 10px;
+      border-radius: 12px;
+      border: 3px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .pet-option:hover {
+      transform: scale(1.1);
+    }
+
+    .pet-option.selected {
+      border-color: #667eea;
+      background: rgba(102, 126, 234, 0.1);
+    }
+
+    .personality-option {
+      flex: 1;
+      min-width: 200px;
+      padding: 15px;
+      border-radius: 12px;
+      border: 2px solid #e0e0e0;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .personality-option:hover {
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .personality-option.selected {
+      border-color: #667eea;
+      background: rgba(102, 126, 234, 0.1);
+    }
+
+    .personality-emoji {
+      font-size: 32px;
+    }
+
+    .personality-info {
+      flex: 1;
+    }
+
+    .personality-name {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .personality-desc {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      padding: 10px 0;
+    }
+
+    .toggle-label input[type="checkbox"] {
+      width: 50px;
+      height: 28px;
+      appearance: none;
+      background: #e0e0e0;
+      border-radius: 14px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .toggle-label input[type="checkbox"]:checked {
+      background: #667eea;
+    }
+
+    .toggle-label input[type="checkbox"]::before {
+      content: '';
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: left 0.3s;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .toggle-label input[type="checkbox"]:checked::before {
+      left: 24px;
+    }
+
+    .mood-display {
+      padding: 15px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 12px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .footer-buttons {
+      background: white;
+      padding: 15px 20px;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-danger {
+      background: #ff5f57;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 95, 87, 0.4);
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #ddd;
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #bbb;
+    }
+  </style>
+</head>
+<body>
+  <div class="window-header">
+    <div class="window-title">⚙️ 设置</div>
+    <button class="close-btn" onclick="closeWindow()"></button>
+  </div>
+
+  <div class="settings-container">
+    <div class="setting-group">
+      <h3>选择宠物</h3>
+      <div class="pet-selector" id="petSelector">
+        <div class="pet-option" data-pet="🐱" onclick="selectPet('🐱')">🐱</div>
+        <div class="pet-option" data-pet="🐶" onclick="selectPet('🐶')">🐶</div>
+        <div class="pet-option" data-pet="🐰" onclick="selectPet('🐰')">🐰</div>
+        <div class="pet-option" data-pet="🦊" onclick="selectPet('🦊')">🦊</div>
+        <div class="pet-option" data-pet="🐻" onclick="selectPet('🐻')">🐻</div>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <h3>选择性格</h3>
+      <div class="personality-selector" id="personalitySelector">
+        <div class="personality-option" data-personality="healing" onclick="selectPersonality('healing')">
+          <div class="personality-emoji">💕</div>
+          <div class="personality-info">
+            <div class="personality-name">治愈陪伴型</div>
+            <div class="personality-desc">温柔体贴，关心你的情绪</div>
+          </div>
+        </div>
+        <div class="personality-option" data-personality="funny" onclick="selectPersonality('funny')">
+          <div class="personality-emoji">😂</div>
+          <div class="personality-info">
+            <div class="personality-name">搞笑逗比型</div>
+            <div class="personality-desc">幽默风趣，爱讲段子</div>
+          </div>
+        </div>
+        <div class="personality-option" data-personality="cool" onclick="selectPersonality('cool')">
+          <div class="personality-emoji">😤</div>
+          <div class="personality-info">
+            <div class="personality-name">毒舌傲娇型</div>
+            <div class="personality-desc">嘴硬心软，傲娇可爱</div>
+          </div>
+        </div>
+        <div class="personality-option" data-personality="assistant" onclick="selectPersonality('assistant')">
+          <div class="personality-emoji">📋</div>
+          <div class="personality-info">
+            <div class="personality-name">贴心助理型</div>
+            <div class="personality-desc">专业高效，实用主义</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <h3>功能开关</h3>
+      <label class="toggle-label">
+        <input type="checkbox" id="autoSpeakCheck" onchange="toggleAutoSpeak()" />
+        <span>主动说话</span>
+      </label>
+    </div>
+
+    <div class="setting-group">
+      <h3>心情状态</h3>
+      <div class="mood-display" id="moodDisplay">💚 超级开心</div>
+    </div>
+  </div>
+
+  <div class="footer-buttons">
+    <button class="btn btn-danger" onclick="resetData()">重置所有数据</button>
+    <button class="btn btn-primary" onclick="saveAndClose()">完成</button>
+  </div>
+
+  <script src="../src/storage.js"></script>
+  <script src="../src/settings-window-utils.js"></script>
+  <script>
+    const SettingsUtils = window.SettingsWindowUtils;
+
+    // 加载当前设置
+    function loadSettings() {
+      const snapshot = SettingsUtils.getSettingsSnapshot(window.PetStorage);
+
+      // 选中当前宠物
+      document.querySelectorAll('.pet-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.pet === snapshot.pet);
+      });
+
+      // 选中当前性格
+      document.querySelectorAll('.personality-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.personality === snapshot.personality);
+      });
+
+      // 设置开关状态
+      document.getElementById('autoSpeakCheck').checked = snapshot.autoSpeak;
+
+      // 显示心情
+      updateMoodDisplay(snapshot.mood);
+    }
+
+    function selectPet(pet) {
+      document.querySelectorAll('.pet-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.pet === pet);
+      });
+      
+      SettingsUtils.setPetSelection(window.PetStorage, pet);
+      if (window.electron && window.electron.sendSettingsChange) {
+        window.electron.sendSettingsChange({ type: 'pet', pet });
+      }
+    }
+
+    function selectPersonality(personality) {
+      document.querySelectorAll('.personality-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.personality === personality);
+      });
+
+      SettingsUtils.setPersonalitySelection(window.PetStorage, personality);
+      if (window.electron && window.electron.sendSettingsChange) {
+        window.electron.sendSettingsChange({ type: 'personality', personality });
+      }
+    }
+
+    function toggleAutoSpeak() {
+      const checked = document.getElementById('autoSpeakCheck').checked;
+      SettingsUtils.setAutoSpeakEnabled(window.PetStorage, checked);
+      if (window.electron && window.electron.sendSettingsChange) {
+        window.electron.sendSettingsChange({ type: 'autoSpeak', autoSpeak: checked });
+      }
+    }
+
+    function updateMoodDisplay(mood) {
+      const display = document.getElementById('moodDisplay');
+      if (mood >= 80) {
+        display.textContent = '💚 超级开心';
+      } else if (mood >= 60) {
+        display.textContent = '😊 心情不错';
+      } else if (mood >= 40) {
+        display.textContent = '😐 还行吧';
+      } else if (mood >= 20) {
+        display.textContent = '😔 有点沮丧';
+      } else {
+        display.textContent = '😢 很不开心';
+      }
+    }
+
+    function resetData() {
+      if (confirm('确定要重置所有数据吗？这将清空历史记录和设置。')) {
+        window.PetStorage.resetAllData();
+        if (window.electron && window.electron.sendSettingsChange) {
+          window.electron.sendSettingsChange({ type: 'reset' });
+        }
+        alert('数据已重置！');
+        loadSettings();
+      }
+    }
+
+    function saveAndClose() {
+      closeWindow();
+    }
+
+    function closeWindow() {
+      window.electron.closeChildWindow('settings');
+    }
+
+    // 页面加载时加载设置
+    window.addEventListener('DOMContentLoaded', loadSettings);
+
+    // 监听心情更新
+    window.addEventListener('mood-updated', (e) => {
+      updateMoodDisplay(e.detail);
+    });
+  </script>
+</body>
+</html>

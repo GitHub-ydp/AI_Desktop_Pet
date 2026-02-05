@@ -34,18 +34,20 @@ class ContextBuilder {
     let context = '';
     let usedTokens = 0;
 
-    // 0. 添加当前情感状态提示
-    const emotionHint = this.buildEmotionalHint(currentMood, currentPersonality);
-    if (emotionHint) {
-      context += emotionHint + '\n';
-      usedTokens += this.estimateTokens(emotionHint);
+    // 0. 提取用户的关键信息（名字、性别等）
+    const userProfile = this.extractUserProfile(searchResults);
+    if (userProfile) {
+      context += userProfile + '\n\n';
+      usedTokens += this.estimateTokens(userProfile);
     }
 
     // 1. 添加相关记忆
-    const memories = searchResults.slice(0, maxMemories);
+    // 过滤掉分数太低的，但保留足够的候选
+    const filteredResults = searchResults.filter(r => r.score >= 0.05);
+    const memories = filteredResults.slice(0, maxMemories);
 
     if (memories.length > 0) {
-      context += '\n相关记忆：\n';
+      context += '【重要对话记录】\n';
 
       for (const memory of memories) {
         const memoryText = this.formatMemory(memory, includeTimestamp, currentMood);
@@ -60,29 +62,96 @@ class ContextBuilder {
         context += memoryText + '\n';
         usedTokens += estimatedTokens;
       }
+
+      context += '\n请记住以上信息，并在对话中自然地使用。\n';
     }
 
-    // 2. 添加相关事实
+    // 2. 添加相关事实（提取的结构化信息）
     if (includeFacts) {
       const allFacts = this.extractFacts(memories);
 
       if (allFacts.length > 0) {
-        context += '\n记住的信息：\n';
         const factText = this.formatFacts(allFacts, currentPersonality);
 
-        if (usedTokens + this.estimateTokens(factText) < maxTokens) {
-          context += factText + '\n';
+        if (usedTokens + this.estimateTokens(factText) < maxTokens * 0.9) {
+          context += '\n关于我的重要信息：\n' + factText + '\n';
           usedTokens += this.estimateTokens(factText);
         }
       }
     }
 
-    // 3. 添加查询上下文
+    // 3. 添加当前查询
     if (query) {
-      context += `\n当前对话：${query}\n`;
+      context += `\n【当前对话】用户说：${query}\n`;
     }
 
     return context;
+  }
+
+  // 提取用户基本信息（名字、性别等）
+  extractUserProfile(searchResults) {
+    if (!searchResults || searchResults.length === 0) {
+      return '';
+    }
+
+    // 只查看用户的对话
+    const userMessages = searchResults.filter(r => r.role === 'user');
+
+    if (userMessages.length === 0) {
+      return '';
+    }
+
+    let name = null;
+    let gender = null;
+    let birthday = null;
+    let interests = [];
+
+    // 从对话中提取信息
+    userMessages.forEach(msg => {
+      const text = (msg.text || msg.content || '').toLowerCase();
+
+      // 提取名字："我叫xxx"
+      const nameMatch = text.match(/我叫(.{1,5})/);
+      if (nameMatch && !name) {
+        name = nameMatch[1].trim();
+      }
+
+      // 提取性别："我是xx生"
+      if (text.includes('我是男生') || text.includes('我是男的')) {
+        gender = '男';
+      } else if (text.includes('我是女生') || text.includes('我是女的')) {
+        gender = '女';
+      }
+
+      // 提取生日
+      const birthMatch = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+      if (birthMatch && !birthday) {
+        birthday = `${birthMatch[1]}年${birthMatch[2]}月${birthMatch[3]}日`;
+      }
+
+      // 提取兴趣："我喜欢xxx"
+      const likeMatch = text.match(/我喜欢(.{1,20})/);
+      if (likeMatch) {
+        interests.push(likeMatch[1].trim());
+      }
+    });
+
+    // 构建用户信息字符串
+    let profile = '';
+    if (name) {
+      profile += `【用户名字】${name}\n`;
+    }
+    if (gender) {
+      profile += `【性别】${gender}\n`;
+    }
+    if (birthday) {
+      profile += `【生日】${birthday}\n`;
+    }
+    if (interests.length > 0) {
+      profile += `【兴趣爱好】${interests.join('、')}\n`;
+    }
+
+    return profile;
   }
 
   // 构建情感状态提示

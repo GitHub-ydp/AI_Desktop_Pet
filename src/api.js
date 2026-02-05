@@ -1,27 +1,17 @@
 // API 模块
 
-// 从环境变量获取 API 配置（通过主进程安全获取）
-const getAPIConfig = async () => {
+// 从环境变量获取 API 密钥（通过主进程安全获取）
+const getAPIKey = async () => {
   try {
-    return await window.electron?.getAPIKey() || {
-      deepseek: '',
-      qwen: '',
-      primary: 'qwen'
-    };
+    const key = await window.electron?.getAPIKey();
+    return key || '';
   } catch (error) {
-    console.error('Failed to get API config:', error);
-    return {
-      deepseek: '',
-      qwen: '',
-      primary: 'qwen'
-    };
+    console.error('Failed to get API key:', error);
+    return '';
   }
 };
 
-const API_URLS = {
-  deepseek: 'https://api.deepseek.com/v1/chat/completions',
-  qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
-};
+const API_URL = 'https://api.deepseek.com/v1/chat/completions';
 let isCallingAPI = false;
 
 // 记忆系统 - 通过 IPC 与主进程通信
@@ -148,75 +138,43 @@ async function fetchWithTimeout(url, options, timeout = 15000) {
   });
 }
 
-async function callAIProvider(messages, personality) {
+// 记录上一次的错误，用于向用户显示
+let lastApiError = null;
+let consecutiveErrors = 0;
+const MAX_CONSECUTIVE_ERRORS = 3;
+
+async function callDeepSeekAPI(messages, personality) {
   if (isCallingAPI) return '请稍等，我还在思考~';
 
   isCallingAPI = true;
+  lastApiError = null;
 
   try {
-    const config = await getAPIConfig();
+    console.log('[API DEBUG] Attempting to get API key...');
+    let apiKey = await getAPIKey();
+    console.log('[API DEBUG] Raw API key type:', typeof apiKey);
+    console.log('[API DEBUG] API key result:', apiKey ? `FOUND (${apiKey.length} chars)` : 'NOT FOUND');
+    console.log('[API DEBUG] API key preview:', apiKey ? apiKey.substring(0, 10) + '...' : 'N/A');
 
-    // 优先使用通义千问（如果配置了）
-    if (config.primary === 'qwen' && config.qwen) {
-      return await callQwenAPI(messages, personality, config.qwen);
-    } else if (config.deepseek) {
-      return await callDeepSeekAPI(messages, personality, config.deepseek);
-    } else {
-      console.error('No API key configured');
-      return getMockResponse(personality, messages);
-    }
-  } catch (error) {
-    console.log('API error, using mock response');
-    return getMockResponse(personality, messages);
-  } finally {
-    isCallingAPI = false;
-  }
-}
-
-// 调用通义千问 API
-async function callQwenAPI(messages, personality, apiKey) {
-  try {
-    const response = await fetchWithTimeout(API_URLS.qwen, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'qwen-plus',
-        input: {
-          messages
-        },
-        parameters: {
-          result_format: 'message',
-          max_tokens: 100,
-          temperature: 0.8
-        }
-      })
+    // 打印发送给 API 的消息内容
+    console.log('[API] ========== REQUEST MESSAGES START ==========');
+    console.log('[API] Total messages:', messages.length);
+    messages.forEach((msg, idx) => {
+      const preview = msg.content.length > 100 ? msg.content.substring(0, 100) + '...' : msg.content;
+      console.log(`[API] Message ${idx} (${msg.role}):`, preview);
     });
+    console.log('[API] ========== REQUEST MESSAGES END ==========');
 
-    if (!response.ok) {
-      throw new Error(`Qwen API error: ${response.status}`);
+    if (!apiKey) {
+      const errorMsg = 'API Key 未配置，请在 .env 文件中设置 DEEPSEEK_API_KEY';
+      console.error('[API ERROR]', errorMsg);
+      lastApiError = errorMsg;
+      consecutiveErrors++;
+      return generateErrorResponse(personality, errorMsg);
     }
 
-    const data = await response.json();
-    return data.output.choices[0].message.content.trim();
-  } catch (error) {
-    console.error('Qwen API failed:', error);
-    // 降级到 DeepSeek（如果可用）
-    const config = await getAPIConfig();
-    if (config.deepseek) {
-      console.log('Falling back to DeepSeek API');
-      return await callDeepSeekAPI(messages, personality, config.deepseek);
-    }
-    throw error;
-  }
-}
-
-// 调用 DeepSeek API
-async function callDeepSeekAPI(messages, personality, apiKey) {
-  try {
-    const response = await fetchWithTimeout(API_URLS.deepseek, {
+    console.log('[API DEBUG] Calling DeepSeek API...');
+    const response = await fetchWithTimeout(API_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -224,21 +182,156 @@ async function callDeepSeekAPI(messages, personality, apiKey) {
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
-        messages,
-        max_tokens: 100,
-        temperature: 0.8
+        messages: messages,
+        max_tokens: 500,
+        temperature: 0.8,
+        // 添加频率惩罚以减少重复
+        frequency_penalty: 0.5,
+        // 添加存在惩罚以增加多样性
+        presence_penalty: 0.3
       })
     });
 
     if (!response.ok) {
-      throw new Error(`DeepSeek API error: ${response.status}`);
+      let errorDetail = '';
+      try {
+        const errorData = await response.json();
+        errorDetail = errorData.error?.message || JSON.stringify(errorData);
+      } catch (e) {
+        errorDetail = await response.text();
+      }
+      
+      const errorMsg = `API 调用失败 (状态码: ${response.status}): ${errorDetail || '未知错误'}`;
+      console.error('[API ERROR]', errorMsg);
+      lastApiError = errorMsg;
+      consecutiveErrors++;
+      
+      // 只在连续错误较少时返回错误提示，避免一直报错
+      if (consecutiveErrors <= MAX_CONSECUTIVE_ERRORS) {
+        return generateErrorResponse(personality, errorMsg);
+      }
+      return getMockResponse(personality, messages);
     }
 
     const data = await response.json();
-    return data.choices[0].message.content.trim();
+    console.log('[API DEBUG] API response received successfully');
+    console.log('[API DEBUG] Response structure:', JSON.stringify(data, null, 2).substring(0, 500) + '...');
+    console.log('[API] ========== FULL RESPONSE START ==========');
+    console.log('[API]', JSON.stringify(data, null, 2));
+    console.log('[API] ========== FULL RESPONSE END ==========');
+
+    // 检查响应结构
+    if (!data.choices || !data.choices[0]) {
+      const errorMsg = 'API 响应格式异常：缺少 choices 字段';
+      console.error('[API ERROR]', errorMsg);
+      lastApiError = errorMsg;
+      consecutiveErrors++;
+      return generateErrorResponse(personality, errorMsg);
+    }
+
+    if (!data.choices[0].message) {
+      const errorMsg = 'API 响应格式异常：缺少 message 字段';
+      console.error('[API ERROR]', errorMsg);
+      console.log('[API DEBUG] Choice structure:', JSON.stringify(data.choices[0]));
+      lastApiError = errorMsg;
+      consecutiveErrors++;
+      return generateErrorResponse(personality, errorMsg);
+    }
+
+    const content = data.choices[0].message.content;
+    console.log('[API DEBUG] Message content length:', content?.length || 0);
+    console.log('[API DEBUG] Message content preview:', content?.substring(0, 50) + '...' || 'EMPTY');
+    
+    // 检查 AI 返回的内容是否是重复模式
+    if (isRepetitivePattern(content)) {
+      console.warn('[API WARNING] AI 返回了重复模式，使用模拟回复替代');
+      return getMockResponse(personality, messages);
+    }
+    
+    // 成功调用，重置错误计数
+    consecutiveErrors = 0;
+    
+    return content.trim();
+
   } catch (error) {
-    console.error('DeepSeek API failed:', error);
-    throw error;
+    const errorMsg = `请求失败: ${error.message}`;
+    console.error('[API ERROR]', errorMsg);
+    lastApiError = errorMsg;
+    consecutiveErrors++;
+    
+    if (consecutiveErrors <= MAX_CONSECUTIVE_ERRORS) {
+      return generateErrorResponse(personality, errorMsg);
+    }
+    return getMockResponse(personality, messages);
+  } finally {
+    isCallingAPI = false;
+  }
+}
+
+// 生成错误提示回复（比模拟回复更明确地告知用户问题）
+function generateErrorResponse(personality, errorMsg) {
+  const isAuthError = errorMsg.includes('401') || errorMsg.includes('unauthorized') || errorMsg.includes('API Key');
+  const isRateLimit = errorMsg.includes('429') || errorMsg.includes('rate limit');
+  const isTimeout = errorMsg.includes('timeout');
+  
+  // 根据错误类型和性格返回不同的提示
+  if (isAuthError) {
+    switch (personality) {
+      case 'healing':
+        return '💕 API Key 好像出问题了，请检查一下配置哦~';
+      case 'funny':
+        return '😂 API Key 好像过期了，快去充值续费吧！';
+      case 'cool':
+        return '😤 API Key 无效...你自己检查一下吧';
+      case 'assistant':
+        return '📋 API 认证失败，请检查 DEEPSEEK_API_KEY 配置';
+      default:
+        return 'API Key 配置错误，请在 .env 文件中检查 DEEPSEEK_API_KEY';
+    }
+  }
+  
+  if (isRateLimit) {
+    switch (personality) {
+      case 'healing':
+        return '💕 请求太频繁了，让我休息一会儿吧~';
+      case 'funny':
+        return '😂 我被限流了！让我歇会儿~';
+      case 'cool':
+        return '😤 请求太多...等会儿再来';
+      case 'assistant':
+        return '📋 API 请求超限，请稍后再试';
+      default:
+        return 'API 请求频率超限，请稍后再试';
+    }
+  }
+  
+  if (isTimeout) {
+    switch (personality) {
+      case 'healing':
+        return '💕 网络有点慢，让我再试试~';
+      case 'funny':
+        return '😂 网卡了！等我缓冲一下~';
+      case 'cool':
+        return '😤 网络超时...真是麻烦';
+      case 'assistant':
+        return '📋 请求超时，请检查网络连接';
+      default:
+        return '请求超时，请检查网络连接';
+    }
+  }
+  
+  // 其他错误
+  switch (personality) {
+    case 'healing':
+      return `💕 遇到点小问题：${errorMsg.substring(0, 30)}...`;
+    case 'funny':
+      return `😂 出错了：${errorMsg.substring(0, 30)}...`;
+    case 'cool':
+      return `😤 出错了...${errorMsg.substring(0, 20)}`;
+    case 'assistant':
+      return `📋 错误：${errorMsg.substring(0, 40)}`;
+    default:
+      return `出错了：${errorMsg}`;
   }
 }
 
@@ -260,20 +353,80 @@ async function saveConversationToMemory(role, content, metadata = {}) {
 // 获取记忆上下文（用于 AI 对话）
 async function getMemoryContext(query) {
   if (!window.PetMemory) {
-    console.warn('PetMemory not available, using fallback');
+    console.warn('[Memory] PetMemory not available, using fallback');
     return buildMemoryContext();
   }
 
   try {
+    console.log('[Memory] Querying context for:', query.substring(0, 50) + (query.length > 50 ? '...' : ''));
+
     const context = await window.PetMemory.getContext(query, {
-      maxTokens: 1500,
-      maxMemories: 3
+      maxTokens: 1000,  // 增加 token 限制
+      maxMemories: 8,   // 增加记忆条数
+      currentMood: 80,   // 可以从外部传入
+      currentPersonality: 'healing'
     });
-    return context;
+
+    // 检查是否有实际内容
+    if (context && context.trim().length > 0) {
+      console.log('[Memory] Context retrieved successfully');
+      console.log('[Memory] Context preview:', context.substring(0, 300) + '...');
+      return context;
+    }
+
+    console.log('[Memory] Empty context returned');
+    return '';
   } catch (error) {
-    console.error('[Memory] Failed to get context:', error);
-    return buildMemoryContext(); // 降级到简化版
+    console.error('[Memory] Failed to get context:', error.message);
+    console.error('[Memory] Error stack:', error.stack);
+    // 降级方案：使用 localStorage 中的简单事实
+    const simpleContext = buildMemoryContext();
+    if (simpleContext) {
+      console.log('[Memory] Using fallback context:', simpleContext);
+    }
+    return simpleContext;
   }
+}
+
+// 检测消息是否是重复模式（用于过滤污染的历史记录）
+function isRepetitivePattern(content) {
+  if (!content) return false;
+  // 检测 "主人说"XXX"我听到啦" 这种模式
+  const repetitivePatterns = [
+    /主人说["']?.*["']?我听到啦/,
+    /主人说["']?.*["']?.*摸摸头/,
+    /["']?.*["']?太有意思了/,
+    /["']?.*["']?我知道啦/,
+    /已收到：["']?.*["']?/
+  ];
+  return repetitivePatterns.some(pattern => pattern.test(content));
+}
+
+// 清理历史消息，过滤掉重复模式
+function cleanChatHistory(history, maxMessages = 6) {
+  if (!history || history.length === 0) return [];
+  
+  // 从最新的消息开始，跳过重复模式的 AI 回复
+  const cleaned = [];
+  let skippedCount = 0;
+  
+  // 倒序遍历，保留最新的有效消息
+  for (let i = history.length - 1; i >= 0 && cleaned.length < maxMessages; i--) {
+    const msg = history[i];
+    // 如果是 AI 回复且是重复模式，跳过
+    if (msg.role === 'assistant' && isRepetitivePattern(msg.content)) {
+      console.log(`[API] 跳过重复模式的 AI 回复: ${msg.content.substring(0, 30)}...`);
+      skippedCount++;
+      continue;
+    }
+    cleaned.unshift(msg);
+  }
+  
+  if (skippedCount > 0) {
+    console.log(`[API] 共跳过 ${skippedCount} 条重复模式的历史消息`);
+  }
+  
+  return cleaned;
 }
 
 async function chatWithAI(userMessage, personality, chatHistory) {
@@ -283,15 +436,8 @@ async function chatWithAI(userMessage, personality, chatHistory) {
 
   let systemPrompt = window.PersonalityPrompts.getPersonalityPrompt(personality);
 
-  // 获取记忆上下文
-  try {
-    const memoryContext = await getMemoryContext(userMessage);
-    if (memoryContext) {
-      systemPrompt += `\n\n【记忆上下文】\n${memoryContext}`;
-    }
-  } catch (error) {
-    console.error('Failed to get memory context:', error);
-  }
+  // 获取记忆上下文（异步开始，不阻塞）
+  const memoryContextPromise = getMemoryContext(userMessage);
 
   // 提取并保存用户信息（简化版作为补充）
   const facts = extractUserInfo(userMessage);
@@ -300,10 +446,27 @@ async function chatWithAI(userMessage, personality, chatHistory) {
     console.log('✅ 已记住:', facts);
   }
 
+  // 等待记忆上下文
+  let memoryContext = '';
+  try {
+    memoryContext = await memoryContextPromise;
+  } catch (error) {
+    console.error('[Memory] Error getting context:', error);
+  }
+
+  // 整合记忆上下文到系统提示
+  if (memoryContext && memoryContext.trim()) {
+    systemPrompt += `\n\n========== 我们的对话记录 ==========\n${memoryContext}\n========== 请自然地回应 ==========`;
+    console.log('[API] Memory context added to system prompt');
+  } else {
+    console.log('[API] No memory context available');
+  }
+
   const messages = [{ role: 'system', content: systemPrompt }];
 
-  // 添加最近10条历史
-  chatHistory.slice(-10).forEach(msg => {
+  // 清理并添加历史消息（只添加最近4条，避免重复）
+  const cleanedHistory = cleanChatHistory(chatHistory, 4);
+  cleanedHistory.forEach(msg => {
     messages.push({ role: msg.role, content: msg.content });
   });
 
@@ -312,7 +475,7 @@ async function chatWithAI(userMessage, personality, chatHistory) {
   // 异步保存用户消息到记忆系统
   saveConversationToMemory('user', userMessage, { personality });
 
-  const response = await callAIProvider(messages, personality);
+  const response = await callDeepSeekAPI(messages, personality);
 
   // 异步保存 AI 回复到记忆系统
   saveConversationToMemory('assistant', response, { personality });
@@ -358,9 +521,8 @@ function getMockResponse(personality, messages) {
 window.PetAPI = {
   chatWithAI,
   isConfigured: async () => {
-    const config = await getAPIConfig();
-    return (config.qwen && config.qwen.length > 0) ||
-           (config.deepseek && config.deepseek.length > 0);
+    const apiKey = await getAPIKey();
+    return apiKey && apiKey.length > 0;
   },
   // 查看记忆
   getMemoryFacts: getUserFacts,
@@ -369,13 +531,22 @@ window.PetAPI = {
     localStorage.removeItem(MEMORY_KEY);
     console.log('记忆已清空');
   },
-  // 获取提供商信息
-  getProvidersInfo: async () => {
-    try {
-      return await window.electron?.getProvidersInfo() || {};
-    } catch (error) {
-      console.error('Failed to get providers info:', error);
-      return {};
-    }
+  // 获取最后一次 API 错误详情
+  getLastError: () => lastApiError,
+  // 获取 API 状态
+  getApiStatus: async () => {
+    const apiKey = await getAPIKey();
+    return {
+      hasKey: !!apiKey,
+      keyLength: apiKey?.length || 0,
+      lastError: lastApiError,
+      consecutiveErrors
+    };
+  },
+  // 重置错误计数
+  resetErrorCount: () => {
+    consecutiveErrors = 0;
+    lastApiError = null;
+    console.log('[API] 错误计数已重置');
   }
 };

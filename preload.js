@@ -6,9 +6,45 @@ contextBridge.exposeInMainWorld('electron', {
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAPIKey: () => ipcRenderer.invoke('get-api-key'),
-  getProvidersInfo: () => ipcRenderer.invoke('get-providers-info'),
+  openDevTools: () => ipcRenderer.invoke('open-devtools'),
   onWindowMove: (callback) => {
     ipcRenderer.on('window-move', callback);
+  },
+  
+  // 窗口大小调整（可选锚点）
+  resizeWindow: (size, anchor) => ipcRenderer.invoke('resize-window', size, anchor),
+  
+  // 子窗口管理
+  createChildWindow: (options) => ipcRenderer.invoke('create-child-window', options),
+  closeChildWindow: (id) => ipcRenderer.invoke('close-child-window', id),
+  sendToChildWindow: (id, channel, data) => ipcRenderer.invoke('send-to-child-window', id, channel, data),
+  onChildWindowMessage: (callback) => {
+    ipcRenderer.on('child-window-message', callback);
+  },
+  // 菜单窗口管理
+  openMenuWindow: () => ipcRenderer.invoke('menu:open'),
+  closeMenuWindow: () => ipcRenderer.invoke('menu:close'),
+  toggleMenuWindow: () => ipcRenderer.invoke('menu:toggle'),
+  isMenuWindowOpen: () => ipcRenderer.invoke('menu:is-open'),
+  onMenuCommand: (callback) => {
+    ipcRenderer.on('menu:command', callback);
+  },
+  // 聊天窗口通信
+  sendChatMessage: (message) => ipcRenderer.invoke('chat:send', message),
+  onChatSend: (callback) => {
+    ipcRenderer.on('chat:send', callback);
+  },
+  sendChatResponse: (requestId, payload) => ipcRenderer.send('chat:response', requestId, payload),
+  // 设置窗口通信
+  sendSettingsChange: (payload) => ipcRenderer.send('settings:change', payload),
+  onSettingsChange: (callback) => {
+    ipcRenderer.on('settings:change', callback);
+  },
+  // 气泡窗口通信
+  showBubble: (message, duration) => ipcRenderer.invoke('bubble:show', message, duration),
+  hideBubble: () => ipcRenderer.invoke('bubble:hide'),
+  onBubbleShow: (callback) => {
+    ipcRenderer.on('bubble:show', callback);
   }
 });
 
@@ -52,4 +88,69 @@ contextBridge.exposeInMainWorld('PetMemory', {
 
   migrateFromLocalStorage: (data) =>
     ipcRenderer.invoke('memory:migrate-localstorage', data)
+});
+
+// 暴露提醒系统 API 到渲染进程
+contextBridge.exposeInMainWorld('PetReminder', {
+  // 创建提醒
+  create: (data) => ipcRenderer.invoke('reminder:create', data),
+
+  // 获取提醒列表
+  getAll: (options) => ipcRenderer.invoke('reminder:get-all', options),
+
+  // 获取待处理提醒
+  getPending: () => ipcRenderer.invoke('reminder:get-pending'),
+
+  // 取消提醒
+  cancel: (id) => ipcRenderer.invoke('reminder:cancel', id),
+
+  // 删除提醒
+  delete: (id) => ipcRenderer.invoke('reminder:delete', id),
+
+  // 获取用户时间偏好
+  getPreference: (keyword) => ipcRenderer.invoke('reminder:get-preference', keyword),
+
+  // 分析用户习惯
+  analyzeHabits: () => ipcRenderer.invoke('reminder:analyze-habits'),
+
+  // 获取提醒历史
+  getHistory: (options) => ipcRenderer.invoke('reminder:get-history', options),
+
+  // 监听提醒触发事件
+  onReminderTriggered: (callback) => {
+    ipcRenderer.on('reminder:triggered', callback);
+  },
+
+  // 监听过期提醒事件
+  onOverdue: (callback) => {
+    ipcRenderer.on('reminder:overdue', callback);
+  },
+
+  // 移除监听
+  offReminderTriggered: (callback) => {
+    ipcRenderer.off('reminder:triggered', callback);
+  },
+
+  offOverdue: (callback) => {
+    ipcRenderer.off('reminder:overdue', callback);
+  }
+});
+
+// 暴露工具系统 API 到渲染进程
+contextBridge.exposeInMainWorld('PetTools', {
+  // 执行工具
+  execute: (toolName, params, context) =>
+    ipcRenderer.invoke('tool:execute', toolName, params, context),
+
+  // 列出所有工具
+  list: () =>
+    ipcRenderer.invoke('tool:list'),
+
+  // 获取工具执行历史
+  getHistory: (options) =>
+    ipcRenderer.invoke('tool:get-history', options),
+
+  // 清空工具执行历史
+  clearHistory: () =>
+    ipcRenderer.invoke('tool:clear-history')
 });

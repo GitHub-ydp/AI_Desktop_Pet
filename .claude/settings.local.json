@@ -43,7 +43,10 @@
       "Bash(git archive:*)",
       "mcp__web-search-prime__webSearchPrime",
       "mcp__zread__read_file",
-      "mcp__zread__search_doc"
+      "mcp__zread__search_doc",
+      "Bash(cmd.exe:*)",
+      "Bash(npx @electron/rebuild:*)",
+      "mcp__web-reader__webReader"
     ]
   }
 }

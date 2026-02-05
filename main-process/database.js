@@ -599,6 +599,120 @@ class MemoryStorage {
     this.db.exec('DELETE FROM embedding_cache');
   }
 
+  // ==================== 提醒操作 ====================
+
+  // 创建提醒
+  createReminder(reminder) {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    const stmt = this.db.prepare(`
+      INSERT INTO reminders (id, content, remind_at, created_at, status, source_conversation_id, repeat_pattern, repeat_end_at, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const now = Date.now();
+    const id = reminder.id || this.generateId();
+
+    try {
+      stmt.run(
+        id,
+        reminder.content,
+        reminder.remindAt,
+        now,
+        reminder.status || 'pending',
+        reminder.sourceConversationId || null,
+        reminder.repeatPattern || null,
+        reminder.repeatEndAt || null,
+        reminder.metadata ? JSON.stringify(reminder.metadata) : null
+      );
+      return id;
+    } catch (error) {
+      console.error('Failed to create reminder:', error);
+      throw error;
+    }
+  }
+
+  // 获取提醒列表
+  getReminders(options = {}) {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    const {
+      status = null,
+      limit = 100,
+      offset = 0,
+      from = null,
+      to = null
+    } = options;
+
+    let query = 'SELECT * FROM reminders WHERE 1=1';
+    const params = [];
+
+    if (status) {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+
+    if (from) {
+      query += ' AND remind_at >= ?';
+      params.push(from);
+    }
+
+    if (to) {
+      query += ' AND remind_at <= ?';
+      params.push(to);
+    }
+
+    query += ' ORDER BY remind_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const stmt = this.db.prepare(query);
+    return stmt.all(...params);
+  }
+
+  // 获取单个提醒
+  getReminder(id) {
+    if (!this.db) return null;
+
+    const stmt = this.db.prepare('SELECT * FROM reminders WHERE id = ?');
+    return stmt.get(id);
+  }
+
+  // 更新提醒状态
+  updateReminderStatus(id, status) {
+    if (!this.db) return false;
+
+    const stmt = this.db.prepare('UPDATE reminders SET status = ? WHERE id = ?');
+    const result = stmt.run(status, id);
+    return result.changes > 0;
+  }
+
+  // 删除提醒
+  deleteReminder(id) {
+    if (!this.db) return false;
+
+    const stmt = this.db.prepare('DELETE FROM reminders WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  // 获取到期的提醒
+  getDueReminders(beforeTime) {
+    if (!this.db) return [];
+
+    const stmt = this.db.prepare(`
+      SELECT * FROM reminders 
+      WHERE status = 'pending' 
+      AND remind_at <= ?
+      ORDER BY remind_at ASC
+    `);
+    
+    return stmt.all(beforeTime);
+  }
+
   // ==================== 记忆重要性评分 ====================
 
   // 计算记忆重要性分数
@@ -673,6 +787,80 @@ class MemoryStorage {
       total,
       oldestAccess: oldestAccess ? new Date(oldestAccess) : null
     };
+  }
+
+  // ==================== 显示器画像 ====================
+
+  saveDisplayProfiles(profiles, activeDisplayId = null) {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+    if (!Array.isArray(profiles) || profiles.length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const stmt = this.db.prepare(`
+      INSERT INTO display_profiles (
+        display_id, label, is_primary, is_active, bounds_json, work_area_json,
+        size_json, scale_factor, rotation, internal, touch_support, monochrome,
+        dpi, size_mm_json, updated_at, last_used_at
+      ) VALUES (
+        @display_id, @label, @is_primary, @is_active, @bounds_json, @work_area_json,
+        @size_json, @scale_factor, @rotation, @internal, @touch_support, @monochrome,
+        @dpi, @size_mm_json, @updated_at, @last_used_at
+      )
+      ON CONFLICT(display_id) DO UPDATE SET
+        label = excluded.label,
+        is_primary = excluded.is_primary,
+        is_active = excluded.is_active,
+        bounds_json = excluded.bounds_json,
+        work_area_json = excluded.work_area_json,
+        size_json = excluded.size_json,
+        scale_factor = excluded.scale_factor,
+        rotation = excluded.rotation,
+        internal = excluded.internal,
+        touch_support = excluded.touch_support,
+        monochrome = excluded.monochrome,
+        dpi = excluded.dpi,
+        size_mm_json = excluded.size_mm_json,
+        updated_at = excluded.updated_at,
+        last_used_at = excluded.last_used_at
+    `);
+
+    const upsertMany = this.db.transaction((items) => {
+      for (const item of items) {
+        const isActive = activeDisplayId && String(item.displayId) === String(activeDisplayId);
+        stmt.run({
+          display_id: String(item.displayId),
+          label: item.label || null,
+          is_primary: item.isPrimary ? 1 : 0,
+          is_active: isActive ? 1 : 0,
+          bounds_json: item.bounds ? JSON.stringify(item.bounds) : null,
+          work_area_json: item.workArea ? JSON.stringify(item.workArea) : null,
+          size_json: item.size ? JSON.stringify(item.size) : null,
+          scale_factor: Number.isFinite(item.scaleFactor) ? item.scaleFactor : null,
+          rotation: Number.isFinite(item.rotation) ? item.rotation : 0,
+          internal: item.internal ? 1 : 0,
+          touch_support: item.touchSupport || 'unknown',
+          monochrome: item.monochrome ? 1 : 0,
+          dpi: Number.isFinite(item.dpi) ? item.dpi : null,
+          size_mm_json: item.sizeMm ? JSON.stringify(item.sizeMm) : null,
+          updated_at: now,
+          last_used_at: isActive ? now : null
+        });
+      }
+    });
+
+    upsertMany(profiles);
+  }
+
+  getDisplayProfiles() {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+    const stmt = this.db.prepare('SELECT * FROM display_profiles ORDER BY updated_at DESC');
+    return stmt.all();
   }
 }
 

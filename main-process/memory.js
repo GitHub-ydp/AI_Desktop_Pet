@@ -8,28 +8,26 @@ const MemorySearchEngine = require('./search');
 const FactExtractor = require('./extractor');
 const ContextBuilder = require('./context');
 const TextChunker = require('./chunker');
+const ReminderScheduler = require('./reminder');
+const { DatabaseMigrator } = require('./migrate');
 const { MEMORY_CONFIG } = require('./config');
-const providerFactory = require('./providers/factory');
 
 class MemoryMainProcess {
   constructor(options = {}) {
     this.options = {
       databasePath: options.databasePath || null,
-      providerFactory: options.providerFactory || providerFactory,
+      apiKey: options.apiKey || '',
       personality: options.personality || 'healing'
     };
 
     // 模块实例
     this.storage = new MemoryStorage(this.options.databasePath);
-    this.embeddingService = new EmbeddingService({
-      providerFactory: this.options.providerFactory
-    });
+    this.embeddingService = new EmbeddingService({ apiKey: this.options.apiKey });
     this.searchEngine = new MemorySearchEngine();
-    this.factExtractor = new FactExtractor({
-      providerFactory: this.options.providerFactory
-    });
+    this.factExtractor = new FactExtractor({ apiKey: this.options.apiKey });
     this.contextBuilder = new ContextBuilder();
     this.textChunker = new TextChunker();
+    this.reminderScheduler = new ReminderScheduler(this.storage);
 
     this.isInitialized = false;
   }
@@ -45,11 +43,19 @@ class MemoryMainProcess {
       // 初始化存储
       await this.storage.initialize();
 
+      // 执行数据库迁移
+      const migrator = new DatabaseMigrator(this.storage);
+      await migrator.migrate();
+
       // 设置模块依赖关系
       this.embeddingService.setStorage(this.storage);
       this.searchEngine.setStorage(this.storage);
       this.searchEngine.setEmbeddingService(this.embeddingService);
       this.factExtractor.setStorage(this.storage);
+      this.reminderScheduler.setStorage(this.storage);
+
+      // 启动提醒调度器
+      this.reminderScheduler.start();
 
       this.isInitialized = true;
       console.log('MemoryMainProcess initialized successfully');
@@ -127,10 +133,12 @@ class MemoryMainProcess {
       maxMemories = MEMORY_CONFIG.context.maxMemories
     } = options;
 
-    // 搜索相关记忆
+    // 搜索相关记忆（降低阈值以获取更多结果）
     const searchResults = await this.searchEngine.search(query, {
-      limit: maxMemories,
-      minScore: 0.5
+      limit: maxMemories * 2,  // 获取更多候选
+      minScore: 0.05,  // 大幅降低阈值，让更多记忆通过
+      mood: 80,
+      personality: this.options.personality || 'healing'
     });
 
     // 构建上下文
@@ -176,6 +184,14 @@ class MemoryMainProcess {
     };
   }
 
+  // 保存显示器画像
+  saveDisplayProfiles(profiles, activeDisplayId = null) {
+    if (!this.isInitialized) {
+      throw new Error('MemoryMainProcess not initialized');
+    }
+    return this.storage.saveDisplayProfiles(profiles, activeDisplayId);
+  }
+
   // 清理旧数据
   clearOldMemories(beforeDate) {
     if (!this.isInitialized) {
@@ -197,11 +213,70 @@ class MemoryMainProcess {
 
   // 关闭
   close() {
+    // 停止提醒调度器
+    if (this.reminderScheduler) {
+      this.reminderScheduler.stop();
+    }
+    
     if (this.storage) {
       this.storage.close();
     }
     this.isInitialized = false;
     console.log('MemoryMainProcess closed');
+  }
+
+  // ==================== 提醒功能 ====================
+
+  // 设置主窗口（用于提醒通知）
+  setMainWindow(mainWindow) {
+    if (this.reminderScheduler) {
+      this.reminderScheduler.setMainWindow(mainWindow);
+    }
+  }
+
+  // 创建提醒
+  async createReminder(reminderData) {
+    if (!this.isInitialized) {
+      throw new Error('MemoryMainProcess not initialized');
+    }
+
+    return this.reminderScheduler.createReminder(reminderData);
+  }
+
+  // 获取提醒列表
+  async getReminders(options = {}) {
+    if (!this.isInitialized) {
+      throw new Error('MemoryMainProcess not initialized');
+    }
+
+    return this.reminderScheduler.getReminders(options);
+  }
+
+  // 获取待处理提醒
+  async getPendingReminders() {
+    if (!this.isInitialized) {
+      throw new Error('MemoryMainProcess not initialized');
+    }
+
+    return this.reminderScheduler.getPendingReminders();
+  }
+
+  // 取消提醒
+  async cancelReminder(id) {
+    if (!this.isInitialized) {
+      throw new Error('MemoryMainProcess not initialized');
+    }
+
+    return this.reminderScheduler.cancelReminder(id);
+  }
+
+  // 删除提醒
+  async deleteReminder(id) {
+    if (!this.isInitialized) {
+      throw new Error('MemoryMainProcess not initialized');
+    }
+
+    return this.reminderScheduler.deleteReminder(id);
   }
 
   // 数据迁移：从 LocalStorage 导入历史
@@ -342,6 +417,59 @@ class MemoryMainProcess {
     ipcMain.handle('memory:migrate-localstorage', async (event, data) => {
       return await this.migrateFromLocalStorage(data);
     });
+
+    // ==================== 提醒 IPC ====================
+
+    // 创建提醒
+    ipcMain.handle('reminder:create', async (event, data) => {
+      console.log('[IPC] reminder:create called with:', JSON.stringify(data));
+      try {
+        const result = await this.createReminder(data);
+        console.log('[IPC] reminder:create success:', result);
+        return result;
+      } catch (error) {
+        console.error('[IPC] reminder:create error:', error);
+        throw error;
+      }
+    });
+
+    // 获取提醒列表
+    ipcMain.handle('reminder:get-all', async (event, options) => {
+      return await this.getReminders(options);
+    });
+
+    // 获取待处理提醒
+    ipcMain.handle('reminder:get-pending', async () => {
+      return await this.getPendingReminders();
+    });
+
+    // 取消提醒
+    ipcMain.handle('reminder:cancel', async (event, id) => {
+      return await this.cancelReminder(id);
+    });
+
+    // 删除提醒
+    ipcMain.handle('reminder:delete', async (event, id) => {
+      return await this.deleteReminder(id);
+    });
+
+    // 获取用户时间偏好
+    ipcMain.handle('reminder:get-preference', async (event, keyword) => {
+      return this.reminderScheduler.getUserTimePreference(keyword);
+    });
+
+    // 分析用户习惯
+    ipcMain.handle('reminder:analyze-habits', async () => {
+      return this.reminderScheduler.analyzeUserHabits();
+    });
+
+    // 获取提醒历史
+    ipcMain.handle('reminder:get-history', async (event, options) => {
+      return this.reminderScheduler.getReminderHistory(options);
+    });
+
+    // 注意：提醒调度器的 IPC 已在上面单独注册，不需要重复调用
+    // this.reminderScheduler.registerIPCHandlers();
 
     console.log('Memory IPC handlers registered');
   }

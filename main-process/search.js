@@ -116,9 +116,10 @@ class MemorySearchEngine {
     const startTime = Date.now();
 
     // 使用关键词搜索（基于 conversations 表）
-    const queryLower = query.toLowerCase();
-    const queryWords = queryLower.split(/\s+/).filter(w => w.length > 1);
+    const queryLower = query.toLowerCase().trim();
+    const queryWords = queryLower.split(/\s+/).filter(w => w.length >= 1); // 允许单字匹配
 
+    // 获取最近的所有对话（不只是匹配的）
     const stmt = this.storage.db.prepare(`
       SELECT id, role, content, timestamp, personality, mood
       FROM conversations
@@ -126,35 +127,64 @@ class MemorySearchEngine {
       LIMIT ?
     `);
 
-    const conversations = stmt.all(limit * 5); // 获取更多候选
+    const conversations = stmt.all(limit * 10); // 获取更多候选
     const now = Date.now();
+
+    // 如果没有对话记录，直接返回空
+    if (conversations.length === 0) {
+      console.log('[Memory] No conversations found in database');
+      return [];
+    }
 
     const results = conversations.map(conv => {
       const contentLower = (conv.content || '').toLowerCase();
-      let score = 0;
+      let score = 0.1; // 基础分数，确保最近对话至少能被看到
 
       // 关键词匹配分数
       queryWords.forEach(word => {
         if (contentLower.includes(word)) {
-          score += 0.4;
+          score += 0.5; // 提高匹配分数
+        }
+        // 部分匹配（如查询"吃饭"，内容有"吃完饭"）
+        if (word.length >= 2 && contentLower.includes(word.substring(0, 2))) {
+          score += 0.2;
         }
       });
 
-      // 时间衰减（24小时内额外加权）
+      // 特殊关键词加权（名字、性别等关键信息）
+      const importantKeywords = ['名字', '叫', '是', '性别', '生日', '喜欢', '爱好'];
+      importantKeywords.forEach(kw => {
+        if (queryLower.includes(kw) && contentLower.includes(kw)) {
+          score += 0.3; // 关键信息匹配加权
+        }
+      });
+
+      // 时间衰减优化
       const ageInHours = (now - conv.timestamp) / (1000 * 60 * 60);
-      if (ageInHours < 24) {
-        score *= 1.5;
-      } else if (ageInHours < 168) { // 一周内
-        score *= 1.2;
-      } else if (ageInHours > 720) { // 30天前，降权
-        score *= 0.7;
+      const ageInDays = ageInHours / 24;
+
+      if (ageInDays < 1) { // 今天
+        score += 0.5;
+      } else if (ageInDays < 3) { // 3天内
+        score += 0.3;
+      } else if (ageInDays < 7) { // 一周内
+        score += 0.2;
+      } else if (ageInDays < 30) { // 一个月内
+        score += 0.1;
+      } else { // 超过一个月
+        score *= 0.5;
+      }
+
+      // 优先返回用户说的话（而不是AI的回复）
+      if (conv.role === 'user') {
+        score += 0.15; // 提高用户消息的权重
       }
 
       // 心情相似度加权
       if (conv.mood !== undefined && mood !== undefined) {
         const moodDiff = Math.abs(conv.mood - mood);
         if (moodDiff < 20) {
-          score *= 1.2;
+          score += 0.15;
         }
       }
 
@@ -178,8 +208,35 @@ class MemorySearchEngine {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
+    // 如果没有匹配结果但最近有对话，返回最近的对话作为上下文
+    if (filteredResults.length === 0 && conversations.length > 0) {
+      const recentConvs = conversations
+        .slice(0, 3) // 最近3条对话
+        .map(conv => ({
+          id: conv.id,
+          conversationId: conv.id,
+          text: conv.content,
+          content: conv.content,
+          role: conv.role,
+          timestamp: conv.timestamp,
+          personality: conv.personality,
+          mood: conv.mood,
+          score: 0.05, // 低分数但能被包含
+          type: 'recent'
+        }));
+      filteredResults = recentConvs;
+    }
+
     const duration = Date.now() - startTime;
-    console.log(`[Memory] Search completed in ${duration}ms, found ${filteredResults.length} results`);
+    console.log(`[Memory] Search completed in ${duration}ms, found ${filteredResults.length} results (searched ${conversations.length} conversations)`);
+
+    // 打印前3个结果的调试信息
+    if (filteredResults.length > 0) {
+      console.log('[Memory] Top results:');
+      filteredResults.slice(0, 3).forEach((r, i) => {
+        console.log(`  ${i+1}. [${r.role}] score=${r.score.toFixed(2)}: ${r.text?.substring(0, 40)}...`);
+      });
+    }
 
     return filteredResults;
   }
