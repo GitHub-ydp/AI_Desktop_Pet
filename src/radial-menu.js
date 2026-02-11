@@ -57,24 +57,24 @@ class RadialMenuController {
     // 二级菜单配置
     this.secondLevelItems = [
       {
+        id: 'screenshot',
+        icon: '📸',
+        label: '截图',
+        action: () => this.startScreenshot(),
+        angle: 0
+      },
+      {
         id: 'tools',
         icon: '🔧',
         label: '工具',
         action: () => this.showToolsMenu(),
-        angle: 0
+        angle: 72
       },
       {
         id: 'debug',
         icon: '🐛',
         label: '调试',
         action: () => this.openDebugConsole(),
-        angle: 72
-      },
-      {
-        id: 'about',
-        icon: 'ℹ️',
-        label: '关于',
-        action: () => this.showAbout(),
         angle: 144
       },
       {
@@ -197,7 +197,8 @@ class RadialMenuController {
     console.log('[RadialMenu] 打开菜单');
     this.isOpen = true;
     this.currentLevel = 1;
-    
+    this.renderMenuItems(); // 确保每次打开都重置为一级菜单
+
     if (this.menuElement) {
       this.menuElement.style.display = 'block';
       this.menuElement.classList.add('radial-menu-open');
@@ -259,9 +260,19 @@ class RadialMenuController {
   }
   
   showToolsMenu() {
-    console.log('[RadialMenu] 显示工具菜单（待实现）');
-    alert('工具功能开发中...');
+    console.log('[RadialMenu] 显示工具菜单');
     this.close();
+
+    // 创建工具选择子窗口
+    if (window.electron && window.electron.createChildWindow) {
+      window.electron.createChildWindow({
+        id: 'tools-menu',
+        title: '工具菜单',
+        width: 300,
+        height: 400,
+        html: 'windows/tools-menu.html'
+      });
+    }
   }
   
   openDebugConsole() {
@@ -288,6 +299,22 @@ class RadialMenuController {
       console.log('[RadialMenu] Minimize API 不可用');
     }
     this.close();
+  }
+
+  // 启动截图功能
+  startScreenshot() {
+    console.log('[RadialMenu] 启动截图');
+    this.close();
+
+    // 通过主进程启动截图
+    if (window.electron && window.electron.createChildWindow) {
+      // 发送 IPC 消息到主进程
+      const { ipcRenderer } = require('electron');
+      ipcRenderer.send('start-screenshot');
+    } else {
+      console.error('[RadialMenu] electron API 不可用');
+      alert('截图功能启动失败');
+    }
   }
   
   // 添加自定义菜单项

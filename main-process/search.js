@@ -8,13 +8,21 @@ class MemorySearchEngine {
   constructor(options = {}) {
     this.storage = options.storage || null;
     this.embeddingService = options.embeddingService || null;
+    this.embeddingEngine = options.embeddingEngine || null;  // 本地 ONNX 嵌入引擎
     this.config = {
       defaultLimit: options.limit || MEMORY_CONFIG.search.defaultLimit,
       minScore: options.minScore || MEMORY_CONFIG.search.minScore,
       vectorWeight: options.vectorWeight || MEMORY_CONFIG.search.vectorWeight,
       textWeight: options.textWeight || MEMORY_CONFIG.search.textWeight,
       timeout: options.timeout || MEMORY_CONFIG.search.timeout,
-      // 新增：情感上下文
+      // 混合搜索权重
+      hybridWeights: {
+        keyword: 0.3,
+        vector: 0.4,
+        temporal: 0.2,
+        importance: 0.1
+      },
+      // 情感上下文
       currentMood: options.currentMood || 80,
       currentPersonality: options.currentPersonality || 'healing'
     };
@@ -31,9 +39,14 @@ class MemorySearchEngine {
     this.storage = storage;
   }
 
-  // 设置嵌入服务实例
+  // 设置嵌入服务实例（旧 API 版嵌入）
   setEmbeddingService(service) {
     this.embeddingService = service;
+  }
+
+  // 设置本地嵌入引擎（ONNX）
+  setEmbeddingEngine(engine) {
+    this.embeddingEngine = engine;
   }
 
   // ==================== 时间衰减系统 ====================
@@ -99,7 +112,7 @@ class MemorySearchEngine {
     return baseScore;
   }
 
-  // 混合搜索（关键词版本 - 不依赖嵌入）
+  // 混合搜索（关键词 + 向量）
   async search(query, options = {}) {
     const {
       limit = this.config.defaultLimit,
@@ -114,78 +127,58 @@ class MemorySearchEngine {
     }
 
     const startTime = Date.now();
+    const now = Date.now();
 
-    // 使用关键词搜索（基于 conversations 表）
-    const queryLower = query.toLowerCase().trim();
-    const queryWords = queryLower.split(/\s+/).filter(w => w.length >= 1); // 允许单字匹配
-
-    // 获取最近的所有对话（不只是匹配的）
+    // 获取候选对话
     const stmt = this.storage.db.prepare(`
       SELECT id, role, content, timestamp, personality, mood
       FROM conversations
       ORDER BY timestamp DESC
       LIMIT ?
     `);
+    const conversations = stmt.all(limit * 10);
 
-    const conversations = stmt.all(limit * 10); // 获取更多候选
-    const now = Date.now();
-
-    // 如果没有对话记录，直接返回空
     if (conversations.length === 0) {
       console.log('[Memory] No conversations found in database');
       return [];
     }
 
-    const results = conversations.map(conv => {
-      const contentLower = (conv.content || '').toLowerCase();
-      let score = 0.1; // 基础分数，确保最近对话至少能被看到
+    // 1. 关键词搜索
+    const keywordResults = this._keywordScoreConversations(query, conversations, now, mood);
 
-      // 关键词匹配分数
-      queryWords.forEach(word => {
-        if (contentLower.includes(word)) {
-          score += 0.5; // 提高匹配分数
-        }
-        // 部分匹配（如查询"吃饭"，内容有"吃完饭"）
-        if (word.length >= 2 && contentLower.includes(word.substring(0, 2))) {
-          score += 0.2;
-        }
-      });
+    // 2. 向量搜索（如果嵌入引擎可用）
+    let vectorResults = new Map();
+    if (this.embeddingEngine && this.embeddingEngine.isReady()) {
+      vectorResults = await this._vectorSearchConversations(query, limit * 3);
+    }
 
-      // 特殊关键词加权（名字、性别等关键信息）
-      const importantKeywords = ['名字', '叫', '是', '性别', '生日', '喜欢', '爱好'];
-      importantKeywords.forEach(kw => {
-        if (queryLower.includes(kw) && contentLower.includes(kw)) {
-          score += 0.3; // 关键信息匹配加权
-        }
-      });
+    // 3. 合并结果
+    const weights = this.config.hybridWeights;
+    const hasVector = vectorResults.size > 0;
 
-      // 时间衰减优化
-      const ageInHours = (now - conv.timestamp) / (1000 * 60 * 60);
-      const ageInDays = ageInHours / 24;
+    const mergedResults = conversations.map(conv => {
+      const kw = keywordResults.get(conv.id) || { keywordScore: 0, temporalScore: 0, importanceScore: 0 };
+      const vs = vectorResults.get(conv.id) || { vectorScore: 0 };
 
-      if (ageInDays < 1) { // 今天
-        score += 0.5;
-      } else if (ageInDays < 3) { // 3天内
-        score += 0.3;
-      } else if (ageInDays < 7) { // 一周内
-        score += 0.2;
-      } else if (ageInDays < 30) { // 一个月内
-        score += 0.1;
-      } else { // 超过一个月
-        score *= 0.5;
+      let finalScore;
+      if (hasVector) {
+        // 有向量搜索时用完整公式
+        finalScore =
+          weights.keyword * kw.keywordScore +
+          weights.vector * vs.vectorScore +
+          weights.temporal * kw.temporalScore +
+          weights.importance * kw.importanceScore;
+      } else {
+        // 无向量时回退到旧逻辑（关键词为主）
+        finalScore = kw.keywordScore * 0.5 + kw.temporalScore * 0.3 + kw.importanceScore * 0.2;
       }
 
-      // 优先返回用户说的话（而不是AI的回复）
-      if (conv.role === 'user') {
-        score += 0.15; // 提高用户消息的权重
-      }
+      // 用户消息加权
+      if (conv.role === 'user') finalScore += 0.05;
 
-      // 心情相似度加权
+      // 心情相似度
       if (conv.mood !== undefined && mood !== undefined) {
-        const moodDiff = Math.abs(conv.mood - mood);
-        if (moodDiff < 20) {
-          score += 0.15;
-        }
+        if (Math.abs(conv.mood - mood) < 20) finalScore += 0.05;
       }
 
       return {
@@ -197,48 +190,138 @@ class MemorySearchEngine {
         timestamp: conv.timestamp,
         personality: conv.personality,
         mood: conv.mood,
-        score: score,
-        type: 'keyword'
+        score: finalScore,
+        type: hasVector && vs.vectorScore > 0 ? 'hybrid' : 'keyword'
       };
     });
 
     // 过滤并排序
-    let filteredResults = results
+    let filteredResults = mergedResults
       .filter(r => r.score >= minScore)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
-    // 如果没有匹配结果但最近有对话，返回最近的对话作为上下文
+    // 降级：如果没有结果，返回最近对话
     if (filteredResults.length === 0 && conversations.length > 0) {
-      const recentConvs = conversations
-        .slice(0, 3) // 最近3条对话
-        .map(conv => ({
-          id: conv.id,
-          conversationId: conv.id,
-          text: conv.content,
-          content: conv.content,
-          role: conv.role,
-          timestamp: conv.timestamp,
-          personality: conv.personality,
-          mood: conv.mood,
-          score: 0.05, // 低分数但能被包含
-          type: 'recent'
-        }));
-      filteredResults = recentConvs;
+      filteredResults = conversations.slice(0, 3).map(conv => ({
+        id: conv.id,
+        conversationId: conv.id,
+        text: conv.content,
+        content: conv.content,
+        role: conv.role,
+        timestamp: conv.timestamp,
+        personality: conv.personality,
+        mood: conv.mood,
+        score: 0.05,
+        type: 'recent'
+      }));
     }
 
     const duration = Date.now() - startTime;
-    console.log(`[Memory] Search completed in ${duration}ms, found ${filteredResults.length} results (searched ${conversations.length} conversations)`);
+    console.log(`[Memory] Search completed in ${duration}ms, found ${filteredResults.length} results (vector: ${hasVector ? 'ON' : 'OFF'})`);
 
-    // 打印前3个结果的调试信息
     if (filteredResults.length > 0) {
       console.log('[Memory] Top results:');
       filteredResults.slice(0, 3).forEach((r, i) => {
-        console.log(`  ${i+1}. [${r.role}] score=${r.score.toFixed(2)}: ${r.text?.substring(0, 40)}...`);
+        console.log(`  ${i+1}. [${r.role}] score=${r.score.toFixed(2)} type=${r.type}: ${r.text?.substring(0, 40)}...`);
       });
     }
 
     return filteredResults;
+  }
+
+  // 关键词评分（返回 Map<id, scores>）
+  _keywordScoreConversations(query, conversations, now, mood) {
+    const queryLower = query.toLowerCase().trim();
+    const queryWords = queryLower.split(/\s+/).filter(w => w.length >= 1);
+    const results = new Map();
+
+    const importantKeywords = ['名字', '叫', '是', '性别', '生日', '喜欢', '爱好', '工作', '职业', '住'];
+
+    for (const conv of conversations) {
+      const contentLower = (conv.content || '').toLowerCase();
+
+      // 关键词匹配分数（归一化到 0-1）
+      let keywordScore = 0.1;  // 基础分
+      let matchCount = 0;
+      queryWords.forEach(word => {
+        if (contentLower.includes(word)) {
+          matchCount++;
+          keywordScore += 0.3;
+        }
+        if (word.length >= 2 && contentLower.includes(word.substring(0, 2))) {
+          keywordScore += 0.1;
+        }
+      });
+      // 重要关键词加权
+      importantKeywords.forEach(kw => {
+        if (queryLower.includes(kw) && contentLower.includes(kw)) {
+          keywordScore += 0.2;
+        }
+      });
+      // 归一化
+      keywordScore = Math.min(1.0, keywordScore);
+
+      // 时间衰减分数（归一化到 0-1）
+      const ageInDays = (now - conv.timestamp) / 86400000;
+      let temporalScore = 0;
+      if (ageInDays < 1) temporalScore = 1.0;
+      else if (ageInDays < 3) temporalScore = 0.7;
+      else if (ageInDays < 7) temporalScore = 0.5;
+      else if (ageInDays < 30) temporalScore = 0.3;
+      else temporalScore = 0.1;
+
+      // 重要性分数
+      let importanceScore = 0;
+      if (conv.content && conv.content.length > 50) importanceScore += 0.3;
+      if (conv.content && conv.content.length > 100) importanceScore += 0.2;
+      if (conv.role === 'user') importanceScore += 0.2;
+      // 包含个人信息的更重要
+      if (importantKeywords.some(kw => contentLower.includes(kw))) importanceScore += 0.3;
+      importanceScore = Math.min(1.0, importanceScore);
+
+      results.set(conv.id, { keywordScore, temporalScore, importanceScore });
+    }
+
+    return results;
+  }
+
+  // 向量搜索（返回 Map<conversationId, {vectorScore}>）
+  async _vectorSearchConversations(query, limit) {
+    const results = new Map();
+
+    try {
+      const queryEmbedding = await this.embeddingEngine.embed(query);
+      if (!queryEmbedding) return results;
+
+      // 获取有嵌入的记忆块
+      const chunks = this.storage.db.prepare(`
+        SELECT id, conversation_id, embedding
+        FROM memory_chunks
+        WHERE embedding IS NOT NULL
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `).all(limit);
+
+      for (const chunk of chunks) {
+        const embedding = this.storage.blobToFloatArray(chunk.embedding);
+        const similarity = this.embeddingEngine.cosineSimilarity(queryEmbedding, embedding);
+
+        // 归一化相似度到 0-1（余弦相似度已经是 -1 到 1）
+        const normalizedScore = Math.max(0, (similarity + 1) / 2);
+
+        // 取每个对话的最高分
+        const existing = results.get(chunk.conversation_id);
+        if (!existing || normalizedScore > existing.vectorScore) {
+          results.set(chunk.conversation_id, { vectorScore: normalizedScore });
+        }
+      }
+
+    } catch (error) {
+      console.error('[Memory] Vector search failed:', error.message);
+    }
+
+    return results;
   }
 
   // 应用时间衰减和情感权重

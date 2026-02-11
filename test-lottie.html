@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lottie 测试</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f0f0f0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+    }
+    #lottie {
+      width: 200px;
+      height: 200px;
+      margin: 20px 0;
+      background: #f9f9f9;
+      border: 2px dashed #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .info {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 10px 0;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .success {
+      color: #10b981;
+      font-weight: bold;
+    }
+    .error {
+      color: #ef4444;
+      font-weight: bold;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      background: #3b82f6;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎭 Lottie 动画测试</h1>
+
+    <div id="lottie">加载中...</div>
+
+    <div class="info" id="info">等待加载...</div>
+
+    <button onclick="testLoad()">重新加载</button>
+    <button onclick="testAllAnimations()">测试所有动画</button>
+
+    <div id="results"></div>
+  </div>
+
+  <script src="assets/lib/lottie.min.js"></script>
+  <script>
+    const info = document.getElementById('info');
+    const results = document.getElementById('results');
+    const lottieContainer = document.getElementById('lottie');
+
+    const animations = [
+      'happy_cat.json',
+      '玩球.json',
+      '猫坐在枕头上.json',
+      '举重.json',
+      '举腿.json',
+      '骑扫帚.json'
+    ];
+
+    function log(message, type = 'info') {
+      const div = document.createElement('div');
+      div.className = type;
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      info.appendChild(div);
+      console.log(message);
+    }
+
+    function testLoad() {
+      info.innerHTML = '';
+      results.innerHTML = '';
+      lottieContainer.innerHTML = '加载中...';
+
+      log('开始加载 happy_cat.json');
+
+      try {
+        const animation = lottie.loadAnimation({
+          container: lottieContainer,
+          renderer: 'svg',
+          loop: true,
+          autoplay: true,
+          path: 'lottie/cat/happy_cat.json'
+        });
+
+        animation.addEventListener('DOMLoaded', () => {
+          log('✅ DOMLoaded 事件触发', 'success');
+          log(`isLoaded: ${animation.isLoaded}`, 'success');
+          log('动画加载成功！', 'success');
+          lottieContainer.style.background = 'transparent';
+        });
+
+        animation.addEventListener('data_failed', (error) => {
+          log(`❌ 加载失败: ${error}`, 'error');
+        });
+
+        setTimeout(() => {
+          log(`isLoaded (5s后): ${animation.isLoaded}`);
+        }, 5000);
+
+      } catch (error) {
+        log(`❌ 异常: ${error.message}`, 'error');
+      }
+    }
+
+    async function testAllAnimations() {
+      results.innerHTML = '<h3>测试结果:</h3>';
+
+      for (const anim of animations) {
+        const result = await testSingleAnimation(anim);
+        const div = document.createElement('div');
+        div.className = result.success ? 'success' : 'error';
+        div.textContent = `${result.success ? '✅' : '❌'} ${anim}: ${result.message}`;
+        results.appendChild(div);
+      }
+    }
+
+    function testSingleAnimation(animFile) {
+      return new Promise((resolve) => {
+        const testContainer = document.createElement('div');
+        testContainer.style.width = '100px';
+        testContainer.style.height = '100px';
+        testContainer.style.margin = '10px';
+        testContainer.style.display = 'inline-block';
+        document.body.appendChild(testContainer);
+
+        try {
+          const animation = lottie.loadAnimation({
+            container: testContainer,
+            renderer: 'svg',
+            loop: true,
+            autoplay: true,
+            path: `lottie/cat/${animFile}`
+          });
+
+          let loaded = false;
+          let failed = false;
+
+          animation.addEventListener('DOMLoaded', () => {
+            loaded = true;
+            log(`✅ ${animFile} DOMLoaded`, 'success');
+          });
+
+          animation.addEventListener('data_failed', (error) => {
+            failed = true;
+            log(`❌ ${animFile} 失败: ${error}`, 'error');
+          });
+
+          setTimeout(() => {
+            testContainer.remove();
+            animation.destroy();
+
+            if (loaded) {
+              resolve({ success: true, message: '加载成功' });
+            } else if (failed) {
+              resolve({ success: false, message: '加载失败' });
+            } else {
+              resolve({ success: false, message: '超时 (5s)' });
+            }
+          }, 5000);
+        } catch (error) {
+          testContainer.remove();
+          resolve({ success: false, message: error.message });
+        }
+      });
+    }
+
+    // 页面加载后自动测试
+    window.addEventListener('DOMContentLoaded', () => {
+      log('页面加载完成，Lottie 版本: ' + lottie.version);
+      log('开始自动测试...');
+      testLoad();
+    });
+  </script>
+</body>
+</html>

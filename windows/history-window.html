@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>对话历史</title>
+  <script src="../src/theme-manager.js"></script>
   <style>
     * {
       margin: 0;
@@ -11,9 +12,33 @@
       box-sizing: border-box;
     }
 
+    :root {
+      --bg: #020810;
+      --bg-card: rgba(0, 30, 55, 0.6);
+      --border: rgba(0, 255, 240, 0.3);
+      --border-bright: rgba(0, 255, 240, 0.7);
+      --neon-cyan: #00fff0;
+      --neon-magenta: #ff2d78;
+      --text: #cff0ff;
+      --text-muted: rgba(160, 220, 240, 0.55);
+      --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
+      --radius: 8px;
+      --header-bg: rgba(0, 15, 30, 0.98);
+      --input-area-bg: rgba(0, 12, 25, 0.98);
+      --confirm-bg: rgba(0, 20, 45, 0.98);
+      --close-icon: rgba(160, 220, 240, 0.6);
+      --accent-hover-bg: rgba(0, 255, 240, 0.1);
+      --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
+      --danger-hover-bg: rgba(255, 45, 120, 0.08);
+      --danger-border: rgba(255, 45, 120, 0.5);
+      --scrollbar: rgba(0, 255, 240, 0.35);
+      --scrollbar-hover: rgba(0, 255, 240, 0.6);
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: #f5f5f5;
+      background: var(--bg);
+      color: var(--text);
       display: flex;
       flex-direction: column;
       height: 100vh;
@@ -21,146 +46,193 @@
     }
 
     .window-header {
-      background: white;
-      padding: 15px 20px;
+      background: var(--header-bg);
+      padding: 12px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid #e0e0e0;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      border-bottom: 1px solid var(--border);
       -webkit-app-region: drag;
+      flex-shrink: 0;
     }
 
     .window-title {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--neon-cyan);
+      text-shadow: var(--glow-sm);
     }
 
     .close-btn {
-      background: #ff5f57;
-      border: none;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
+      background: transparent;
+      border: 1px solid var(--border);
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
       cursor: pointer;
       -webkit-app-region: no-drag;
-      transition: transform 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
     }
 
+    .close-btn::before,
+    .close-btn::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 11px;
+      height: 1.5px;
+      background: var(--close-icon);
+      border-radius: 2px;
+      transform-origin: center;
+      transition: background 0.2s;
+    }
+
+    .close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .close-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
+
     .close-btn:hover {
-      transform: scale(1.2);
+      border-color: var(--neon-magenta);
+      box-shadow: var(--danger-glow);
+    }
+
+    .close-btn:hover::before,
+    .close-btn:hover::after {
+      background: var(--neon-magenta);
     }
 
     .history-container {
       flex: 1;
-      padding: 20px;
+      padding: 16px;
       overflow-y: auto;
+      background: var(--bg);
     }
 
     .history-item {
-      background: white;
-      border-radius: 12px;
-      padding: 15px;
-      margin-bottom: 10px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 8px;
       animation: fadeIn 0.3s ease;
+      transition: border-color 0.2s;
+    }
+
+    .history-item:hover {
+      border-color: var(--border-bright);
     }
 
     @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
     .history-role {
       font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
       margin-bottom: 5px;
-      color: #667eea;
+      color: var(--neon-cyan);
     }
 
     .history-role.user {
-      color: #764ba2;
+      color: var(--neon-magenta);
     }
 
     .history-content {
-      color: #333;
+      color: var(--text);
       line-height: 1.6;
+      font-size: 13px;
     }
 
     .history-time {
-      font-size: 12px;
-      color: #999;
+      font-size: 11px;
+      color: var(--text-muted);
       margin-top: 5px;
     }
 
     .empty-state {
       text-align: center;
       padding: 60px 20px;
-      color: #999;
+      color: var(--text-muted);
       font-size: 14px;
     }
 
-    .footer-buttons {
-      background: white;
-      padding: 15px 20px;
-      border-top: 1px solid #e0e0e0;
+    .confirm-dialog {
+      display: none;
+      background: var(--confirm-bg);
+      border: 1px solid var(--neon-magenta);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: var(--danger-glow);
+    }
+
+    .confirm-dialog.show {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .confirm-dialog p {
+      color: var(--text);
+      font-size: 13px;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .confirm-dialog .dialog-btns {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       justify-content: flex-end;
     }
 
+    .footer-buttons {
+      background: var(--input-area-bg);
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      flex-shrink: 0;
+    }
+
     .btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
+      padding: 9px 18px;
+      border-radius: var(--radius);
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s;
+      transition: background 0.15s, box-shadow 0.2s;
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      background: transparent;
+      color: var(--neon-cyan);
+      border: 1px solid var(--border-bright);
     }
 
     .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      background: var(--accent-hover-bg);
+      box-shadow: var(--glow-sm);
     }
 
     .btn-danger {
-      background: #ff5f57;
-      color: white;
+      background: transparent;
+      color: var(--neon-magenta);
+      border: 1px solid var(--danger-border);
     }
 
     .btn-danger:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(255, 95, 87, 0.4);
+      background: var(--danger-hover-bg);
+      box-shadow: var(--danger-glow);
     }
 
-    ::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: #ddd;
-      border-radius: 3px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: #bbb;
-    }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
   </style>
 </head>
 <body>
@@ -171,6 +243,14 @@
 
   <div class="history-container" id="historyContainer">
     <div class="empty-state">还没有对话记录哦~</div>
+  </div>
+
+  <div class="confirm-dialog" id="clearConfirmDialog">
+    <p>确定要清空所有对话历史吗？</p>
+    <div class="dialog-btns">
+      <button class="btn btn-primary" onclick="confirmClear()">确定</button>
+      <button class="btn btn-danger" onclick="cancelClear()">取消</button>
+    </div>
   </div>
 
   <div class="footer-buttons">
@@ -194,19 +274,19 @@
         const div = document.createElement('div');
         div.className = 'history-item';
         div.style.animationDelay = `${index * 0.05}s`;
-        
+
         const role = document.createElement('div');
         role.className = `history-role ${item.role}`;
         role.textContent = item.role === 'user' ? '你' : '宠物';
-        
+
         const content = document.createElement('div');
         content.className = 'history-content';
         content.textContent = item.content;
-        
+
         const time = document.createElement('div');
         time.className = 'history-time';
         time.textContent = new Date(item.timestamp).toLocaleString('zh-CN');
-        
+
         div.appendChild(role);
         div.appendChild(content);
         div.appendChild(time);
@@ -218,15 +298,24 @@
     }
 
     function clearHistory() {
-      if (confirm('确定要清空所有对话历史吗？')) {
-        window.PetStorage.remove('chat_history');
-        window.dispatchEvent(new CustomEvent('history-cleared'));
-        loadHistory();
-      }
+      document.getElementById('clearConfirmDialog').classList.add('show');
+    }
+
+    function confirmClear() {
+      document.getElementById('clearConfirmDialog').classList.remove('show');
+      window.PetStorage.remove('chat_history');
+      window.dispatchEvent(new CustomEvent('history-cleared'));
+      loadHistory();
+    }
+
+    function cancelClear() {
+      document.getElementById('clearConfirmDialog').classList.remove('show');
     }
 
     function closeWindow() {
-      window.electron.closeChildWindow('history');
+      if (window.electron && window.electron.closeChildWindow) {
+        window.electron.closeChildWindow('history');
+      }
     }
 
     // 页面加载时加载历史
@@ -234,6 +323,7 @@
 
     // 监听历史更新
     window.addEventListener('history-updated', loadHistory);
+    console.log('[history-window] 主题系统已加载');
   </script>
 </body>
 </html>

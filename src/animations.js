@@ -115,7 +115,7 @@ class PetAnimationController {
     this.useLottie = false;
     
     // 强制禁用 Lottie（修复黄色方块问题）
-    this.forceEmojiMode = true;
+    this.forceEmojiMode = false;
     
     console.log('[Animation] 动画控制器已创建');
   }
@@ -168,34 +168,37 @@ class PetAnimationController {
         console.log('[Animation] Lottie 动画系统已启用');
         this.useLottie = true;
 
-        // 隐藏 emoji，显示 Lottie
+        // 显示 Lottie，隐藏 emoji
         this.petEmoji.style.display = 'none';
-        petLottie.style.display = 'block';
-        petLottie.classList.add('lottie-active');
+        const petLottie = document.getElementById('petLottie');
+        if (petLottie) {
+          petLottie.style.display = 'block';
+          petLottie.classList.add('lottie-active');
+        }
 
         // 加载初始宠物动画
+        console.log('[Animation] 开始加载初始宠物动画...');
         this.lottieController.loadPet(this.baseExpression, 'idle').then((success) => {
           if (success) {
-            console.log('[Animation] Lottie 动画加载成功');
+            console.log('[Animation] ✅ Lottie 初始加载成功！');
           } else {
-            console.warn('[Animation] Lottie 动画加载失败，切换到 Emoji');
+            console.warn('[Animation] ⚠️ Lottie 返回 false，切换到 Emoji');
             this.switchToEmoji();
           }
         }).catch((error) => {
-          console.error('[Animation] Lottie 动画加载异常，切换到 Emoji:', error);
+          console.error('[Animation] ❌ Lottie 加载异常，切换到 Emoji:', error);
           this.switchToEmoji();
         });
       } else {
         console.log('[Animation] Lottie 初始化失败，使用 Emoji 备用方案');
         this.useLottie = false;
         this.petEmoji.style.display = 'block';
-        petLottie.style.display = 'none';
+        const petLottie = document.getElementById('petLottie');
+        if (petLottie) petLottie.style.display = 'none';
       }
     } else {
       console.log('[Animation] Lottie 控制器未找到，使用 Emoji');
       this.useLottie = false;
-      this.petEmoji.style.display = 'block';
-      petLottie.style.display = 'none';
     }
 
     // 创建装饰层
@@ -226,23 +229,29 @@ class PetAnimationController {
 
     this.updateExpression();
     console.log('[Animation] 切换到 Emoji 模式，表情:', this.petEmoji.textContent);
+  }
 
-    // 销毁 Lottie 实例
-    if (this.lottieController) {
-      this.lottieController.destroy();
+  // 切换到 Lottie 模式
+  switchToLottie() {
+    if (!this.lottieController || !this.lottieController.isEnabled()) {
+      console.warn('[Animation] Lottie 不可用，无法切换');
+      return;
     }
+
+    this.useLottie = true;
+
+    const petLottie = document.getElementById('petLottie');
+    if (petLottie) {
+      petLottie.style.display = 'block';
+      petLottie.classList.add('lottie-active');
+    }
+
+    // 隐藏 emoji
+    this.petEmoji.style.display = 'none';
+
+    console.log('[Animation] 切换到 Lottie 模式');
   }
 
-  // 创建装饰层（用于显示粒子、表情等）
-  createDecorationLayer() {
-    
-    // 设置初始状态
-    this.setState('idle');
-    
-    console.log('[Animation] 动画系统初始化完成');
-    return true;
-  }
-  
   // 创建装饰层（用于显示粒子、表情等）
   createDecorationLayer() {
     const existing = document.getElementById('petDecorations');
@@ -263,27 +272,34 @@ class PetAnimationController {
       console.warn(`[Animation] 未知状态: ${newState}`);
       return false;
     }
-    
+
     if (this.currentState === newState) {
       console.log(`[Animation] 已经是 ${newState} 状态，跳过`);
       return false;
     }
-    
+
     console.log(`[Animation] 状态切换: ${this.currentState} -> ${newState}`);
-    
+
     // 移除旧状态的类
     this.petWrapper.classList.remove(`pet-${this.currentState}`);
-    
+
     // 保存上一个状态
     this.previousState = this.currentState;
     this.currentState = newState;
-    
+
     // 添加新状态的类
     this.petWrapper.classList.add(`pet-${this.currentState}`);
 
+    // 清除之前的计时器
+    if (this.stateTimer) {
+      clearTimeout(this.stateTimer);
+      this.stateTimer = null;
+    }
+
     // 如果启用了 Lottie，切换 Lottie 动画
     if (this.useLottie && this.lottieController) {
-      this.lottieController.playState(newState).then((success) => {
+      // 传递当前的宠物类型
+      this.lottieController.playState(newState, this.baseExpression).then((success) => {
         if (!success) {
           console.warn('[Animation] Lottie 动画播放失败，切换到 Emoji');
           this.switchToEmoji();
@@ -293,22 +309,34 @@ class PetAnimationController {
         this.switchToEmoji();
       });
     }
-    
-    // 清除之前的计时器
-    if (this.stateTimer) {
-      clearTimeout(this.stateTimer);
-      this.stateTimer = null;
-    }
-    
-    // 如果指定了持续时间，自动恢复到上一个状态
-    if (duration && duration > 0) {
-      this.stateTimer = setTimeout(() => {
-        console.log(`[Animation] 定时恢复状态: ${this.currentState} -> ${this.previousState}`);
-        this.setState(this.previousState);
-      }, duration);
-    }
-    
+
+    // 注意：状态持续时间现在由 LottieController 统一管理
+    // 不在这里重复设置，避免双重定时器
+
     return true;
+  }
+
+  // 根据心情和上下文自动决定下一个状态
+  autoDecideNextState(mood, lastInteractionTime) {
+    if (!window.AnimationConfig) {
+      console.warn('[Animation] AnimationConfig 未加载，保持当前状态');
+      return;
+    }
+
+    const decision = window.AnimationConfig.decideNextState(
+      this.currentState,
+      mood,
+      lastInteractionTime,
+      {
+        baseExpression: this.baseExpression
+      }
+    );
+
+    console.log(`[Animation] 自动状态决策: ${decision.reason} -> ${decision.state}`);
+
+    if (decision.state !== this.currentState) {
+      this.setState(decision.state);
+    }
   }
   
   // 获取当前状态
@@ -435,22 +463,32 @@ class PetAnimationController {
     this.baseExpression = petEmoji;
     console.log(`[Animation] 设置宠物类型: ${petEmoji}`);
 
-    // 如果启用了 Lottie，加载新宠物
-    if (this.useLottie && this.lottieController) {
-      this.lottieController.loadPet(petEmoji, this.currentState).then((success) => {
-        if (!success) {
-          console.warn('[Animation] Lottie 宠物加载失败，切换到 Emoji');
-          this.switchToEmoji();
+    // 通过 SkinRegistry 检查该皮肤是否支持 Lottie
+    const skinHasLottie = window.SkinRegistry
+      ? window.SkinRegistry.hasLottieSupport(petEmoji)
+      : false;
+
+    if (skinHasLottie) {
+      // 该皮肤支持 Lottie
+      if (this.lottieController) {
+        this.lottieController.setBaseExpression(petEmoji);
+
+        // 如果当前不在 Lottie 模式且非强制 Emoji，切换到 Lottie
+        if (!this.useLottie && !this.forceEmojiMode && this.lottieController.isEnabled()) {
+          console.log(`[Animation] 皮肤 ${petEmoji} 支持 Lottie，切换到 Lottie 模式`);
+          this.switchToLottie();
+          this.lottieController.loadPet(petEmoji, this.currentState || 'idle');
         }
-      }).catch((error) => {
-        console.error('[Animation] Lottie 宠物加载失败，切换到 Emoji:', error);
-        this.switchToEmoji();
-      });
+      }
     } else {
-      this.updateExpression();
+      // 该皮肤不支持 Lottie，切换到 Emoji 模式
+      if (this.useLottie) {
+        console.log(`[Animation] 皮肤 ${petEmoji} 不支持 Lottie，切换到 Emoji 模式`);
+        this.switchToEmoji();
+      }
     }
   }
-  
+
   // 根据心情更新表情
   updateByMood(mood) {
     let expression = 'normal';
@@ -514,10 +552,38 @@ class PetAnimationController {
   showTemporaryExpression(expressionType, duration = 2000) {
     const previousExpression = this.currentExpression;
     this.setExpression(expressionType);
-    
+
     setTimeout(() => {
       this.setExpression(previousExpression);
     }, duration);
+  }
+
+  // 启动自动状态检查（每30秒检查一次是否需要切换状态）
+  startAutoStateCheck(moodGetter, lastInteractionGetter) {
+    if (this.stateCheckInterval) {
+      clearInterval(this.stateCheckInterval);
+    }
+
+    console.log('[Animation] 启动自动状态检查');
+
+    this.stateCheckInterval = setInterval(() => {
+      // 只在 idle 状态下自动切换（避免打扰用户正在观看的动画）
+      if (this.currentState === 'idle') {
+        const mood = moodGetter ? moodGetter() : 80;
+        const lastInteraction = lastInteractionGetter ? lastInteractionGetter() : Date.now();
+
+        this.autoDecideNextState(mood, lastInteraction);
+      }
+    }, 30000); // 每30秒检查一次
+  }
+
+  // 停止自动状态检查
+  stopAutoStateCheck() {
+    if (this.stateCheckInterval) {
+      clearInterval(this.stateCheckInterval);
+      this.stateCheckInterval = null;
+      console.log('[Animation] 停止自动状态检查');
+    }
   }
 }
 

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工具菜单</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      overflow: hidden;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 20px;
+    }
+
+    /* 顶部标题栏 */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      -webkit-app-region: drag;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .close-btn {
+      -webkit-app-region: no-drag;
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* 工具列表 */
+    .tools-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .tool-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .tool-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .tool-item:active {
+      transform: translateY(0);
+    }
+
+    .tool-icon {
+      font-size: 28px;
+    }
+
+    .tool-info {
+      flex: 1;
+    }
+
+    .tool-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .tool-desc {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .tool-shortcut {
+      font-size: 12px;
+      color: #999;
+      background: #f0f0f0;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    /* 分类标题 */
+    .category-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+      margin-top: 16px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .category-title:first-child {
+      margin-top: 0;
+    }
+
+    /* 滚动条样式 */
+    .tools-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .tools-list::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+
+    .tools-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 3px;
+    }
+
+    .tools-list::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 顶部标题栏 -->
+    <div class="header">
+      <h1>🔧 工具箱</h1>
+      <button class="close-btn" id="closeBtn">×</button>
+    </div>
+
+    <!-- 工具列表 -->
+    <div class="tools-list">
+      <!-- 截图工具 -->
+      <div class="category-title">📸 截图工具</div>
+      <div class="tool-item" data-tool="screenshot">
+        <div class="tool-icon">📸</div>
+        <div class="tool-info">
+          <div class="tool-name">区域截图</div>
+          <div class="tool-desc">选择屏幕区域进行截图</div>
+        </div>
+        <div class="tool-shortcut">Ctrl+Shift+A</div>
+      </div>
+
+      <div class="tool-item" data-tool="fullscreen-screenshot">
+        <div class="tool-icon">🖼️</div>
+        <div class="tool-info">
+          <div class="tool-name">全屏截图</div>
+          <div class="tool-desc">截取整个屏幕</div>
+        </div>
+      </div>
+
+      <!-- 开发工具 -->
+      <div class="category-title">🛠️ 开发工具</div>
+      <div class="tool-item" data-tool="devtools">
+        <div class="tool-icon">🐛</div>
+        <div class="tool-info">
+          <div class="tool-name">开发者工具</div>
+          <div class="tool-desc">打开调试控制台</div>
+        </div>
+        <div class="tool-shortcut">Ctrl+Shift+I</div>
+      </div>
+
+      <div class="tool-item" data-tool="reload">
+        <div class="tool-icon">🔄</div>
+        <div class="tool-info">
+          <div class="tool-name">重新加载</div>
+          <div class="tool-desc">重新加载应用</div>
+        </div>
+        <div class="tool-shortcut">Ctrl+R</div>
+      </div>
+
+      <!-- 其他工具 -->
+      <div class="category-title">📦 其他</div>
+      <div class="tool-item" data-tool="screenshot-history">
+        <div class="tool-icon">📁</div>
+        <div class="tool-info">
+          <div class="tool-name">截图历史</div>
+          <div class="tool-desc">查看所有截图记录</div>
+        </div>
+      </div>
+
+      <div class="tool-item" data-tool="open-folder">
+        <div class="tool-icon">📂</div>
+        <div class="tool-info">
+          <div class="tool-name">打开截图文件夹</div>
+          <div class="tool-desc">在文件管理器中打开</div>
+        </div>
+      </div>
+
+      <!-- 开发工具 -->
+      <div class="category-title">🛠️ 开发</div>
+      <div class="tool-item" data-tool="animation-test">
+        <div class="tool-icon">🎭</div>
+        <div class="tool-info">
+          <div class="tool-name">动画测试</div>
+          <div class="tool-desc">测试所有动画效果</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    // 关闭窗口
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      ipcRenderer.send('close-child-window', 'tools-menu');
+    });
+
+    // 工具项点击事件
+    document.querySelectorAll('.tool-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const tool = item.dataset.tool;
+        handleToolClick(tool);
+      });
+    });
+
+    // 处理工具点击
+    async function handleToolClick(tool) {
+      console.log('[ToolsMenu] Tool clicked:', tool);
+
+      switch (tool) {
+        case 'screenshot':
+          // 启动区域截图 - 通过主进程处理
+          ipcRenderer.send('start-screenshot');
+          break;
+
+        case 'fullscreen-screenshot':
+          // 全屏截图
+          ipcRenderer.send('start-fullscreen-screenshot');
+          break;
+
+        case 'devtools':
+          // 打开开发者工具
+          if (window.electron && window.electron.openDevTools) {
+            window.electron.openDevTools();
+          }
+          break;
+
+        case 'reload':
+          // 重新加载
+          location.reload();
+          break;
+
+        case 'screenshot-history':
+          // 查看截图历史（暂时用 alert）
+          alert('截图历史功能开发中...\n\n您可以直接访问截图文件夹查看所有截图');
+          break;
+
+        case 'open-folder':
+          // 打开截图文件夹
+          ipcRenderer.send('open-screenshots-folder');
+          break;
+
+        case 'animation-test':
+          // 打开动画测试窗口
+          if (window.electron && window.electron.createChildWindow) {
+            window.electron.createChildWindow({
+              id: 'animation-test',
+              title: '动画测试',
+              width: 400,
+              height: 600,
+              html: 'windows/animation-test.html'
+            });
+          }
+          // 不关闭工具菜单，让用户可以看到
+          setTimeout(() => {
+            ipcRenderer.send('close-child-window', 'tools-menu');
+          }, 100);
+          return; // 提前返回，不关闭工具菜单
+          break;
+      }
+
+      // 关闭工具菜单
+      setTimeout(() => {
+        ipcRenderer.send('close-child-window', 'tools-menu');
+      }, 100);
+    }
+
+    // ESC 关闭
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        ipcRenderer.send('close-child-window', 'tools-menu');
+      }
+    });
+  </script>
+</body>
+</html>

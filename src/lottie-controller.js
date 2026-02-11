@@ -1,60 +1,77 @@
 // Lottie 动画控制器
 // 管理宠物的 Lottie 动画加载、播放和切换
+// 通过 SkinRegistry 获取皮肤配置和动画路径
 
 class LottieController {
   constructor() {
     // Lottie 动画实例
     this.animation = null;
-    
-    // 当前宠物类型
-    this.currentPet = 'cat';
-    
+
+    // 当前皮肤 ID
+    this.currentSkinId = 'cat';
+
     // 当前动画状态
     this.currentState = 'idle';
-    
+
     // 动画容器
     this.container = null;
-    
+
     // 是否启用 Lottie（如果加载失败，回退到 emoji）
     this.enabled = false;
-    
-    // 动画状态映射到文件名
-    this.stateToAnimation = {
-      'idle': 'idle.json',
-      'happy': 'idle.json',
-      'sleeping': 'idle.json',
-      'talking': 'idle.json',
-      'dragging': 'idle.json',
-      'clicked': 'idle.json',
-      'thinking': 'idle.json',
-      'sad': 'idle.json'
-    };
-    
-    // 宠物类型映射到文件夹名
-    // 临时：统一使用新版猫的 Lottie 资源，保证新样式生效
-    this.petToFolder = {
-      '🐱': 'cat',
-      '🐶': 'cat',
-      '🐰': 'cat',
-      '🦊': 'cat',
-      '🐻': 'cat'
-    };
-    
-    // 动画是否循环
-    this.loopStates = {
-      'idle': true,
-      'happy': true,
-      'sleeping': true,
-      'talking': true,
-      'dragging': true,
-      'clicked': false,    // 单次播放
-      'thinking': true,
-      'sad': true
-    };
-    
+
+    // 当前基础表情（宠物 emoji）
+    this.baseExpression = '🐱';
+
+    // 动画缓存（避免重复加载）
+    this.animationCache = new Map();
+
+    // 当前加载的动画路径
+    this.currentAnimationPath = null;
+
+    // 是否正在加载动画
+    this.isLoading = false;
+
+    // 超时定时器
+    this.timeoutTimer = null;
+
+    // 状态计时器（用于最小显示时间）
+    this.stateTimer = null;
+
+    // 过渡动画持续时间
+    this.transitionDuration = 300;
+
     console.log('[LottieController] Lottie 控制器已创建');
   }
-  
+
+  // 获取状态配置（通过 SkinRegistry）
+  getStateConfig(state) {
+    if (!window.SkinRegistry) {
+      return null;
+    }
+
+    const animInfo = window.SkinRegistry.getAnimationForState(this.baseExpression, state);
+    if (!animInfo) return null;
+
+    // 返回兼容旧接口的配置对象
+    return {
+      loop: animInfo.loop,
+      onComplete: animInfo.onComplete,
+      minDisplayTime: animInfo.minDisplayTime,
+      duration: animInfo.duration,
+      priority: animInfo.priority
+    };
+  }
+
+  // 获取是否循环播放
+  shouldLoop(state) {
+    const stateConfig = this.getStateConfig(state);
+    if (stateConfig && stateConfig.loop !== undefined) {
+      return stateConfig.loop;
+    }
+    // 默认循环
+    return true;
+  }
+
   // 初始化
   initialize(containerId = 'petLottie') {
     // 检查 Lottie 库是否加载
@@ -64,7 +81,7 @@ class LottieController {
       this.enabled = false;
       return false;
     }
-    
+
     // 获取容器
     this.container = document.getElementById(containerId);
     if (!this.container) {
@@ -72,207 +89,404 @@ class LottieController {
       this.enabled = false;
       return false;
     }
-    
+
+    // 确保容器有尺寸
+    console.log(`[LottieController] 容器尺寸: ${this.container.offsetWidth}x${this.container.offsetHeight}`);
+    if (this.container.offsetWidth === 0 || this.container.offsetHeight === 0) {
+      console.warn('[LottieController] 容器尺寸为 0，设置默认尺寸');
+      this.container.style.width = '150px';
+      this.container.style.height = '150px';
+    }
+
     this.enabled = true;
     console.log('[LottieController] Lottie 控制器初始化成功');
     return true;
   }
-  
+
   // 加载宠物动画
   async loadPet(petEmoji, initialState = 'idle') {
     if (!this.enabled) {
       console.log('[LottieController] Lottie 未启用，跳过加载');
       return false;
     }
-    
-    const petFolder = this.petToFolder[petEmoji];
-    if (!petFolder) {
-      console.error(`[LottieController] 未知的宠物类型: ${petEmoji}`);
+
+    // 通过 SkinRegistry 检查是否支持 Lottie
+    if (window.SkinRegistry && !window.SkinRegistry.hasLottieSupport(petEmoji)) {
+      console.log(`[LottieController] 皮肤 ${petEmoji} 不支持 Lottie`);
       return false;
     }
-    
-    console.log(`[LottieController] 加载宠物: ${petFolder}`);
-    this.currentPet = petFolder;
-    
+
+    // 通过 SkinRegistry 获取 skinId
+    if (window.SkinRegistry) {
+      this.currentSkinId = window.SkinRegistry.getSkinIdByEmoji(petEmoji);
+    }
+
+    console.log(`[LottieController] 加载宠物: ${this.currentSkinId} (${petEmoji})`);
+    this.baseExpression = petEmoji;
+
     // 播放初始状态
     return await this.playState(initialState);
   }
-  
+
+  // 获取动画文件路径（通过 SkinRegistry）
+  getAnimationPath(state) {
+    if (window.SkinRegistry) {
+      const animInfo = window.SkinRegistry.getAnimationForState(this.baseExpression, state);
+      if (animInfo) {
+        return animInfo.path;
+      }
+    }
+
+    // 降级：使用默认路径
+    console.warn('[LottieController] 无法从 SkinRegistry 获取路径，使用默认');
+    return `lottie/cat/happy_cat.json`;
+  }
+
   // 播放指定状态的动画
-  async playState(state) {
+  async playState(state, petEmoji = null) {
     if (!this.enabled) {
       return false;
     }
-    
-    // 获取动画文件名
-    const animationFile = this.stateToAnimation[state] || 'idle.json';
-    const animationPath = `assets/pets/${this.currentPet}/${animationFile}`;
-    
-    console.log(`[LottieController] 播放状态: ${state} (${animationPath})`);
-    
-    // 如果当前状态相同，不重复加载
-    if (this.currentState === state && this.animation && !this.animation.isPaused) {
+
+    // 如果提供了宠物 emoji，更新当前皮肤
+    if (petEmoji) {
+      this.baseExpression = petEmoji;
+      if (window.SkinRegistry) {
+        this.currentSkinId = window.SkinRegistry.getSkinIdByEmoji(petEmoji);
+
+        // 检查该皮肤是否支持 Lottie
+        if (!window.SkinRegistry.hasLottieSupport(petEmoji)) {
+          console.log(`[LottieController] 皮肤 ${petEmoji} 不支持 Lottie`);
+          return false;
+        }
+      }
+    }
+
+    const animationPath = this.getAnimationPath(state);
+    const shouldLoop = this.shouldLoop(state);
+    const stateConfig = this.getStateConfig(state);
+
+    console.log(`[LottieController] 播放状态: ${state} (${animationPath}), loop: ${shouldLoop}`);
+
+    // 如果当前状态相同且正在循环播放，不重复加载
+    if (this.currentState === state &&
+        this.animation &&
+        !this.animation.isPaused &&
+        this.currentAnimationPath === animationPath &&
+        shouldLoop) {
       console.log('[LottieController] 动画已在播放，跳过');
       return true;
     }
-    
+
+    // 如果正在加载，保持当前动画继续播放，返回 true
+    if (this.isLoading) {
+      console.log(`[LottieController] 正在加载动画 (${this.currentState}), 保持当前状态`);
+      return true;
+    }
+
+    // 清除之前的状态计时器
+    if (this.stateTimer) {
+      clearTimeout(this.stateTimer);
+      this.stateTimer = null;
+    }
+
+    // 标记为正在加载
+    this.isLoading = true;
+
+    // 保存旧动画引用，等新动画加载成功后再销毁
+    const oldAnimation = this.animation;
+    const oldState = this.currentState;
+
     try {
-      // 销毁旧动画
-      if (this.animation) {
-        this.animation.destroy();
-        this.animation = null;
+      // 如果是同一个动画文件，只重置播放位置，不重新加载
+      if (this.currentAnimationPath === animationPath && this.animation && this.animation.isLoaded) {
+        console.log('[LottieController] 复用已加载的动画，重置播放');
+
+        this.currentState = state;
+        this.animation.loop = shouldLoop;
+
+        // 重置到第一帧并播放
+        if (typeof this.animation.goToAndPlay === 'function') {
+          this.animation.goToAndPlay(0, true);
+        } else {
+          this.animation.stop();
+          this.animation.play();
+        }
+
+        this.isLoading = false;
+        this.setupStateDuration(state);
+        return true;
       }
-      
-      // 清空容器
-      this.container.innerHTML = '';
-      
-      // 加载新动画
-      this.animation = this.lottieLib.loadAnimation({
-        container: this.container,
+
+      // 先更新状态
+      this.currentState = state;
+      this.currentAnimationPath = animationPath;
+
+      // 创建新动画容器（暂不销毁旧动画）
+      const tempContainer = document.createElement('div');
+      tempContainer.style.width = '100%';
+      tempContainer.style.height = '100%';
+
+      // 加载新动画到临时容器
+      const newAnimation = this.lottieLib.loadAnimation({
+        container: tempContainer,
         renderer: 'svg',
-        loop: this.loopStates[state] !== false,
+        loop: shouldLoop,
         autoplay: true,
         path: animationPath
       });
-      
-      this.currentState = state;
-      
+
       // 监听加载完成
       return await new Promise((resolve, reject) => {
-        this.animation.addEventListener('DOMLoaded', () => {
-          console.log(`[LottieController] 动画加载成功: ${state}`);
+        newAnimation.addEventListener('DOMLoaded', () => {
+          console.log(`[LottieController] 动画 DOM 加载完成: ${state}`);
+          this.isLoading = false;
+
+          // 清除超时定时器
+          if (this.timeoutTimer) {
+            clearTimeout(this.timeoutTimer);
+            this.timeoutTimer = null;
+          }
+
+          // 新动画加载成功，现在才销毁旧动画并替换
+          if (oldAnimation) {
+            oldAnimation.destroy();
+          }
+          this.container.innerHTML = '';
+          this.container.appendChild(tempContainer);
+          this.animation = newAnimation;
 
           // 调试信息：检查 SVG 内容
           if (this.container && this.container.querySelector('svg')) {
             const svg = this.container.querySelector('svg');
             const shapes = svg.querySelectorAll('path, circle, ellipse, rect, g');
             console.log(`[LottieController] SVG 包含 ${shapes.length} 个元素`);
-            console.log(`[LottieController] SVG 尺寸: ${svg.getAttribute('width')}x${svg.getAttribute('height')}`);
-            console.log(`[LottieController] SVG viewBox: ${svg.getAttribute('viewBox')}`);
-            console.log(`[LottieController] 容器尺寸: ${this.container.offsetWidth}x${this.container.offsetHeight}`);
 
-            // 修复 viewBox 问题：确保 SVG 正确缩放到容器
+            // 修复 viewBox 问题
             if (!svg.getAttribute('viewBox') && svg.getAttribute('width') && svg.getAttribute('height')) {
               const width = svg.getAttribute('width');
               const height = svg.getAttribute('height');
               svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-              console.log(`[LottieController] ⚠️ 修复缺失的 viewBox: 0 0 ${width} ${height}`);
-            }
-
-            // 检查前几个形状元素的颜色
-            const fills = svg.querySelectorAll('[fill]');
-            if (fills.length > 0) {
-              console.log(`[LottieController] 填充颜色数量: ${fills.length}`);
-              for (let i = 0; i < Math.min(3, fills.length); i++) {
-                console.log(`[LottieController] 填充 ${i+1}: ${fills[i].getAttribute('fill')}`);
-              }
-            }
-
-            if (shapes.length === 0) {
-              console.warn('[LottieController] ⚠️ SVG 中没有找到任何形状元素！');
             }
           }
+
+          // 如果不是循环播放，监听 complete 事件
+          if (!shouldLoop) {
+            console.log(`[LottieController] 状态 ${state} 为单次播放，监听 complete 事件`);
+
+            // 只监听一次 complete 事件
+            newAnimation.addEventListener('complete', () => {
+              console.log(`[LottieController] 动画播放完成: ${state}`);
+
+              // 检查配置中是否有自动切换
+              if (stateConfig && stateConfig.onComplete) {
+                const nextState = stateConfig.onComplete;
+                console.log(`[LottieController] 自动切换到: ${nextState}`);
+
+                // 通知 Animation 控制器
+                if (window.PetAnimations && window.PetAnimations.currentState === state) {
+                  window.PetAnimations.setState(nextState);
+                }
+              } else {
+                // 默认切换到 idle
+                console.log(`[LottieController] 动画完成，切换到 idle`);
+                if (window.PetAnimations && window.PetAnimations.currentState === state) {
+                  window.PetAnimations.setState('idle');
+                }
+              }
+            }, { once: true });
+          }
+
+          // 设置状态持续时间（用于最小显示时间）
+          this.setupStateDuration(state);
 
           resolve(true);
         });
 
-        this.animation.addEventListener('data_failed', (error) => {
+        newAnimation.addEventListener('data_failed', (error) => {
           console.error(`[LottieController] 动画加载失败: ${state}`, error);
-          this.enabled = false;
+          this.isLoading = false;
+
+          // 清除超时定时器
+          if (this.timeoutTimer) {
+            clearTimeout(this.timeoutTimer);
+            this.timeoutTimer = null;
+          }
+
+          // 标记该皮肤 Lottie 不可用
+          if (window.SkinRegistry) {
+            window.SkinRegistry.markLottieUnavailable(this.baseExpression);
+          }
+
+          // 新动画加载失败，保持旧动画继续播放
+          this.currentState = oldState;
+          console.log('[LottieController] 新动画加载失败，保持旧动画');
+
           reject(error);
         });
 
-        // 超时处理
-        setTimeout(() => {
-          if (this.animation && !this.animation.isLoaded) {
+        // 超时处理 - 15 秒超时
+        this.timeoutTimer = setTimeout(() => {
+          if (this.timeoutTimer) {
             console.error(`[LottieController] 动画加载超时: ${state}`);
-            this.enabled = false;
+            console.error(`[LottieController] 动画路径: ${animationPath}`);
+            console.error(`[LottieController] 容器尺寸: ${this.container?.offsetWidth}x${this.container?.offsetHeight}`);
+            console.error(`[LottieController] 动画对象: ${newAnimation ? '存在' : '不存在'}`);
+            console.error(`[LottieController] isLoaded: ${newAnimation?.isLoaded}`);
+
+            this.isLoading = false;
+
+            // 超时时保持旧动画继续播放
+            this.currentState = oldState;
+            console.log('[LottieController] 动画加载超时，保持旧动画');
+
+            // 销毁新动画
+            if (newAnimation) {
+              newAnimation.destroy();
+            }
+
             reject(new Error('Timeout'));
           }
-        }, 3000);
+        }, 15000); // 15 秒超时
       });
-      
+
     } catch (error) {
       console.error(`[LottieController] 加载动画失败:`, error);
-      this.enabled = false;
+      this.isLoading = false;
+
+      // 发生错误时保持旧动画
+      this.currentState = oldState;
+      console.log('[LottieController] 发生错误，保持旧动画');
+
       return false;
     }
   }
-  
+
+  // 设置状态持续时间（用于循环播放状态的最小显示时间）
+  setupStateDuration(state) {
+    const stateConfig = this.getStateConfig(state);
+    if (!stateConfig) return;
+
+    const shouldLoop = this.shouldLoop(state);
+
+    // 如果不是循环播放，由 complete 事件处理，不需要设置定时器
+    if (!shouldLoop) {
+      console.log(`[LottieController] 状态 ${state} 为单次播放，由 complete 事件处理`);
+      return;
+    }
+
+    // 如果有 minDisplayTime，设置最小显示时间
+    if (stateConfig.minDisplayTime) {
+      console.log(`[LottieController] 设置状态最小显示时间: ${state} - ${stateConfig.minDisplayTime}ms`);
+
+      this.stateTimer = setTimeout(() => {
+        console.log(`[LottieController] 状态 ${state} 最小显示时间结束`);
+
+        // 最小显示时间结束后，可以自动切换到 idle
+        // 只通知 Animation.js，让 Animation 统一管理状态切换
+        if (window.PetAnimations && window.PetAnimations.currentState === state) {
+          window.PetAnimations.setState('idle');
+        }
+      }, stateConfig.minDisplayTime);
+    }
+  }
+
   // 过渡到新状态（带淡入淡出效果）
   async transitionTo(state, duration = 300) {
-    if (!this.enabled) {
+    if (!this.enabled || this.isLoading) {
       return false;
     }
-    
+
     console.log(`[LottieController] 过渡到: ${state}`);
-    
+
     // 淡出当前动画
     if (this.container) {
       this.container.style.transition = `opacity ${duration}ms ease-out`;
       this.container.style.opacity = '0';
     }
-    
+
     // 等待淡出完成
     await new Promise(resolve => setTimeout(resolve, duration));
-    
+
     // 加载新动画
     const success = await this.playState(state);
-    
+
     // 淡入新动画
     if (success && this.container) {
       this.container.style.opacity = '1';
     }
-    
+
     return success;
   }
-  
+
   // 暂停动画
   pause() {
     if (this.animation) {
       this.animation.pause();
     }
   }
-  
+
   // 恢复动画
   resume() {
     if (this.animation) {
       this.animation.play();
     }
   }
-  
+
   // 停止并重置动画
   stop() {
     if (this.animation) {
       this.animation.stop();
     }
   }
-  
+
   // 设置动画速度
   setSpeed(speed) {
     if (this.animation) {
       this.animation.setSpeed(speed);
     }
   }
-  
+
   // 销毁动画
   destroy() {
+    if (this.stateTimer) {
+      clearTimeout(this.stateTimer);
+      this.stateTimer = null;
+    }
+
+    if (this.timeoutTimer) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = null;
+    }
+
     if (this.animation) {
       this.animation.destroy();
       this.animation = null;
     }
+
     this.currentState = null;
+    this.currentAnimationPath = null;
+    this.isLoading = false;
+
     console.log('[LottieController] 动画已销毁');
   }
-  
+
   // 检查是否已启用
   isEnabled() {
     return this.enabled;
   }
-  
+
   // 获取当前状态
   getState() {
     return this.currentState;
+  }
+
+  // 设置基础表情（宠物类型）
+  setBaseExpression(petEmoji) {
+    this.baseExpression = petEmoji;
+    if (window.SkinRegistry) {
+      this.currentSkinId = window.SkinRegistry.getSkinIdByEmoji(petEmoji);
+    }
   }
 }
 

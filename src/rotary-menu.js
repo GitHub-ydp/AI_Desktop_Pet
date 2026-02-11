@@ -28,16 +28,16 @@ class RotaryMenuController {
       },
       {
         id: 'history',
-        icon: '📜',
+        icon: '📋',
         label: '历史',
         action: () => window.openHistory && window.openHistory(),
         angle: 120
       },
       {
-        id: 'reminder',
-        icon: '⏰',
-        label: '提醒',
-        action: () => this.showReminderMenu(),
+        id: 'theme',
+        icon: '🎨',
+        label: '主题',
+        action: () => window.openTheme && window.openTheme(),
         angle: 180
       },
       {
@@ -159,7 +159,9 @@ class RotaryMenuController {
       itemElement.dataset.id = item.id;
       itemElement.dataset.angle = item.angle;
       itemElement.title = item.label;
-      
+      // 设置 staggered 弹入动画所需的 CSS 变量
+      itemElement.style.setProperty('--item-index', index);
+
       // 按钮孔
       const holeElement = document.createElement('div');
       holeElement.className = 'dial-hole';
@@ -206,7 +208,7 @@ class RotaryMenuController {
   
   // 更新菜单项位置
   updateItemPositions() {
-    const radius = 95; // 调整半径以适应新的环形尺寸 (扩大孔洞后，半径也需要增加)
+    const radius = 115; // 菜单尺寸变大后，增加半径
     
     this.itemElements.forEach((element) => {
       const angle = parseFloat(element.dataset.angle);
@@ -241,7 +243,8 @@ class RotaryMenuController {
     console.log('[RotaryMenu] 打开菜单');
     this.isOpen = true;
     this.currentLevel = 1;
-    
+    this.renderMenuItems(); // 确保每次打开都重置为一级菜单
+
     // 仅主窗口需要扩展尺寸
     if (!this.isMenuWindow && window.electron && window.electron.resizeWindow) {
       window.electron.resizeWindow('medium');
@@ -264,7 +267,8 @@ class RotaryMenuController {
     
     console.log('[RotaryMenu] 关闭菜单');
     this.isOpen = false;
-    
+    this.currentLevel = 1; // 关闭时重置层级，防止下次打开显示二级菜单
+
     if (this.menuElement) {
       this.menuElement.classList.remove('rotary-menu-open');
       this.dialElement.classList.remove('spinning-in');
@@ -324,17 +328,28 @@ class RotaryMenuController {
   // ========== 菜单项动作（复用原有逻辑） ==========
   
   showReminderMenu() {
-    console.log('[RotaryMenu] 显示提醒菜单（待实现）');
-    alert('提醒功能开发中...');
+    console.log('[RotaryMenu] 显示提醒菜单');
     this.close();
+    // 打开聊天窗口，引导用户说出提醒内容
+    if (window.openChat) {
+      window.openChat();
+    }
+    // 稍微延迟显示引导气泡，等聊天窗口打开后再提示
+    setTimeout(() => {
+      if (window.showBubbleMessage) {
+        window.showBubbleMessage('告诉我你需要提醒什么~');
+      }
+    }, 300);
   }
-  
+
   showToolsMenu() {
-    console.log('[RotaryMenu] 显示工具菜单（待实现）');
-    alert('工具功能开发中...');
+    console.log('[RotaryMenu] 显示工具菜单（开发中）');
     this.close();
+    if (window.showBubbleMessage) {
+      window.showBubbleMessage('工具功能开发中...');
+    }
   }
-  
+
   openDebugConsole() {
     console.log('[RotaryMenu] 打开调试控制台');
     if (window.electron && window.electron.openDevTools) {
@@ -344,11 +359,13 @@ class RotaryMenuController {
     }
     this.close();
   }
-  
+
   showAbout() {
     console.log('[RotaryMenu] 显示关于信息');
-    alert('AI Desktop Pet v1.0\n\n一个可爱的桌面AI宠物\n使用 DeepSeek API');
     this.close();
+    if (window.showBubbleMessage) {
+      window.showBubbleMessage('AI Desktop Pet - 你的 AI 桌面伙伴 ✨');
+    }
   }
   
   hideApp() {

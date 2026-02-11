@@ -3,6 +3,7 @@
 
 const { ToolRegistry, createToolRegistry } = require('./registry.js');
 const { systemTools } = require('./tools/system.js');
+const { screenshotTools } = require('./tools/screenshot.js');
 const { getDatabasePath, TOOL_CONFIG } = require('./config.js');
 const Database = require('better-sqlite3');
 
@@ -64,6 +65,9 @@ class ToolSystem {
 
     // 注册系统工具
     this.registry.registerCategory('system', systemTools);
+
+    // 注册截图工具
+    this.registry.registerCategory('screenshot', screenshotTools);
 
     console.log('✅ 内置工具注册完成');
   }
@@ -190,6 +194,7 @@ module.exports = {
   ToolRegistry,
   TOOL_CONFIG,
   systemTools,
+  screenshotTools,
   initializeTools,
   getToolRegistry,
   getToolSystem,

@@ -128,6 +128,18 @@ CREATE INDEX IF NOT EXISTS idx_reminder_history_keyword ON reminder_history(vagu
 CREATE INDEX IF NOT EXISTS idx_reminder_history_completed_at ON reminder_history(completed_at);
 CREATE INDEX IF NOT EXISTS idx_reminder_history_reminder_id ON reminder_history(reminder_id);
 
+-- 14. 用户画像汇总表：从事实中提取的结构化用户信息
+CREATE TABLE IF NOT EXISTS user_profile (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  confidence REAL DEFAULT 1.0,
+  updated_at INTEGER NOT NULL,
+  source_fact_id TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_profile_updated_at ON user_profile(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_profile_confidence ON user_profile(confidence DESC);
+
 -- ==================== 数据迁移 ====================
 -- 为现有数据库添加新字段（如果不存在）
 
@@ -230,3 +242,46 @@ CREATE TABLE IF NOT EXISTS display_profiles (
 
 CREATE INDEX IF NOT EXISTS idx_display_profiles_updated_at ON display_profiles(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_display_profiles_active ON display_profiles(is_active);
+
+-- ==================== 截图系统 ====================
+-- Screenshot System
+
+-- 12. 截图历史表：存储所有截图记录
+CREATE TABLE IF NOT EXISTS screenshots (
+  id TEXT PRIMARY KEY,
+  file_path TEXT NOT NULL,
+  file_size INTEGER,
+  width INTEGER,
+  height INTEGER,
+  format TEXT DEFAULT 'png',
+  capture_method TEXT DEFAULT 'region', -- region, fullscreen, window
+  metadata TEXT, -- JSON 格式存储额外信息
+  tags TEXT, -- 逗号分隔的标签
+  ocr_text TEXT, -- OCR 识别的文本
+  is_deleted INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  accessed_at INTEGER
+);
+
+-- 截图历史索引
+CREATE INDEX IF NOT EXISTS idx_screenshots_created_at ON screenshots(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_screenshots_is_deleted ON screenshots(is_deleted);
+CREATE INDEX IF NOT EXISTS idx_screenshots_tags ON screenshots(tags);
+
+-- 13. 截图分析表：存储 AI 分析、OCR、翻译结果
+CREATE TABLE IF NOT EXISTS screenshot_analyses (
+  id TEXT PRIMARY KEY,
+  screenshot_id TEXT NOT NULL,
+  analysis_type TEXT NOT NULL, -- analyze, ocr, translate
+  model TEXT, -- 使用的 AI 模型
+  prompt TEXT, -- 分析提示词
+  result TEXT, -- 分析结果
+  confidence REAL, -- 置信度
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (screenshot_id) REFERENCES screenshots(id) ON DELETE CASCADE
+);
+
+-- 截图分析索引
+CREATE INDEX IF NOT EXISTS idx_screenshot_analyses_screenshot_id ON screenshot_analyses(screenshot_id);
+CREATE INDEX IF NOT EXISTS idx_screenshot_analyses_type ON screenshot_analyses(analysis_type);
+CREATE INDEX IF NOT EXISTS idx_screenshot_analyses_created_at ON screenshot_analyses(created_at DESC);

@@ -1,5 +1,6 @@
 // 上下文构建器
 // 负责格式化搜索结果并构建 AI 上下文
+// 支持分层记忆系统（有 MemoryLayerManager 时使用分层构建，否则回退到旧逻辑）
 // CommonJS 版本 - 用于主进程
 
 const { MEMORY_CONFIG } = require('./config');
@@ -16,17 +17,63 @@ class ContextBuilder {
         ? options.includeTimestamp
         : MEMORY_CONFIG.context.includeTimestamp
     };
+
+    // 分层记忆管理器引用（可选）
+    this.memoryLayerManager = options.memoryLayerManager || null;
+  }
+
+  // 设置分层记忆管理器
+  setMemoryLayerManager(manager) {
+    this.memoryLayerManager = manager;
   }
 
   // 构建上下文（增强情感感知）
-  build(searchResults, options = {}) {
+  // 如果有分层记忆管理器，优先使用分层构建
+  async build(searchResults, options = {}) {
     const {
       query = '',
       maxTokens = this.config.maxTokens,
       maxMemories = this.config.maxMemories,
       includeFacts = this.config.includeFacts,
       includeTimestamp = this.config.includeTimestamp,
-      // 新增：情感上下文
+      currentMood = 80,
+      currentPersonality = 'healing'
+    } = options;
+
+    // 如果有分层记忆管理器，使用分层上下文构建
+    if (this.memoryLayerManager) {
+      try {
+        const layeredContext = await this.memoryLayerManager.buildLayeredContext(query, {
+          mood: currentMood,
+          personality: currentPersonality,
+          maxTokens
+        });
+
+        if (layeredContext && layeredContext.trim()) {
+          // 添加当前查询
+          let context = layeredContext;
+          if (query) {
+            context += `\n【当前对话】用户说：${query}\n`;
+          }
+          return context;
+        }
+      } catch (error) {
+        console.warn('[Context] 分层上下文构建失败，回退到传统模式:', error.message);
+      }
+    }
+
+    // 回退到传统模式
+    return this._buildLegacy(searchResults, options);
+  }
+
+  // 传统上下文构建（保留原逻辑作为降级方案）
+  _buildLegacy(searchResults, options = {}) {
+    const {
+      query = '',
+      maxTokens = this.config.maxTokens,
+      maxMemories = this.config.maxMemories,
+      includeFacts = this.config.includeFacts,
+      includeTimestamp = this.config.includeTimestamp,
       currentMood = 80,
       currentPersonality = 'healing'
     } = options;
@@ -42,7 +89,6 @@ class ContextBuilder {
     }
 
     // 1. 添加相关记忆
-    // 过滤掉分数太低的，但保留足够的候选
     const filteredResults = searchResults.filter(r => r.score >= 0.05);
     const memories = filteredResults.slice(0, maxMemories);
 
@@ -51,8 +97,6 @@ class ContextBuilder {
 
       for (const memory of memories) {
         const memoryText = this.formatMemory(memory, includeTimestamp, currentMood);
-
-        // 粗略估算 token 数（中文约1.5倍，英文约1倍）
         const estimatedTokens = this.estimateTokens(memoryText);
 
         if (usedTokens + estimatedTokens > maxTokens * 0.8) {
@@ -66,7 +110,7 @@ class ContextBuilder {
       context += '\n请记住以上信息，并在对话中自然地使用。\n';
     }
 
-    // 2. 添加相关事实（提取的结构化信息）
+    // 2. 添加相关事实
     if (includeFacts) {
       const allFacts = this.extractFacts(memories);
 

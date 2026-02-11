@@ -56,6 +56,12 @@ class DatabaseMigrator {
     if (currentVersion < 2) {
       await this.migrateToV2();
     }
+    if (currentVersion < 3) {
+      await this.migrateToV3();
+    }
+    if (currentVersion < 4) {
+      await this.migrateToV4();
+    }
   }
 
   // 迁移到版本1：修复 reminders 表约束
@@ -182,9 +188,95 @@ class DatabaseMigrator {
       throw error;
     }
   }
+
+  // 迁移到版本3：新增截图系统表
+  async migrateToV3() {
+    console.log('[Migrate] Migrating to v3: Add screenshot tables...');
+    try {
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS screenshots (
+          id TEXT PRIMARY KEY,
+          file_path TEXT NOT NULL,
+          file_size INTEGER,
+          width INTEGER,
+          height INTEGER,
+          format TEXT DEFAULT 'png',
+          capture_method TEXT DEFAULT 'region',
+          metadata TEXT,
+          tags TEXT,
+          ocr_text TEXT,
+          is_deleted INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          accessed_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_screenshots_created_at ON screenshots(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_screenshots_is_deleted ON screenshots(is_deleted);
+        CREATE INDEX IF NOT EXISTS idx_screenshots_tags ON screenshots(tags);
+
+        CREATE TABLE IF NOT EXISTS screenshot_analyses (
+          id TEXT PRIMARY KEY,
+          screenshot_id TEXT NOT NULL,
+          analysis_type TEXT NOT NULL,
+          model TEXT,
+          prompt TEXT,
+          result TEXT,
+          confidence REAL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (screenshot_id) REFERENCES screenshots(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_screenshot_analyses_screenshot_id ON screenshot_analyses(screenshot_id);
+        CREATE INDEX IF NOT EXISTS idx_screenshot_analyses_type ON screenshot_analyses(analysis_type);
+        CREATE INDEX IF NOT EXISTS idx_screenshot_analyses_created_at ON screenshot_analyses(created_at DESC);
+      `);
+      console.log('[Migrate] ✓ Migration to v3 complete');
+    } catch (error) {
+      console.error('[Migrate] ✗ Migration to v3 failed:', error);
+      throw error;
+    }
+  }
+
+  // 迁移到版本4：记忆系统升级（向量嵌入 + 事实提取 + 用户画像）
+  async migrateToV4() {
+    console.log('[Migrate] Migrating to v4: Memory system upgrade...');
+    try {
+      // 1. memory_facts 表添加新字段
+      const factsColumns = this.storage.db.pragma('table_info(memory_facts)');
+      const factsColumnNames = factsColumns.map(c => c.name);
+
+      if (!factsColumnNames.includes('last_confirmed_at')) {
+        this.storage.db.exec('ALTER TABLE memory_facts ADD COLUMN last_confirmed_at INTEGER');
+      }
+      if (!factsColumnNames.includes('source_text')) {
+        this.storage.db.exec('ALTER TABLE memory_facts ADD COLUMN source_text TEXT');
+      }
+
+      // 2. 新增 user_profile 汇总表
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS user_profile (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          confidence REAL DEFAULT 1.0,
+          updated_at INTEGER NOT NULL,
+          source_fact_id TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_profile_updated_at ON user_profile(updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_user_profile_confidence ON user_profile(confidence DESC);
+      `);
+
+      // 3. 回填 memory_facts 新字段
+      this.storage.db.exec(`
+        UPDATE memory_facts SET last_confirmed_at = updated_at WHERE last_confirmed_at IS NULL
+      `);
+
+      console.log('[Migrate] ✓ Migration to v4 complete');
+    } catch (error) {
+      console.error('[Migrate] ✗ Migration to v4 failed:', error);
+      throw error;
+    }
+  }
 }
 
 // 定义最新版本号
-const LATEST_VERSION = 2;
+const LATEST_VERSION = 4;
 
 module.exports = { DatabaseMigrator, LATEST_VERSION };

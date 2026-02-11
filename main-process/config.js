@@ -8,7 +8,7 @@ const MEMORY_CONFIG = {
     maxSize: 100 * 1024 * 1024 // 100MB
   },
 
-  // 嵌入配置
+  // 嵌入配置（旧 API 方式，保留兼容）
   embeddings: {
     provider: 'deepseek',
     model: 'deepseek-embeddings',
@@ -17,6 +17,19 @@ const MEMORY_CONFIG = {
     timeout: 30000,
     retryAttempts: 3,
     retryDelay: 1000
+  },
+
+  // 本地 ONNX 嵌入引擎配置
+  localEmbedding: {
+    enabled: true,
+    modelName: 'Xenova/bge-small-zh-v1.5',
+    dimensions: 512,
+    maxBatchSize: 32,
+    // 历史数据迁移配置
+    migration: {
+      batchSize: 50,
+      delayMs: 1000
+    }
   },
 
   // 分块配置
@@ -43,12 +56,32 @@ const MEMORY_CONFIG = {
     includeTimestamp: true
   },
 
-  // 提取配置
+  // 提取配置（旧正则提取器）
   extraction: {
     enabled: true,
     autoExtract: true,
     useAI: true,
     confidence: 0.7
+  },
+
+  // LLM 事实提取器配置
+  factExtraction: {
+    enabled: true,
+    bufferThreshold: 3,    // 累积 N 轮对话后批量提取
+    model: 'deepseek-chat',
+    apiHost: 'api.deepseek.com',
+    apiPath: '/v1/chat/completions'
+  },
+
+  // 记忆分层配置
+  memoryLayers: {
+    enabled: true,
+    tokenBudget: {
+      total: 1500,
+      profile: 200,   // Layer 1: 用户画像
+      core: 800,       // Layer 2: 重要记忆
+      history: 500     // Layer 3: 对话历史
+    }
   },
 
   // 清理配置

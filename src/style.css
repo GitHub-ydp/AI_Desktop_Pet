@@ -25,7 +25,12 @@ body {
   --cyber-gradient: linear-gradient(135deg, rgba(232, 248, 255, 0.96), rgba(210, 236, 255, 0.9));
   --pet-bottom: 0px;  /* 兼容旧逻辑，当前不用于定位 */
   --pet-size: 150px;  /* 匹配 150x150 主窗口 */
-  --menu-size: 250px;
+  --menu-size: 300px;
+  --pet-lottie-scale: 0.72;
+  /* 主题 CSS 变量默认值（懒猫橘），由 theme-manager.js 在运行时覆盖 */
+  --bg: #1a0e05;
+  --neon-cyan: #ffb347;
+  --neon-magenta: #ff6b35;
 }
 
 #app {
@@ -125,6 +130,8 @@ body {
   display: block;
   overflow: visible !important;
   position: relative;
+  transform: scale(var(--pet-lottie-scale));
+  transform-origin: center center;
 }
 
 /* 确保 SVG 内部元素可见 */
@@ -407,31 +414,6 @@ body {
   background: radial-gradient(circle, rgba(100, 120, 180, 0.1) 0%, transparent 70%);
 }
 
-/* 伤心的泪滴 */
-.pet-wrapper.pet-sad::after {
-  content: '💧';
-  position: absolute;
-  top: 20px;
-  left: 25%;
-  font-size: 18px;
-  animation: tear-drop 3s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes tear-drop {
-  0%, 30% {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  40% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-}
 
 /* ========== 线性胶囊菜单 ========== */
 .linear-menu {
@@ -565,7 +547,7 @@ body {
 /* 对话气泡 */
 .chat-bubble {
   position: absolute;
-  bottom: 160px;  /* 调整到宠物上方 */
+  bottom: 190px;  /* 调整到宠物上方 */
   left: 50%;
   transform: translateX(-50%) scale(0.75);
   background: var(--cyber-gradient);
@@ -1069,17 +1051,17 @@ body {
   /* 将来可以添加深色模式样式 */
 }
 
-/* ========== 旋转拨号菜单 ========== */
+/* ========== 旋转拨号菜单 — 赛博朋克风格 ========== */
+/* 霓虹色变量：电子青 / 品红 / 紫电 */
 .rotary-menu {
   position: absolute;
-  /* 与宠物中心对齐 */
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: var(--menu-size);
   height: var(--menu-size);
-  z-index: 5; /* 降低层级，让宠物(z-index: 10)在上面 */
-  pointer-events: none; /* 默认不阻挡点击 */
+  z-index: 5;
+  pointer-events: none;
 }
 
 .rotary-menu-open {
@@ -1093,137 +1075,231 @@ body {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  /* 赛博霓虹环 */
-  background: radial-gradient(circle at 50% 50%, transparent 40%, rgba(232, 246, 255, 0.95) 41%, rgba(200, 230, 255, 0.92) 78%, rgba(185, 220, 248, 0.95) 100%);
+  /* 极暗背景让霓虹色爆发 */
+  background: radial-gradient(
+    circle at 50% 50%,
+    transparent 38%,
+    rgb(from var(--bg) r g b / 0.88) 39%,
+    rgb(from var(--bg) r g b / 0.92) 78%,
+    rgb(from var(--bg) r g b / 0.90) 100%
+  );
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  /* 霓虹双色边框光晕：主色 + 强调色 */
   box-shadow:
-    0 16px 36px rgba(0, 0, 0, 0.24),
-    0 0 22px rgba(0, 220, 255, 0.22),
-    inset 0 0 18px rgba(255, 255, 255, 0.75),
-    inset 0 0 6px rgba(0, 120, 180, 0.12);
-  border: 1px solid rgba(120, 200, 255, 0.75);
-  /* 初始状态：缩小到中心 (scale 0) */
+    0 0 0 1.5px rgb(from var(--neon-cyan) r g b / 0.55),
+    0 0 18px rgb(from var(--neon-cyan) r g b / 0.60),
+    0 0 45px rgb(from var(--neon-cyan) r g b / 0.30),
+    0 0 0 3px rgb(from var(--neon-magenta) r g b / 0.18),
+    inset 0 0 40px rgb(from var(--neon-cyan) r g b / 0.06);
+  border: 1px solid rgb(from var(--neon-cyan) r g b / 0.45);
   transform: scale(0);
-  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); /* 弹性缓动，慢慢出来 */
+  transition: transform 0.50s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.30s ease;
   opacity: 0;
-  /* 确保中间镂空部分不响应点击 */
   pointer-events: auto;
-  clip-path: circle(50% at 50% 50%); /* 确保只有圆形区域可点击 */
-  -webkit-mask: radial-gradient(transparent 38%, black 39%); /* 遮罩中心 */
-  mask: radial-gradient(transparent 38%, black 39%);
+  clip-path: circle(50% at 50% 50%);
+  -webkit-mask: radial-gradient(transparent 37%, black 38%);
+  mask: radial-gradient(transparent 37%, black 38%);
 }
 
-/* 拨号盘高光层 */
-.rotary-dial::after {
-  content: '';
-  position: absolute;
-  inset: 8px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0) 58%);
-  pointer-events: none;
-}
-
-/* 外圈霓虹描边 */
+/* 外圈旋转光晕 — 主色/强调色交替 */
 .rotary-dial::before {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: -6px;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, rgba(0, 255, 255, 0.35), rgba(255, 255, 255, 0.04), rgba(0, 200, 255, 0.3));
-  filter: blur(6px);
-  opacity: 0.55;
+  background: conic-gradient(
+    from 0deg,
+    rgb(from var(--neon-cyan) r g b / 0.70),
+    rgb(from var(--neon-magenta) r g b / 0.45),
+    rgb(from var(--neon-magenta) r g b / 0.60),
+    rgb(from var(--neon-cyan) r g b / 0.55),
+    rgb(from var(--neon-cyan) r g b / 0.70)
+  );
+  filter: blur(10px);
+  opacity: 0.75;
   z-index: -1;
   pointer-events: none;
+  animation: rotary-glow-pulse 2.5s ease-in-out infinite;
 }
 
-/* 拨号盘入场动画 - 从后面滑出 (scale 1) */
+/* 内圈扫描线质感 */
+.rotary-dial::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgb(from var(--neon-cyan) r g b / 0.025) 3px,
+    rgb(from var(--neon-cyan) r g b / 0.025) 4px
+  );
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* 霓虹脉冲动画 */
+@keyframes rotary-glow-pulse {
+  0%, 100% { opacity: 0.65; transform: scale(1) rotate(0deg); }
+  50%       { opacity: 0.90; transform: scale(1.02) rotate(180deg); }
+}
+
+/* 拨号盘入场 */
 .rotary-dial.spinning-in {
   transform: scale(1);
   opacity: 1;
 }
 
-/* 拨号盘出场动画 - 缩回中心 */
+/* 拨号盘出场 */
 .rotary-dial.spinning-out {
   transform: scale(0);
   opacity: 0;
-  transition: all 0.4s ease-in;
+  transition: all 0.35s ease-in;
 }
 
-/* 拨号盘中心装饰 - 已移除，为了显示宠物 */
+/* 拨号盘中心装饰 - 隐藏，显示宠物 */
 .dial-center {
   display: none;
 }
 
-/* 菜单项 */
+/* 菜单项 — staggered 弹入支持 */
 .dial-item {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   transform: translate(calc(-50% + var(--item-x)), calc(-50% + var(--item-y)));
   z-index: 3;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition:
+    transform 0.18s ease,
+    opacity 0.25s ease calc(var(--item-index, 0) * 50ms);
 }
 
-/* 拨号孔 */
+/* 入场弹入关键帧 */
+.rotary-dial.spinning-in .dial-item {
+  animation: dial-item-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: calc(var(--item-index, 0) * 55ms);
+}
+
+@keyframes dial-item-pop {
+  0%   { opacity: 0; transform: translate(calc(-50% + var(--item-x)), calc(-50% + var(--item-y))) scale(0.2); }
+  100% { opacity: 1; transform: translate(calc(-50% + var(--item-x)), calc(-50% + var(--item-y))) scale(1); }
+}
+
+/* 拨号孔 — 极暗背景 + 主题边框 */
 .dial-hole {
-  width: 38px;
-  height: 38px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(220, 245, 255, 0.9));
+  width: 44px;
+  height: 44px;
+  background: rgb(from var(--bg) r g b / 0.80);
   border-radius: 50%;
-  box-shadow: 
-    inset 2px 2px 6px rgba(0, 0, 0, 0.08),
-    inset -2px -2px 6px rgba(255, 255, 255, 0.9),
-    0 4px 10px rgba(0, 0, 0, 0.12),
-    0 0 12px rgba(0, 220, 255, 0.35);
+  border: 1.5px solid rgb(from var(--neon-cyan) r g b / 0.55);
+  box-shadow:
+    0 0 8px rgb(from var(--neon-cyan) r g b / 0.50),
+    0 0 20px rgb(from var(--neon-cyan) r g b / 0.25),
+    inset 0 0 8px rgb(from var(--neon-cyan) r g b / 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
-  border: 1px solid rgba(0, 210, 255, 0.5);
+  transition: all 0.18s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
+/* 悬停：主色爆发 */
 .dial-item:hover .dial-hole {
-  transform: scale(1.1);
-  background: linear-gradient(135deg, #ffffff, #dff6ff);
-  box-shadow: 
-    0 6px 18px rgba(0, 220, 255, 0.5),
-    0 0 16px rgba(0, 240, 255, 0.6),
-    inset 0 0 0 transparent;
-  border-color: rgba(0, 240, 255, 0.9);
+  transform: scale(1.15);
+  background: rgb(from var(--bg) r g b / 0.85);
+  border-color: var(--neon-cyan);
+  box-shadow:
+    0 0 14px var(--neon-cyan),
+    0 0 30px rgb(from var(--neon-cyan) r g b / 0.70),
+    0 0 55px rgb(from var(--neon-cyan) r g b / 0.35),
+    inset 0 0 12px rgb(from var(--neon-cyan) r g b / 0.15);
 }
 
+/* 点击反馈：强调色闪烁 */
 .dial-item.clicked .dial-hole {
-  transform: scale(0.95);
-  background: #e3f2fd;
+  transform: scale(0.90);
+  border-color: rgb(from var(--neon-magenta) r g b / 0.90);
+  box-shadow:
+    0 0 14px rgb(from var(--neon-magenta) r g b / 0.80),
+    0 0 30px rgb(from var(--neon-magenta) r g b / 0.50);
 }
 
+/* 图标 */
 .dial-icon {
-  font-size: 18px;
-  transition: transform 0.2s ease;
+  font-size: 19px;
+  transition: transform 0.18s ease, filter 0.18s ease;
+  filter: drop-shadow(0 0 4px rgb(from var(--neon-cyan) r g b / 0.60));
 }
 
 .dial-item:hover .dial-icon {
-  transform: scale(1.1);
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 8px rgb(from var(--neon-cyan) r g b / 0.90));
 }
 
-/* 标签（悬停显示） */
+/* 对话按钮 — 主色专属 */
+.dial-item[data-id="chat"] .dial-hole {
+  border-color: rgb(from var(--neon-cyan) r g b / 0.70);
+  box-shadow:
+    0 0 10px rgb(from var(--neon-cyan) r g b / 0.65),
+    0 0 25px rgb(from var(--neon-cyan) r g b / 0.30),
+    inset 0 0 8px rgb(from var(--neon-cyan) r g b / 0.10);
+}
+
+.dial-item[data-id="chat"]:hover .dial-hole {
+  border-color: var(--neon-cyan);
+  box-shadow:
+    0 0 18px var(--neon-cyan),
+    0 0 40px rgb(from var(--neon-cyan) r g b / 0.60),
+    0 0 70px rgb(from var(--neon-cyan) r g b / 0.30),
+    inset 0 0 14px rgb(from var(--neon-cyan) r g b / 0.20);
+}
+
+/* 关闭按钮 — 强调色专属 */
+.dial-item[data-id="close"] .dial-hole {
+  border-color: rgb(from var(--neon-magenta) r g b / 0.65);
+  box-shadow:
+    0 0 10px rgb(from var(--neon-magenta) r g b / 0.60),
+    0 0 22px rgb(from var(--neon-magenta) r g b / 0.25),
+    inset 0 0 8px rgb(from var(--neon-magenta) r g b / 0.10);
+}
+
+.dial-item[data-id="close"]:hover .dial-hole {
+  border-color: var(--neon-magenta);
+  box-shadow:
+    0 0 18px var(--neon-magenta),
+    0 0 40px rgb(from var(--neon-magenta) r g b / 0.65),
+    0 0 70px rgb(from var(--neon-magenta) r g b / 0.30),
+    inset 0 0 14px rgb(from var(--neon-magenta) r g b / 0.20);
+}
+
+/* 标签 — 主题色字 + 极暗底 */
 .dial-label {
   position: absolute;
-  bottom: -30px;
+  bottom: -26px;
   left: 50%;
-  transform: translateX(-50%) translateY(4px);
+  transform: translateX(-50%) translateY(5px);
   font-size: 10px;
-  color: #0a4b63;
-  background: rgba(220, 250, 255, 0.85);
-  padding: 2px 6px;
-  border-radius: 6px;
+  color: rgb(from var(--neon-cyan) r g b / 0.95);
+  background: rgb(from var(--bg) r g b / 0.88);
+  padding: 2px 7px;
+  border-radius: 4px;
   white-space: nowrap;
   opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease;
   pointer-events: none;
-  box-shadow: 0 2px 8px rgba(0, 180, 255, 0.25);
+  border: 1px solid rgb(from var(--neon-cyan) r g b / 0.40);
+  box-shadow: 0 0 8px rgb(from var(--neon-cyan) r g b / 0.30);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-size: 9px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .dial-item:hover .dial-label {

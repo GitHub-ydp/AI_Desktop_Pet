@@ -87,7 +87,17 @@ contextBridge.exposeInMainWorld('PetMemory', {
     ipcRenderer.invoke('memory:import', data),
 
   migrateFromLocalStorage: (data) =>
-    ipcRenderer.invoke('memory:migrate-localstorage', data)
+    ipcRenderer.invoke('memory:migrate-localstorage', data),
+
+  // 记忆系统升级 API
+  getEmbeddingStatus: () =>
+    ipcRenderer.invoke('memory:embedding-status'),
+
+  flushFacts: () =>
+    ipcRenderer.invoke('memory:flush-facts'),
+
+  getLayeredContext: (query, options) =>
+    ipcRenderer.invoke('memory:get-layered-context', query, options)
 });
 
 // 暴露提醒系统 API 到渲染进程
@@ -153,4 +163,59 @@ contextBridge.exposeInMainWorld('PetTools', {
   // 清空工具执行历史
   clearHistory: () =>
     ipcRenderer.invoke('tool:clear-history')
+});
+
+// 暴露截图系统 API 到渲染进程
+contextBridge.exposeInMainWorld('PetScreenshot', {
+  // 获取可用的屏幕源
+  getSources: () => ipcRenderer.invoke('screenshot:get-sources'),
+
+  // 区域截图（实际捕获在渲染进程中完成）
+  captureRegion: (bounds) => ipcRenderer.invoke('screenshot:capture-region', bounds),
+
+  // 全屏截图
+  captureFullScreen: () => ipcRenderer.invoke('screenshot:capture-fullscreen'),
+
+  // 复制到剪贴板
+  copyToClipboard: (filePath) => ipcRenderer.invoke('screenshot:copy-to-clipboard', filePath),
+
+  // 获取历史记录
+  getHistory: (options) => ipcRenderer.invoke('screenshot:get-history', options),
+
+  // 获取单个截图
+  getById: (id) => ipcRenderer.invoke('screenshot:get-by-id', id),
+
+  // 软删除截图
+  delete: (id) => ipcRenderer.invoke('screenshot:delete', id),
+
+  // 永久删除截图
+  permanentlyDelete: (id) => ipcRenderer.invoke('screenshot:permanently-delete', id),
+
+  // AI 分析
+  analyze: (id, prompt) => ipcRenderer.invoke('screenshot:analyze', id, prompt),
+
+  // OCR 识别
+  ocr: (id, lang) => ipcRenderer.invoke('screenshot:ocr', id, lang),
+
+  // 翻译
+  translate: (id, targetLang) => ipcRenderer.invoke('screenshot:translate', id, targetLang),
+
+  // 获取分析结果
+  getAnalyses: (id) => ipcRenderer.invoke('screenshot:get-analyses', id),
+
+  // 获取统计信息
+  getStatistics: () => ipcRenderer.invoke('screenshot:get-statistics'),
+
+  // 清理过期截图
+  cleanup: () => ipcRenderer.invoke('screenshot:cleanup'),
+
+  // 监听快速截图事件
+  onQuickCapture: (callback) => {
+    ipcRenderer.on('screenshot:quick-capture', callback);
+  },
+
+  // 移除监听
+  offQuickCapture: (callback) => {
+    ipcRenderer.off('screenshot:quick-capture', callback);
+  }
 });

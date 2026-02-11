@@ -1,5 +1,6 @@
 // 主进程记忆系统核心
 // 协调器 - 负责协调所有模块并通过 IPC 提供接口
+// v2: 集成本地向量嵌入、LLM 事实提取、分层记忆管理
 // CommonJS 版本 - 用于主进程
 
 const MemoryStorage = require('./database');
@@ -12,6 +13,11 @@ const ReminderScheduler = require('./reminder');
 const { DatabaseMigrator } = require('./migrate');
 const { MEMORY_CONFIG } = require('./config');
 
+// 新组件
+const EmbeddingEngine = require('./embedding');
+const FactExtractorLLM = require('./fact-extractor');
+const MemoryLayerManager = require('./memory-layer');
+
 class MemoryMainProcess {
   constructor(options = {}) {
     this.options = {
@@ -20,7 +26,7 @@ class MemoryMainProcess {
       personality: options.personality || 'healing'
     };
 
-    // 模块实例
+    // 原有模块
     this.storage = new MemoryStorage(this.options.databasePath);
     this.embeddingService = new EmbeddingService({ apiKey: this.options.apiKey });
     this.searchEngine = new MemorySearchEngine();
@@ -28,6 +34,11 @@ class MemoryMainProcess {
     this.contextBuilder = new ContextBuilder();
     this.textChunker = new TextChunker();
     this.reminderScheduler = new ReminderScheduler(this.storage);
+
+    // 新组件
+    this.embeddingEngine = null;       // 本地 ONNX 嵌入引擎
+    this.factExtractorLLM = null;      // LLM 事实提取器
+    this.memoryLayerManager = null;    // 分层记忆管理器
 
     this.isInitialized = false;
   }
@@ -47,12 +58,15 @@ class MemoryMainProcess {
       const migrator = new DatabaseMigrator(this.storage);
       await migrator.migrate();
 
-      // 设置模块依赖关系
+      // 设置原有模块依赖关系
       this.embeddingService.setStorage(this.storage);
       this.searchEngine.setStorage(this.storage);
       this.searchEngine.setEmbeddingService(this.embeddingService);
       this.factExtractor.setStorage(this.storage);
       this.reminderScheduler.setStorage(this.storage);
+
+      // 初始化新组件
+      await this._initializeNewComponents();
 
       // 启动提醒调度器
       this.reminderScheduler.start();
@@ -67,7 +81,86 @@ class MemoryMainProcess {
     }
   }
 
-  // 添加对话（分步启用功能）
+  // 初始化新组件（异步，不阻塞主流程）
+  async _initializeNewComponents() {
+    const config = MEMORY_CONFIG;
+
+    // 1. 本地嵌入引擎（异步初始化，不阻塞）
+    if (config.localEmbedding && config.localEmbedding.enabled) {
+      this.embeddingEngine = new EmbeddingEngine({
+        modelName: config.localEmbedding.modelName,
+        dimensions: config.localEmbedding.dimensions,
+        maxBatchSize: config.localEmbedding.maxBatchSize
+      });
+
+      // 注入到搜索引擎
+      this.searchEngine.setEmbeddingEngine(this.embeddingEngine);
+
+      // 异步加载模型（不阻塞启动）
+      this.embeddingEngine.initialize().then(ready => {
+        if (ready) {
+          console.log('[Memory] 本地嵌入引擎已就绪');
+          // 启动后台批量嵌入迁移
+          this._startBackgroundMigration();
+        } else {
+          console.log('[Memory] 本地嵌入引擎加载失败，回退到关键词搜索');
+        }
+      }).catch(err => {
+        console.error('[Memory] 嵌入引擎初始化异常:', err.message);
+      });
+    }
+
+    // 2. LLM 事实提取器
+    if (config.factExtraction && config.factExtraction.enabled) {
+      this.factExtractorLLM = new FactExtractorLLM({
+        apiKey: this.options.apiKey,
+        apiHost: config.factExtraction.apiHost,
+        apiPath: config.factExtraction.apiPath,
+        model: config.factExtraction.model,
+        bufferThreshold: config.factExtraction.bufferThreshold,
+        storage: this.storage
+      });
+    }
+
+    // 3. 分层记忆管理器
+    if (config.memoryLayers && config.memoryLayers.enabled) {
+      this.memoryLayerManager = new MemoryLayerManager({
+        storage: this.storage,
+        searchEngine: this.searchEngine,
+        embeddingEngine: this.embeddingEngine,
+        factExtractor: this.factExtractorLLM,
+        totalTokens: config.memoryLayers.tokenBudget.total,
+        profileTokens: config.memoryLayers.tokenBudget.profile,
+        coreTokens: config.memoryLayers.tokenBudget.core,
+        historyTokens: config.memoryLayers.tokenBudget.history
+      });
+
+      // 注入到上下文构建器
+      this.contextBuilder.setMemoryLayerManager(this.memoryLayerManager);
+    }
+  }
+
+  // 后台批量嵌入迁移
+  async _startBackgroundMigration() {
+    if (!this.memoryLayerManager || !this.embeddingEngine || !this.embeddingEngine.isReady()) return;
+
+    const config = MEMORY_CONFIG.localEmbedding?.migration || {};
+
+    // 延迟 10 秒后开始，避免影响启动
+    setTimeout(async () => {
+      try {
+        const result = await this.memoryLayerManager.migrateHistoryEmbeddings({
+          batchSize: config.batchSize || 50,
+          delayMs: config.delayMs || 1000
+        });
+        console.log(`[Memory] 历史嵌入迁移完成: ${result.processed}/${result.total}`);
+      } catch (error) {
+        console.error('[Memory] 历史嵌入迁移失败:', error.message);
+      }
+    }, 10000);
+  }
+
+  // 添加对话（集成新组件）
   async addConversation(role, content, metadata = {}) {
     if (!this.isInitialized) {
       throw new Error('MemoryMainProcess not initialized');
@@ -83,11 +176,8 @@ class MemoryMainProcess {
 
       console.log(`[Memory] Conversation saved: ${conversation.id}`);
 
-      // 2. 同步分块处理（不使用异步，避免卡死）
+      // 2. 同步分块处理
       try {
-        console.log('[Memory] Starting chunking...');
-
-        // 简化版分块：直接保存整个文本作为一个块
         const chunk = {
           id: this.storage.generateId(),
           conversationId: conversation.id,
@@ -99,10 +189,35 @@ class MemoryMainProcess {
         };
 
         this.storage.saveMemoryChunk(chunk);
-        console.log('[Memory] Chunk saved successfully');
       } catch (chunkError) {
         console.error('[Memory] Chunking error:', chunkError);
-        // 分块失败不影响主流程
+      }
+
+      // 3. 异步：为新对话生成嵌入
+      if (this.embeddingEngine && this.embeddingEngine.isReady()) {
+        this._asyncGenerateEmbedding(content, conversation.id);
+      }
+
+      // 4. 异步：向 LLM 事实提取器添加对话
+      if (this.factExtractorLLM && role === 'user') {
+        // 等收到 AI 回复后再触发（在 onConversationPairComplete 中处理）
+        // 这里只记录用户消息
+        this._lastUserMessage = { content, conversationId: conversation.id, metadata };
+      }
+
+      // 如果是 AI 回复，配对触发事实提取
+      if (this.factExtractorLLM && role === 'assistant' && this._lastUserMessage) {
+        const userMsg = this._lastUserMessage;
+        this._lastUserMessage = null;
+
+        // 异步提取事实
+        this.factExtractorLLM.addConversation(
+          userMsg.content,
+          content,
+          { conversationId: userMsg.conversationId, ...metadata }
+        ).catch(err => {
+          console.error('[Memory] 事实提取异常:', err.message);
+        });
       }
 
       return conversation;
@@ -110,6 +225,28 @@ class MemoryMainProcess {
     } catch (error) {
       console.error('[Memory] Failed to add conversation:', error);
       throw error;
+    }
+  }
+
+  // 异步生成嵌入（不阻塞）
+  async _asyncGenerateEmbedding(text, conversationId) {
+    try {
+      const embedding = await this.embeddingEngine.embed(text);
+      if (!embedding) return;
+
+      // 更新对应 memory_chunk 的 embedding
+      const chunk = this.storage.db.prepare(
+        'SELECT id FROM memory_chunks WHERE conversation_id = ? LIMIT 1'
+      ).get(conversationId);
+
+      if (chunk) {
+        const embeddingBlob = this.storage.floatArrayToBlob(embedding);
+        this.storage.db.prepare(
+          'UPDATE memory_chunks SET embedding = ? WHERE id = ?'
+        ).run(embeddingBlob, chunk.id);
+      }
+    } catch (error) {
+      console.error('[Memory] 嵌入生成失败:', error.message);
     }
   }
 
@@ -133,16 +270,16 @@ class MemoryMainProcess {
       maxMemories = MEMORY_CONFIG.context.maxMemories
     } = options;
 
-    // 搜索相关记忆（降低阈值以获取更多结果）
+    // 搜索相关记忆
     const searchResults = await this.searchEngine.search(query, {
-      limit: maxMemories * 2,  // 获取更多候选
-      minScore: 0.05,  // 大幅降低阈值，让更多记忆通过
+      limit: maxMemories * 2,
+      minScore: 0.05,
       mood: 80,
       personality: this.options.personality || 'healing'
     });
 
-    // 构建上下文
-    const context = this.contextBuilder.build(searchResults, {
+    // 构建上下文（context.js 会自动使用分层或传统模式）
+    const context = await this.contextBuilder.build(searchResults, {
       query,
       maxTokens,
       maxMemories
@@ -160,12 +297,33 @@ class MemoryMainProcess {
     return this.storage.getFacts(options);
   }
 
-  // 获取用户画像
+  // 获取用户画像（优先使用新的分层系统）
   async getUserProfile() {
     if (!this.isInitialized) {
       throw new Error('MemoryMainProcess not initialized');
     }
 
+    // 优先使用 LLM 事实提取器的画像
+    if (this.factExtractorLLM) {
+      const profile = this.factExtractorLLM.getUserProfile();
+      if (profile && Object.keys(profile).length > 0) {
+        return profile;
+      }
+    }
+
+    // 优先使用分层记忆管理器的画像
+    if (this.memoryLayerManager) {
+      try {
+        const profile = await this.memoryLayerManager.getUserProfile();
+        if (profile && (profile.name || profile.preferences?.length > 0)) {
+          return profile;
+        }
+      } catch (error) {
+        // 降级
+      }
+    }
+
+    // 回退到旧的事实提取器
     return await this.factExtractor.getUserProfile();
   }
 
@@ -178,10 +336,32 @@ class MemoryMainProcess {
     const dbStats = this.storage.getStats();
     const cacheStats = this.embeddingService.getCacheStats();
 
+    // 新增：嵌入引擎状态
+    const embeddingInfo = this.embeddingEngine ? this.embeddingEngine.getInfo() : null;
+
+    // 新增：用户画像计数
+    let profileCount = 0;
+    try {
+      const result = this.storage.db.prepare('SELECT COUNT(*) as count FROM user_profile').get();
+      profileCount = result.count;
+    } catch (e) {
+      // user_profile 表可能不存在
+    }
+
     return {
       ...dbStats,
-      cache: cacheStats
+      cache: cacheStats,
+      embedding: embeddingInfo,
+      profileEntries: profileCount
     };
+  }
+
+  // 手动触发事实提取刷新
+  async flushFactExtraction() {
+    if (this.factExtractorLLM) {
+      return await this.factExtractorLLM.flushBuffer();
+    }
+    return [];
   }
 
   // 保存显示器画像
@@ -208,6 +388,12 @@ class MemoryMainProcess {
     }
 
     this.storage.clearAll();
+    // 也清空 user_profile 表
+    try {
+      this.storage.db.exec('DELETE FROM user_profile');
+    } catch (e) {
+      // 表可能不存在
+    }
     console.log('All memories cleared');
   }
 
@@ -217,7 +403,12 @@ class MemoryMainProcess {
     if (this.reminderScheduler) {
       this.reminderScheduler.stop();
     }
-    
+
+    // 刷新待处理的事实提取
+    if (this.factExtractorLLM) {
+      this.factExtractorLLM.flushBuffer().catch(() => {});
+    }
+
     if (this.storage) {
       this.storage.close();
     }
@@ -306,6 +497,28 @@ class MemoryMainProcess {
       }
     }
 
+    // 迁移 localStorage 中的用户事实到 user_profile 表
+    if (localStorageData.userFacts && this.storage && this.storage.db) {
+      try {
+        const now = Date.now();
+        const stmt = this.storage.db.prepare(`
+          INSERT OR IGNORE INTO user_profile (key, value, confidence, updated_at)
+          VALUES (?, ?, ?, ?)
+        `);
+        const facts = localStorageData.userFacts;
+        if (facts.name) stmt.run('name', facts.name, 0.9, now);
+        if (facts.gender) stmt.run('gender', facts.gender, 0.9, now);
+        if (facts.birthday) stmt.run('birthday', facts.birthday, 0.9, now);
+        if (facts.interests) {
+          const interests = Array.isArray(facts.interests) ? facts.interests : [facts.interests];
+          interests.forEach(i => stmt.run(`like.${i}`, i, 0.8, now));
+        }
+        console.log('[Memory] 用户事实已迁移到 user_profile 表');
+      } catch (error) {
+        console.error('[Memory] 用户事实迁移失败:', error.message);
+      }
+    }
+
     console.log(`Migration complete: ${imported} imported, ${failed} failed`);
 
     return { imported, failed };
@@ -321,12 +534,22 @@ class MemoryMainProcess {
     const facts = this.storage.getFacts();
     const stats = this.getStats();
 
+    // 新增：导出用户画像
+    let userProfile = {};
+    try {
+      const rows = this.storage.db.prepare('SELECT * FROM user_profile').all();
+      userProfile = rows;
+    } catch (e) {
+      // 表可能不存在
+    }
+
     return {
-      version: '1.0.0',
+      version: '2.0.0',
       exportedAt: new Date().toISOString(),
       stats,
       conversations,
-      facts
+      facts,
+      userProfile
     };
   }
 
@@ -356,6 +579,21 @@ class MemoryMainProcess {
     // 导入事实
     if (data.facts && Array.isArray(data.facts)) {
       this.storage.batchSaveFacts(data.facts);
+    }
+
+    // 导入用户画像
+    if (data.userProfile && Array.isArray(data.userProfile)) {
+      try {
+        const stmt = this.storage.db.prepare(`
+          INSERT OR REPLACE INTO user_profile (key, value, confidence, updated_at, source_fact_id)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        for (const row of data.userProfile) {
+          stmt.run(row.key, row.value, row.confidence, row.updated_at, row.source_fact_id);
+        }
+      } catch (e) {
+        console.error('Failed to import user profile:', e.message);
+      }
     }
 
     console.log('Data import complete');
@@ -418,6 +656,27 @@ class MemoryMainProcess {
       return await this.migrateFromLocalStorage(data);
     });
 
+    // ==================== 新增：记忆系统升级 IPC ====================
+
+    // 获取嵌入引擎状态
+    ipcMain.handle('memory:embedding-status', async () => {
+      if (!this.embeddingEngine) return { ready: false, loading: false };
+      return this.embeddingEngine.getInfo();
+    });
+
+    // 手动触发事实提取
+    ipcMain.handle('memory:flush-facts', async () => {
+      return await this.flushFactExtraction();
+    });
+
+    // 获取分层记忆上下文
+    ipcMain.handle('memory:get-layered-context', async (event, query, options) => {
+      if (!this.memoryLayerManager) {
+        return await this.getContext(query, options);
+      }
+      return await this.memoryLayerManager.buildLayeredContext(query, options);
+    });
+
     // ==================== 提醒 IPC ====================
 
     // 创建提醒
@@ -467,9 +726,6 @@ class MemoryMainProcess {
     ipcMain.handle('reminder:get-history', async (event, options) => {
       return this.reminderScheduler.getReminderHistory(options);
     });
-
-    // 注意：提醒调度器的 IPC 已在上面单独注册，不需要重复调用
-    // this.reminderScheduler.registerIPCHandlers();
 
     console.log('Memory IPC handlers registered');
   }

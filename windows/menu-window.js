@@ -45,9 +45,23 @@ function openHistory() {
   closeMenuWindow();
 }
 
+function openTheme() {
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'theme',
+      title: '切换主题',
+      width: 360,
+      height: 380,
+      html: 'windows/theme-window.html'
+    });
+  }
+  closeMenuWindow();
+}
+
 window.openChat = openChat;
 window.openSettings = openSettings;
 window.openHistory = openHistory;
+window.openTheme = openTheme;
 
 const MenuWindowUtils = window.MenuWindowUtils || {
   shouldCloseMenuOnTarget: (target) => {

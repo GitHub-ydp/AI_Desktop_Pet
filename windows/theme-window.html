@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>切换主题</title>
+  <script src="../src/theme-manager.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #020810;
+      --bg-card: rgba(0, 30, 55, 0.6);
+      --border: rgba(0, 255, 240, 0.3);
+      --border-bright: rgba(0, 255, 240, 0.7);
+      --neon-cyan: #00fff0;
+      --neon-magenta: #ff2d78;
+      --text: #cff0ff;
+      --text-muted: rgba(160, 220, 240, 0.55);
+      --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
+      --radius: 8px;
+      --header-bg: rgba(0, 15, 30, 0.98);
+      --close-icon: rgba(160, 220, 240, 0.6);
+      --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
+      --scrollbar: rgba(0, 255, 240, 0.35);
+      --scrollbar-hover: rgba(0, 255, 240, 0.6);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .window-header {
+      background: var(--header-bg);
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+
+    .window-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--neon-cyan);
+      letter-spacing: 0.5px;
+      text-shadow: var(--glow-sm);
+    }
+
+    .close-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .close-btn::before,
+    .close-btn::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 11px;
+      height: 1.5px;
+      background: var(--close-icon);
+      border-radius: 2px;
+      transform-origin: center;
+      transition: background 0.2s;
+    }
+
+    .close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .close-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
+
+    .close-btn:hover {
+      border-color: var(--neon-magenta);
+      box-shadow: var(--danger-glow);
+    }
+
+    .close-btn:hover::before,
+    .close-btn:hover::after {
+      background: var(--neon-magenta);
+    }
+
+    .content {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .theme-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .theme-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+      position: relative;
+    }
+
+    .theme-card:hover {
+      border-color: var(--border-bright);
+      box-shadow: var(--glow-sm);
+      transform: translateY(-1px);
+    }
+
+    .theme-card.active {
+      border-color: var(--neon-cyan);
+      box-shadow: var(--glow-sm);
+    }
+
+    .theme-card.active .active-badge {
+      display: flex;
+    }
+
+    .active-badge {
+      display: none;
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--neon-cyan);
+      letter-spacing: 0.3px;
+      text-shadow: var(--glow-sm);
+    }
+
+    /* 赛博朋克预览 */
+    .theme-preview {
+      height: 68px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .preview-cyberpunk {
+      background: linear-gradient(135deg, #020810 0%, #001833 100%);
+    }
+
+    .preview-lazyCat {
+      background: linear-gradient(135deg, #1a0e05 0%, #2e1808 100%);
+    }
+
+    .preview-bar {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .preview-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .preview-line {
+      height: 2px;
+      flex: 1;
+      border-radius: 2px;
+    }
+
+    /* 赛博朋克预览色 */
+    .preview-cyberpunk .preview-dot { background: #00fff0; box-shadow: 0 0 5px #00fff0; }
+    .preview-cyberpunk .preview-line { background: rgba(0, 255, 240, 0.25); }
+    .preview-cyberpunk .preview-text { font-size: 11px; font-weight: 700; color: #00fff0; text-shadow: 0 0 8px #00fff0; }
+    .preview-cyberpunk .preview-sub  { font-size: 9px; color: rgba(160, 220, 240, 0.55); }
+
+    /* 懒猫橘预览色 */
+    .preview-lazyCat .preview-dot { background: #ffb347; box-shadow: 0 0 5px #ffb347; }
+    .preview-lazyCat .preview-line { background: rgba(255, 175, 70, 0.25); }
+    .preview-lazyCat .preview-text { font-size: 11px; font-weight: 700; color: #ffb347; text-shadow: 0 0 8px rgba(255, 180, 70, 0.6); }
+    .preview-lazyCat .preview-sub  { font-size: 9px; color: rgba(255, 205, 155, 0.55); }
+
+    .theme-info {
+      padding: 10px 14px;
+      background: var(--bg-card);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .theme-icon { font-size: 22px; line-height: 1; }
+
+    .theme-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .theme-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+
+    /* 加载状态样式 */
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      gap: 16px;
+    }
+
+    .loading-spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--neon-cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 13px;
+      color: var(--text-muted);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+
+    /* 错误提示样式 */
+    .error-toast {
+      animation: slideDown 0.3s ease-out, neonPulse 1.5s ease-in-out infinite;
+    }
+
+    .theme-card {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .theme-card:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body>
+  <div class="window-header">
+    <div class="window-title">🎨 切换主题</div>
+    <button class="close-btn" data-action="close"></button>
+  </div>
+
+  <div class="content">
+    <div class="section-title">选择主题风格</div>
+    <div class="theme-cards">
+
+      <!-- 赛博朋克 -->
+      <div class="theme-card" id="card-cyberpunk" data-theme="cyberpunk">
+        <span class="active-badge">✓ 当前主题</span>
+        <div class="theme-preview preview-cyberpunk">
+          <div class="preview-bar">
+            <div class="preview-dot"></div>
+            <div class="preview-line"></div>
+            <div class="preview-dot" style="background:#ff2d78;box-shadow:0 0 5px #ff2d78"></div>
+          </div>
+          <div>
+            <div class="preview-text">⚡ CYBER PUNK</div>
+            <div class="preview-sub">霓虹 · 深夜 · 都市</div>
+          </div>
+        </div>
+        <div class="theme-info">
+          <div class="theme-icon">⚡</div>
+          <div>
+            <div class="theme-name">赛博朋克</div>
+            <div class="theme-desc">霓虹青 + 品红，深夜都市风</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 懒猫橘 -->
+      <div class="theme-card" id="card-lazyCat" data-theme="lazyCat">
+        <span class="active-badge">✓ 当前主题</span>
+        <div class="theme-preview preview-lazyCat">
+          <div class="preview-bar">
+            <div class="preview-dot"></div>
+            <div class="preview-line"></div>
+            <div class="preview-dot" style="background:#ff6b35;box-shadow:0 0 5px #ff6b35"></div>
+          </div>
+          <div>
+            <div class="preview-text">🐱 懒猫橘</div>
+            <div class="preview-sub">温暖 · 橘黄 · 慵懒午后</div>
+          </div>
+        </div>
+        <div class="theme-info">
+          <div class="theme-icon">🐱</div>
+          <div>
+            <div class="theme-name">懒猫橘</div>
+            <div class="theme-desc">暖橘 + 橙红，与宠物相配</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // 主题窗口控制器
+    (function() {
+      'use strict';
+
+      console.log('[ThemeWindow] 初始化开始');
+
+      // 状态管理
+      const state = {
+        isInitialized: false,
+        isLoading: false,
+        currentTheme: null,
+        retryCount: 0,
+        maxRetries: 3
+      };
+
+      // DOM 元素引用
+      const elements = {
+        themeCards: null,
+        loadingState: null,
+        errorContainer: null
+      };
+
+      // 更新当前激活的主题卡片
+      function updateActiveCard() {
+        console.log('[ThemeWindow] updateActiveCard 调用');
+
+        // 检查 ThemeManager 可用性
+        if (!window.ThemeManager) {
+          console.error('[ThemeWindow] ThemeManager 未定义！');
+          showError('主题管理器未加载，请刷新页面重试');
+          return false;
+        }
+
+        try {
+          const current = window.ThemeManager.getCurrent();
+          console.log('[ThemeWindow] 当前主题:', current);
+          state.currentTheme = current;
+
+          // 移除所有激活状态
+          if (elements.themeCards) {
+            elements.themeCards.forEach(card => card.classList.remove('active'));
+
+            // 激活当前主题
+            const activeCard = document.getElementById('card-' + current);
+            if (activeCard) {
+              activeCard.classList.add('active');
+              console.log('[ThemeWindow] 已激活主题卡片:', current);
+              return true;
+            } else {
+              console.warn('[ThemeWindow] 未找到主题卡片:', current);
+            }
+          }
+        } catch (error) {
+          console.error('[ThemeWindow] 更新激活卡片失败:', error);
+          showError('更新主题状态失败: ' + error.message);
+        }
+        return false;
+      }
+
+      // 选择主题
+      function selectTheme(name) {
+        console.log('[ThemeWindow] selectTheme 调用，主题:', name);
+
+        // 检查 ThemeManager 可用性
+        if (!window.ThemeManager) {
+          console.error('[ThemeWindow] ThemeManager 未定义！');
+          showError('主题管理器未加载，请刷新页面重试');
+          return;
+        }
+
+        // 显示加载状态
+        showLoading(true);
+
+        try {
+          window.ThemeManager.save(name);
+          console.log('[ThemeWindow] 主题已保存:', name);
+          updateActiveCard();
+          showSuccess('主题已切换');
+        } catch (error) {
+          console.error('[ThemeWindow] 保存主题失败:', error);
+          showError('切换主题失败: ' + error.message);
+        } finally {
+          // 延迟隐藏加载状态
+          setTimeout(() => showLoading(false), 300);
+        }
+      }
+
+      // 关闭窗口
+      function closeWindow() {
+        console.log('[ThemeWindow] closeWindow 调用');
+
+        // 检查 electron API 可用性
+        if (!window.electron) {
+          console.error('[ThemeWindow] window.electron 未定义！');
+          showError('无法关闭窗口：API 不可用');
+          return;
+        }
+
+        if (!window.electron.closeChildWindow) {
+          console.error('[ThemeWindow] window.electron.closeChildWindow 未定义！');
+          showError('无法关闭窗口：方法不可用');
+          return;
+        }
+
+        try {
+          window.electron.closeChildWindow('theme');
+        } catch (error) {
+          console.error('[ThemeWindow] 关闭窗口失败:', error);
+          showError('关闭窗口失败: ' + error.message);
+        }
+      }
+
+      // 显示加载状态
+      function showLoading(show) {
+        state.isLoading = show;
+        if (elements.loadingState) {
+          elements.loadingState.style.display = show ? 'flex' : 'none';
+        }
+      }
+
+      // 显示错误提示
+      function showError(message) {
+        removeErrorToast();
+
+        const toast = document.createElement('div');
+        toast.className = 'error-toast';
+        toast.textContent = message;
+        toast.style.cssText = `
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: var(--neon-magenta);
+          color: white;
+          padding: 12px 24px;
+          border-radius: var(--radius);
+          box-shadow: var(--danger-glow);
+          z-index: 1000;
+          font-size: 13px;
+          animation: slideDown 0.3s ease-out, neonPulse 1.5s ease-in-out infinite;
+        `;
+
+        if (elements.errorContainer) {
+          elements.errorContainer.appendChild(toast);
+        } else {
+          document.body.appendChild(toast);
+        }
+
+        // 3 秒后自动移除
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.remove();
+          }
+        }, 3000);
+      }
+
+      // 显示成功提示
+      function showSuccess(message) {
+        removeErrorToast();
+
+        const toast = document.createElement('div');
+        toast.className = 'success-toast';
+        toast.textContent = message;
+        toast.style.cssText = `
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: var(--neon-cyan);
+          color: #020810;
+          padding: 12px 24px;
+          border-radius: var(--radius);
+          box-shadow: var(--glow-sm);
+          z-index: 1000;
+          font-size: 13px;
+          font-weight: 600;
+          animation: slideDown 0.3s ease-out;
+        `;
+
+        if (elements.errorContainer) {
+          elements.errorContainer.appendChild(toast);
+        } else {
+          document.body.appendChild(toast);
+        }
+
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.remove();
+          }
+        }, 2000);
+      }
+
+      // 移除错误提示
+      function removeErrorToast() {
+        const existing = document.querySelector('.error-toast');
+        if (existing) existing.remove();
+
+        const success = document.querySelector('.success-toast');
+        if (success) success.remove();
+      }
+
+      // 事件委托处理
+      function setupEventDelegation() {
+        console.log('[ThemeWindow] 设置事件委托');
+
+        // 主题卡片点击事件
+        const themeCardsContainer = document.querySelector('.theme-cards');
+        if (themeCardsContainer) {
+          themeCardsContainer.addEventListener('click', function(e) {
+            const card = e.target.closest('.theme-card');
+            if (card && card.dataset.theme) {
+              console.log('[ThemeWindow] 主题卡片被点击:', card.dataset.theme);
+              selectTheme(card.dataset.theme);
+            }
+          });
+          console.log('[ThemeWindow] 主题卡片事件委托已绑定');
+        } else {
+          console.error('[ThemeWindow] 未找到 .theme-cards 容器');
+        }
+
+        // 关闭按钮点击事件
+        const closeBtn = document.querySelector('.close-btn');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeWindow();
+          });
+          console.log('[ThemeWindow] 关闭按钮事件已绑定');
+        } else {
+          console.error('[ThemeWindow] 未找到 .close-btn 按钮');
+        }
+      }
+
+      // 等待 ThemeManager 加载
+      function waitForThemeManager() {
+        return new Promise((resolve, reject) => {
+          if (window.ThemeManager) {
+            resolve();
+            return;
+          }
+
+          let attempts = 0;
+          const maxAttempts = 10;
+          const interval = 50;
+
+          const checkInterval = setInterval(() => {
+            attempts++;
+            console.log(`[ThemeWindow] 等待 ThemeManager... (${attempts}/${maxAttempts})`);
+
+            if (window.ThemeManager) {
+              clearInterval(checkInterval);
+              resolve();
+            } else if (attempts >= maxAttempts) {
+              clearInterval(checkInterval);
+              reject(new Error('ThemeManager 加载超时'));
+            }
+          }, interval);
+        });
+      }
+
+      // 初始化应用
+      async function initialize() {
+        if (state.isInitialized) {
+          console.log('[ThemeWindow] 已经初始化，跳过');
+          return;
+        }
+
+        console.log('[ThemeWindow] 开始初始化');
+
+        // 获取 DOM 元素
+        elements.themeCards = document.querySelectorAll('.theme-card');
+        elements.loadingState = document.getElementById('loading-state');
+        elements.errorContainer = document.getElementById('error-container');
+
+        console.log('[ThemeWindow] ThemeManager 可用:', !!window.ThemeManager);
+        console.log('[ThemeWindow] electron API 可用:', !!window.electron);
+
+        // 显示加载状态
+        showLoading(true);
+
+        try {
+          // 等待 ThemeManager 加载
+          await waitForThemeManager();
+          console.log('[ThemeWindow] ThemeManager 已就绪');
+
+          // 设置事件委托
+          setupEventDelegation();
+
+          // 更新当前激活的主题
+          updateActiveCard();
+
+          state.isInitialized = true;
+          console.log('[ThemeWindow] 初始化完成');
+        } catch (error) {
+          console.error('[ThemeWindow] 初始化失败:', error);
+          showError('主题系统初始化失败，请刷新页面重试');
+        } finally {
+          // 隐藏加载状态
+          setTimeout(() => showLoading(false), 200);
+        }
+      }
+
+      // 页面加载完成后初始化
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initialize);
+      } else {
+        // DOM 已经加载完成，直接初始化
+        initialize();
+      }
+
+      // 暴露 API 到全局（用于调试）
+      window.ThemeWindowAPI = {
+        selectTheme: selectTheme,
+        closeWindow: closeWindow,
+        updateActiveCard: updateActiveCard,
+        getState: () => ({ ...state })
+      };
+
+      console.log('[ThemeWindow] 脚本加载完成');
+    })();
+  </script>
+</body>
+</html>

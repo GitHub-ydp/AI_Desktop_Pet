@@ -4,197 +4,236 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>和宠物说话</title>
+  <script src="../src/theme-manager.js"></script>
   <style>
     * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
-    }
+:root {
+  --bg: #020810;
+  --bg-surface: rgba(2, 10, 20, 0.98);
+  --bg-card: rgba(0, 30, 55, 0.6);
+  --border: rgba(0, 255, 240, 0.3);
+  --border-bright: rgba(0, 255, 240, 0.7);
+  --neon-cyan: #00fff0;
+  --neon-magenta: #ff2d78;
+  --text: #cff0ff;
+  --text-muted: rgba(160, 220, 240, 0.55);
+  --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
+  --glow-md: 0 0 16px rgba(0, 255, 240, 0.35), 0 0 4px rgba(0, 255, 240, 0.6);
+  --radius: 8px;
+  --header-bg: rgba(0, 15, 30, 0.98);
+  --input-area-bg: rgba(0, 12, 25, 0.98);
+  --input-field-bg: rgba(0, 20, 40, 0.8);
+  --close-icon: rgba(160, 220, 240, 0.6);
+  --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
+  --scrollbar: rgba(0, 255, 240, 0.35);
+  --scrollbar-hover: rgba(0, 255, 240, 0.6);
+}
 
-    .window-header {
-      background: rgba(255, 255, 255, 0.95);
-      padding: 15px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #e0e0e0;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      -webkit-app-region: drag;
-    }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
 
-    .window-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #333;
-    }
+.window-header {
+  background: var(--header-bg);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+}
 
-    .close-btn {
-      background: #ff5f57;
-      border: none;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      cursor: pointer;
-      -webkit-app-region: no-drag;
-      transition: transform 0.2s;
-    }
+.window-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--neon-cyan);
+  letter-spacing: 0.5px;
+  text-shadow: var(--glow-sm);
+}
 
-    .close-btn:hover {
-      transform: scale(1.2);
-    }
+.close-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+  flex-shrink: 0;
+}
 
-    .chat-container {
-      flex: 1;
-      padding: 20px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-    }
+.close-btn::before,
+.close-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 11px;
+  height: 1.5px;
+  background: var(--close-icon);
+  border-radius: 2px;
+  transform-origin: center;
+  transition: background 0.2s;
+}
 
-    .chat-message {
-      max-width: 80%;
-      padding: 12px 16px;
-      border-radius: 18px;
-      animation: fadeIn 0.3s ease;
-      word-wrap: break-word;
-    }
+.close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+.close-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
 
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
+.close-btn:hover {
+  border-color: var(--neon-magenta);
+  box-shadow: var(--danger-glow);
+}
 
-    .user-message {
-      align-self: flex-end;
-      background: rgba(255, 255, 255, 0.95);
-      color: #333;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    }
+.close-btn:hover::before,
+.close-btn:hover::after {
+  background: var(--neon-magenta);
+}
 
-    .assistant-message {
-      align-self: flex-start;
-      background: rgba(255, 255, 255, 0.9);
-      color: #333;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    }
+.chat-container {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg);
+}
 
-    .input-container {
-      background: rgba(255, 255, 255, 0.95);
-      padding: 15px 20px;
-      display: flex;
-      gap: 10px;
-      border-top: 1px solid #e0e0e0;
-      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-    }
+.chat-message {
+  max-width: 75%;
+  padding: 9px 13px;
+  border-radius: var(--radius);
+  animation: fadeIn 0.2s ease;
+  word-wrap: break-word;
+  line-height: 1.55;
+  font-size: 13px;
+}
 
-    .chat-input {
-      flex: 1;
-      padding: 12px 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 24px;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.3s;
-    }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
-    .chat-input:focus {
-      border-color: #667eea;
-    }
+.user-message {
+  align-self: flex-end;
+  background: var(--accent-bg-dim, rgba(0, 255, 240, 0.07));
+  color: var(--neon-cyan);
+  border: 1px solid var(--border);
+  border-bottom-right-radius: 3px;
+}
 
-    .send-btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 24px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
+.assistant-message {
+  align-self: flex-start;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 3px;
+}
 
-    .send-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
+.input-container {
+  background: var(--input-area-bg);
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
 
-    .send-btn:active {
-      transform: translateY(0);
-    }
+.chat-input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  outline: none;
+  background: var(--input-field-bg);
+  color: var(--text);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
 
-    .send-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+.chat-input::placeholder {
+  color: var(--text-muted);
+}
 
-    .typing-indicator {
-      display: none;
-      align-self: flex-start;
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.9);
-      border-radius: 18px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    }
+.chat-input:focus {
+  border-color: var(--border-bright);
+  box-shadow: var(--glow-sm);
+}
 
-    .typing-indicator span {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #999;
-      margin: 0 2px;
-      animation: typing 1.4s infinite;
-    }
+.send-btn {
+  background: transparent;
+  color: var(--neon-cyan);
+  border: 1px solid var(--border-bright);
+  padding: 9px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.2s;
+  white-space: nowrap;
+}
 
-    .typing-indicator span:nth-child(2) {
-      animation-delay: 0.2s;
-    }
+.send-btn:hover {
+  background: var(--accent-hover-bg, rgba(0, 255, 240, 0.1));
+  box-shadow: var(--glow-sm);
+}
 
-    .typing-indicator span:nth-child(3) {
-      animation-delay: 0.4s;
-    }
+.send-btn:active {
+  background: var(--accent-bg-dim, rgba(0, 255, 240, 0.18));
+}
 
-    @keyframes typing {
-      0%, 60%, 100% {
-        transform: translateY(0);
-      }
-      30% {
-        transform: translateY(-10px);
-      }
-    }
+.send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
 
-    ::-webkit-scrollbar {
-      width: 6px;
-    }
+.typing-indicator {
+  display: none;
+  align-self: flex-start;
+  padding: 9px 12px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 3px;
+}
 
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
+.typing-indicator span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neon-cyan);
+  margin: 0 2px;
+  animation: typing 1.4s infinite;
+  opacity: 0.7;
+}
 
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 3px;
-    }
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
 
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.5);
-    }
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.7; }
+  30% { transform: translateY(-8px); opacity: 1; }
+}
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
   </style>
 </head>
 <body>
@@ -212,10 +251,10 @@
   </div>
 
   <div class="input-container">
-    <input 
-      type="text" 
-      id="chatInput" 
-      class="chat-input" 
+    <input
+      type="text"
+      id="chatInput"
+      class="chat-input"
       placeholder="输入你想说的话..."
       onkeyup="if(event.key==='Enter')sendMessage()"
       autofocus
@@ -227,7 +266,9 @@
     let isProcessing = false;
 
     function closeWindow() {
-      window.electron.closeChildWindow('chat');
+      if (window.electron && window.electron.closeChildWindow) {
+        window.electron.closeChildWindow('chat');
+      }
     }
 
     function addMessage(role, content) {
@@ -252,7 +293,7 @@
     async function sendMessage() {
       const input = document.getElementById('chatInput');
       const message = input.value.trim();
-      
+
       if (!message || isProcessing) return;
 
       isProcessing = true;
@@ -285,8 +326,6 @@
         document.getElementById('sendBtn').disabled = false;
       }
     }
-
-    // 旧的 window 事件通道已弃用（独立窗口下无效）
   </script>
 </body>
 </html>

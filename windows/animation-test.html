@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>动画测试</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      overflow: hidden;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 20px;
+    }
+
+    /* 顶部标题栏 */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      -webkit-app-region: drag;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .close-btn {
+      -webkit-app-region: no-drag;
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* 预览区域 */
+    .preview {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      margin-bottom: 20px;
+      min-height: 200px;
+    }
+
+    #animationPreview {
+      width: 200px;
+      height: 200px;
+    }
+
+    /* 信息显示 */
+    .info {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #333;
+    }
+
+    .info-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .info-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-label {
+      font-weight: 600;
+      color: #666;
+    }
+
+    .info-value {
+      color: #333;
+    }
+
+    /* 按钮网格 */
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      overflow-y: auto;
+    }
+
+    .anim-btn {
+      padding: 12px 16px;
+      border: none;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+      transition: all 0.2s;
+      text-align: left;
+    }
+
+    .anim-btn:hover {
+      background: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .anim-btn:active {
+      transform: translateY(0);
+    }
+
+    .anim-btn.active {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    .anim-btn .duration {
+      font-size: 11px;
+      color: #999;
+      margin-top: 2px;
+    }
+
+    .anim-btn.active .duration {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    /* 状态指示 */
+    .status {
+      position: fixed;
+      top: 60px;
+      right: 20px;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      border-radius: 6px;
+      font-size: 12px;
+      display: none;
+      z-index: 10000;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.success {
+      background: #10b981;
+    }
+
+    .status.error {
+      background: #ef4444;
+    }
+
+    /* 滚动条 */
+    .buttons::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .buttons::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+
+    .buttons::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 顶部标题栏 -->
+    <div class="header">
+      <h1>🎭 动画测试</h1>
+      <button class="close-btn" id="closeBtn">×</button>
+    </div>
+
+    <!-- 预览区域 -->
+    <div class="preview">
+      <div id="animationPreview"></div>
+    </div>
+
+    <!-- 信息显示 -->
+    <div class="info">
+      <div class="info-item">
+        <span class="info-label">当前状态:</span>
+        <span class="info-value" id="currentState">-</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">动画文件:</span>
+        <span class="info-value" id="currentFile">-</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">持续时间:</span>
+        <span class="info-value" id="currentDuration">-</span>
+      </div>
+    </div>
+
+    <!-- 按钮网格 -->
+    <div class="buttons" id="buttonGrid">
+      <!-- 动态生成 -->
+    </div>
+  </div>
+
+  <!-- 状态提示 -->
+  <div class="status" id="status"></div>
+
+  <script src="assets/lib/lottie.min.js"></script>
+  <script src="src/animation-config.js"></script>
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    let currentAnimation = null;
+    let currentBtn = null;
+
+    // 动画状态定义
+    const animationStates = [
+      { state: 'idle', name: '待机状态', emoji: '😊' },
+      { state: 'happy', name: '开心', emoji: '😄' },
+      { state: 'sleeping', name: '睡觉', emoji: '😴' },
+      { state: 'exercising', name: '运动', emoji: '💪' },
+      { state: 'playing', name: '玩耍', emoji: '🎮' },
+      { state: 'thinking', name: '思考', emoji: '🤔' },
+      { state: 'talking', name: '聊天', emoji: '💬' },
+      { state: 'clicked', name: '点击反馈', emoji: '👆' },
+      { state: 'sad', name: '悲伤', emoji: '😢' },
+      { state: 'dragging', name: '拖拽中', emoji: '🖐️' }
+    ];
+
+    // 初始化
+    function init() {
+      createButtons();
+      loadAnimation('idle');
+    }
+
+    // 创建按钮
+    function createButtons() {
+      const grid = document.getElementById('buttonGrid');
+
+      animationStates.forEach(({ state, name, emoji }) => {
+        const btn = document.createElement('button');
+        btn.className = 'anim-btn';
+        btn.dataset.state = state;
+
+        // 获取动画信息
+        const info = getAnimationInfo(state);
+        const durationText = info.duration
+          ? `${info.duration / 1000}秒`
+          : '循环';
+
+        btn.innerHTML = `
+          <div>${emoji} ${name}</div>
+          <div class="duration">${info.file} · ${durationText}</div>
+        `;
+
+        btn.addEventListener('click', () => {
+          loadAnimation(state);
+          updateActiveButton(btn);
+        });
+
+        grid.appendChild(btn);
+      });
+    }
+
+    // 获取动画信息
+    function getAnimationInfo(state) {
+      if (!window.AnimationConfig) {
+        return { file: 'happy_cat.json', duration: null };
+      }
+
+      const file = window.AnimationConfig.getAnimationFile(state, '🐱');
+      const duration = window.AnimationConfig.getStateDuration(state, '🐱');
+
+      return { file, duration };
+    }
+
+    // 更新活动按钮
+    function updateActiveButton(activeBtn) {
+      document.querySelectorAll('.anim-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      activeBtn.classList.add('active');
+      currentBtn = activeBtn;
+    }
+
+    // 加载动画
+    function loadAnimation(state) {
+      const info = getAnimationInfo(state);
+      const animationPath = `lottie/cat/${info.file}`;
+
+      console.log(`[AnimationTest] Loading: ${state} (${animationPath})`);
+
+      // 更新信息显示
+      document.getElementById('currentState').textContent = state;
+      document.getElementById('currentFile').textContent = info.file;
+      document.getElementById('currentDuration').textContent = info.duration
+        ? `${info.duration / 1000}秒`
+        : '循环';
+
+      // 销毁旧动画
+      if (currentAnimation) {
+        currentAnimation.destroy();
+      }
+
+      // 加载新动画
+      const container = document.getElementById('animationPreview');
+      container.innerHTML = '';
+
+      try {
+        currentAnimation = lottie.loadAnimation({
+          container: container,
+          renderer: 'svg',
+          loop: !info.duration,
+          autoplay: true,
+          path: animationPath
+        });
+
+        showStatus('加载成功', 'success');
+
+        // 如果有持续时间，自动切换回 idle
+        if (info.duration) {
+          setTimeout(() => {
+            if (state !== 'idle') {
+              loadAnimation('idle');
+              const idleBtn = document.querySelector('[data-state="idle"]');
+              if (idleBtn) updateActiveButton(idleBtn);
+            }
+          }, info.duration);
+        }
+
+      } catch (error) {
+        console.error('[AnimationTest] Load failed:', error);
+        showStatus('加载失败: ' + error.message, 'error');
+      }
+    }
+
+    // 显示状态提示
+    function showStatus(message, type = 'info') {
+      const status = document.getElementById('status');
+      status.textContent = message;
+      status.className = `status show ${type}`;
+      setTimeout(() => {
+        status.classList.remove('show');
+      }, 3000);
+    }
+
+    // 关闭窗口
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      ipcRenderer.send('close-child-window', 'animation-test');
+    });
+
+    // ESC 关闭
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        ipcRenderer.send('close-child-window', 'animation-test');
+      }
+    });
+
+    // 初始化
+    init();
+  </script>
+</body>
+</html>

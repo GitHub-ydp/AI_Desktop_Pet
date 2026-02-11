@@ -4,8 +4,8 @@
   "description": "AI Desktop Pet - An intelligent desktop companion powered by AI",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev",
+    "start": "node scripts/run-electron.js",
+    "dev": "node scripts/run-electron.js --dev",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
@@ -28,6 +28,7 @@
     "electron-rebuild": "^3.2.9"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "better-sqlite3": "^12.6.2",
     "lottie-web": "^5.13.0",
     "sqlite-vec": "^0.1.7-alpha.2",
@@ -43,6 +44,7 @@
       "main.js",
       "preload.js",
       "index.html",
+      "Happy Cat.json",
       "main-process/**/*",
       "src/**/*",
       "assets/**/*",

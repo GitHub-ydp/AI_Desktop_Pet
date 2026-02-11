@@ -60,17 +60,21 @@ async function checkIfNeedsInit() {
 // 打开初始化表单
 function openInitModal() {
   // 创建初始化子窗口
-  window.electron.createChildWindow({
-    id: 'init',
-    title: '初始化设置',
-    width: 450,
-    height: 550,
-    html: 'windows/init-window.html'
-  });
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'init',
+      title: '初始化设置',
+      width: 450,
+      height: 550,
+      html: 'windows/init-window.html'
+    });
 
-  // 监听初始化完成事件
-  window.addEventListener('init-completed', handleInitCompleted, { once: true });
-  window.addEventListener('init-skipped', handleInitSkipped, { once: true });
+    // 监听初始化完成事件
+    window.addEventListener('init-completed', handleInitCompleted, { once: true });
+    window.addEventListener('init-skipped', handleInitSkipped, { once: true });
+  } else {
+    console.error('[App] electron API 不可用，无法打开初始化窗口');
+  }
 }
 
 // 处理初始化完成
@@ -188,6 +192,16 @@ async function init() {
   initChatIpc();
   // 初始化设置 IPC 监听
   initSettingsIpc();
+  // 初始化截图功能
+  initScreenshot();
+
+  // 启动自动状态检查
+  if (window.PetAnimations) {
+    window.PetAnimations.startAutoStateCheck(
+      () => state.mood,  // 获取当前心情
+      () => state.lastInteraction || Date.now()  // 获取最后互动时间
+    );
+  }
 
   console.log('App initialized!');
 
@@ -304,6 +318,7 @@ function loadData() {
   state.mood = petData.mood;
   state.settings = settings;
   state.chatHistory = history;
+  state.lastInteraction = petData.lastInteraction || Date.now();  // 读取最后互动时间
 }
 
 function saveData() {
@@ -441,17 +456,23 @@ function openChat(resetPendingReminder = true) {
   }
 
   // 创建聊天子窗口
-  window.electron.createChildWindow({
-    id: 'chat',
-    title: '和宠物说话',
-    width: 400,
-    height: 500,
-    html: 'windows/chat-window.html'
-  });
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'chat',
+      title: '和宠物说话',
+      width: 400,
+      height: 500,
+      html: 'windows/chat-window.html'
+    });
+  } else {
+    console.error('[App] electron API 不可用，无法打开聊天窗口');
+  }
 }
 
 function closeChat() {
-  window.electron.closeChildWindow('chat');
+  if (window.electron && window.electron.closeChildWindow) {
+    window.electron.closeChildWindow('chat');
+  }
 }
 
 function closeChatOnBackdrop(event) {
@@ -469,6 +490,10 @@ function sendChatMessage() {
 
 async function sendChat(message, options = {}) {
   const { returnReply = false, closeChatWindow = true } = options;
+
+  // 更新最后互动时间
+  state.lastInteraction = Date.now();
+
   // 检查是否有待确认的模糊时间提醒
   if (state.pendingReminder) {
     const result = await processVagueTimeReply(message);
@@ -742,19 +767,25 @@ async function processVagueTimeReply(userReply) {
 // 设置
 function openSettings() {
   closeQuickMenu();
-  
+
   // 创建设置子窗口
-  window.electron.createChildWindow({
-    id: 'settings',
-    title: '设置',
-    width: 500,
-    height: 600,
-    html: 'windows/settings-window.html'
-  });
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'settings',
+      title: '设置',
+      width: 500,
+      height: 600,
+      html: 'windows/settings-window.html'
+    });
+  } else {
+    console.error('[App] electron API 不可用，无法打开设置窗口');
+  }
 }
 
 function closeSettings() {
-  window.electron.closeChildWindow('settings');
+  if (window.electron && window.electron.closeChildWindow) {
+    window.electron.closeChildWindow('settings');
+  }
 }
 
 function closeSettingsOnBackdrop(e) {
@@ -764,19 +795,48 @@ function closeSettingsOnBackdrop(e) {
 // 历史
 function openHistory() {
   closeQuickMenu();
-  
+
   // 创建历史记录子窗口
-  window.electron.createChildWindow({
-    id: 'history',
-    title: '对话历史',
-    width: 500,
-    height: 600,
-    html: 'windows/history-window.html'
-  });
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'history',
+      title: '对话历史',
+      width: 500,
+      height: 600,
+      html: 'windows/history-window.html'
+    });
+  } else {
+    console.error('[App] electron API 不可用，无法打开历史窗口');
+  }
 }
 
+// 主题切换
+function openTheme() {
+  closeQuickMenu();
+
+  // 创建主题选择子窗口
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'theme',
+      title: '切换主题',
+      width: 360,
+      height: 380,
+      html: 'windows/theme-window.html'
+    });
+  } else {
+    console.error('[App] electron API 不可用，无法打开主题窗口');
+  }
+}
+// 暴露所有菜单相关函数到全局 window 对象
+window.openChat = openChat;
+window.openSettings = openSettings;
+window.openHistory = openHistory;
+window.openTheme = openTheme;
+
 function closeHistory() {
-  window.electron.closeChildWindow('history');
+  if (window.electron && window.electron.closeChildWindow) {
+    window.electron.closeChildWindow('history');
+  }
 }
 
 function closeHistoryOnBackdrop(e) {
@@ -815,13 +875,21 @@ function clearHistory() {
 // 选择宠物
 function selectPet(pet) {
   state.currentPet = pet;
-  
-  // 更新动画系统的基础宠物
+
+  // 更新动画系统的基础宠物（setBasePet 会自动处理 Lottie/Emoji 切换）
   if (window.PetAnimations) {
     window.PetAnimations.setBasePet(pet);
     window.PetAnimations.updateByMood(state.mood);
   }
-  
+
+  // 显示当前皮肤模式提示
+  if (window.SkinRegistry) {
+    const hasLottie = window.SkinRegistry.hasLottieSupport(pet);
+    const skin = window.SkinRegistry.getSkinByEmoji(pet);
+    const modeName = hasLottie ? 'Lottie 动画' : 'Emoji';
+    console.log(`[SelectPet] 切换到 ${skin.name} (${modeName} 模式)`);
+  }
+
   saveData();
   updateUI();
 }
@@ -875,6 +943,7 @@ function startTimers() {
   // 记录用户互动
   const recordInteraction = () => {
     lastInteractionTime = Date.now();
+    state.lastInteraction = Date.now();  // 同时更新 state
     if (isSleeping && window.PetAnimations) {
       window.PetAnimations.wakeUp();
       isSleeping = false;
@@ -1186,11 +1255,24 @@ function toggleLottieMode() {
 
   if (isLottie) {
     // 切换到 Emoji
+    window.PetAnimations.forceEmojiMode = true;
     window.PetAnimations.switchToEmoji();
     console.log('[Toggle] Emoji 显示状态:', document.getElementById('petEmoji').style.display);
     console.log('[Toggle] Emoji 内容:', document.getElementById('petEmoji').textContent);
     showBubbleMessage(`已切换到 Emoji 模式\n按 Ctrl+L 切换回 Lottie`);
   } else {
+    // 检查当前皮肤是否支持 Lottie
+    const skinHasLottie = window.SkinRegistry
+      ? window.SkinRegistry.hasLottieSupport(state.currentPet)
+      : false;
+
+    if (!skinHasLottie) {
+      const skin = window.SkinRegistry ? window.SkinRegistry.getSkinByEmoji(state.currentPet) : null;
+      const name = skin ? skin.name : state.currentPet;
+      showBubbleMessage(`${name} 暂无 Lottie 动画\n保持 Emoji 模式`);
+      return;
+    }
+
     // 切换到 Lottie
     const petLottie = document.getElementById('petLottie');
     const petEmoji = document.getElementById('petEmoji');
@@ -1199,6 +1281,7 @@ function toggleLottieMode() {
     console.log('[Toggle] petEmoji 存在:', !!petEmoji);
 
     if (petLottie && window.LottieController) {
+      window.PetAnimations.forceEmojiMode = false;
       petLottie.style.display = 'block';
       petLottie.classList.add('lottie-active');
       petEmoji.style.display = 'none';
@@ -1236,3 +1319,11 @@ function toggleLottieMode() {
     }
   }, 500);
 }
+
+// ==================== 截图功能 ====================
+
+// 初始化截图功能
+function initScreenshot() {
+  console.log('[Screenshot] Screenshot functionality initialized (快捷键: Ctrl+Shift+A)');
+}
+
