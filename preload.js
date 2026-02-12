@@ -40,6 +40,11 @@ contextBridge.exposeInMainWorld('electron', {
   onSettingsChange: (callback) => {
     ipcRenderer.on('settings:change', callback);
   },
+  // 宠物状态切换通信（菜单窗口 -> 主窗口）
+  sendPetState: (payload) => ipcRenderer.send('pet:state', payload),
+  onPetState: (callback) => {
+    ipcRenderer.on('pet:state', callback);
+  },
   // 气泡窗口通信
   showBubble: (message, duration) => ipcRenderer.invoke('bubble:show', message, duration),
   hideBubble: () => ipcRenderer.invoke('bubble:hide'),

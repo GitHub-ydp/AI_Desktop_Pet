@@ -192,6 +192,8 @@ async function init() {
   initChatIpc();
   // 初始化设置 IPC 监听
   initSettingsIpc();
+  // 初始化宠物状态 IPC 监听（菜单窗口 -> 主窗口）
+  initPetStateIpc();
   // 初始化截图功能
   initScreenshot();
 
@@ -260,6 +262,23 @@ function initSettingsIpc() {
       updateUI();
       stopTimers();
       startTimers();
+    }
+  });
+}
+
+// 宠物状态 IPC（菜单窗口 -> 主窗口）
+function initPetStateIpc() {
+  if (!window.electron || !window.electron.onPetState) return;
+  window.electron.onPetState((event, data) => {
+    if (!data || !data.state) return;
+    const s = data.state;
+    console.log(`[App] 收到菜单窗口状态切换: ${s}`);
+    if (window.PetAnimations) {
+      if (s === 'idle') {
+        window.PetAnimations.unlockManualState();
+      } else {
+        window.PetAnimations.setManualState(s);
+      }
     }
   });
 }
@@ -493,6 +512,11 @@ async function sendChat(message, options = {}) {
 
   // 更新最后互动时间
   state.lastInteraction = Date.now();
+
+  // 用户主动聊天时解除手动状态锁定
+  if (window.PetAnimations && window.PetAnimations.isManualLocked()) {
+    window.PetAnimations.unlockManualState();
+  }
 
   // 检查是否有待确认的模糊时间提醒
   if (state.pendingReminder) {
@@ -944,6 +968,12 @@ function startTimers() {
   const recordInteraction = () => {
     lastInteractionTime = Date.now();
     state.lastInteraction = Date.now();  // 同时更新 state
+
+    // 解除手动状态锁定（用户交互时恢复自动模式）
+    if (window.PetAnimations && window.PetAnimations.isManualLocked()) {
+      window.PetAnimations.unlockManualState();
+    }
+
     if (isSleeping && window.PetAnimations) {
       window.PetAnimations.wakeUp();
       isSleeping = false;
@@ -956,9 +986,12 @@ function startTimers() {
   
   // 检查是否需要睡觉
   setInterval(() => {
+    // 手动锁定时不自动进入睡眠
+    if (window.PetAnimations && window.PetAnimations.isManualLocked()) return;
+
     const inactiveTime = Date.now() - lastInteractionTime;
     const fiveMinutes = 5 * 60 * 1000;
-    
+
     if (inactiveTime > fiveMinutes && !isSleeping && window.PetAnimations) {
       window.PetAnimations.sleeping();
       isSleeping = true;

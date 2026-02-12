@@ -59,10 +59,10 @@ class RotaryMenuController {
     // 二级菜单配置
     this.secondLevelItems = [
       {
-        id: 'tools',
-        icon: '🔧',
-        label: '工具',
-        action: () => this.showToolsMenu(),
+        id: 'states',
+        icon: '🎭',
+        label: '状态',
+        action: () => this.showStateMenu(true),
         angle: 0
       },
       {
@@ -94,7 +94,23 @@ class RotaryMenuController {
         angle: 288
       }
     ];
-    
+
+    // 三级菜单：宠物状态选择（动态构建，基于当前皮肤的可用 Lottie 动画）
+    // 状态名 → 显示信息的映射
+    this.stateDisplayMap = {
+      idle:       { icon: '😌', label: '待机' },
+      happy:      { icon: '😆', label: '开心' },
+      sleeping:   { icon: '😴', label: '睡觉' },
+      exercising: { icon: '💪', label: '锻炼' },
+      playing:    { icon: '🧹', label: '玩耍' },
+      thinking:   { icon: '🤔', label: '思考' },
+      talking:    { icon: '💬', label: '聊天' },
+      clicked:    { icon: '👆', label: '点击' },
+      sad:        { icon: '😢', label: '伤心' },
+      dragging:   { icon: '✋', label: '拖拽' }
+    };
+    this.stateMenuItems = []; // 将由 buildStateMenuItems() 动态填充
+
     console.log('[RotaryMenu] 旋转拨号菜单控制器已创建');
   }
   
@@ -121,17 +137,22 @@ class RotaryMenuController {
     this.menuElement.id = 'rotaryMenu';
     this.menuElement.className = 'rotary-menu';
     this.menuElement.style.display = 'none';
-    
+
     // 创建拨号盘
     this.dialElement = document.createElement('div');
     this.dialElement.className = 'rotary-dial';
     this.menuElement.appendChild(this.dialElement);
-    
+
     // 中心装饰（已通过CSS隐藏，不再需要创建内容）
     const centerDecoration = document.createElement('div');
     centerDecoration.className = 'dial-center';
     this.dialElement.appendChild(centerDecoration);
-    
+
+    // 创建浮动 tooltip（挂在 rotary-menu 上，不受 dial 的 clip-path 裁切）
+    this.tooltipElement = document.createElement('div');
+    this.tooltipElement.className = 'dial-tooltip';
+    this.menuElement.appendChild(this.tooltipElement);
+
     // 添加到宠物容器附近
     const petWrapper = document.getElementById('petWrapper');
     if (petWrapper && petWrapper.parentNode) {
@@ -158,46 +179,45 @@ class RotaryMenuController {
       itemElement.className = 'dial-item';
       itemElement.dataset.id = item.id;
       itemElement.dataset.angle = item.angle;
-      itemElement.title = item.label;
+      // 不设置 title，避免系统原生 tooltip
       // 设置 staggered 弹入动画所需的 CSS 变量
       itemElement.style.setProperty('--item-index', index);
 
       // 按钮孔
       const holeElement = document.createElement('div');
       holeElement.className = 'dial-hole';
-      
+
       // 图标
       const iconElement = document.createElement('span');
       iconElement.className = 'dial-icon';
       iconElement.textContent = item.icon;
       holeElement.appendChild(iconElement);
-      
+
       itemElement.appendChild(holeElement);
-      
-      // 标签（悬停显示）
-      const labelElement = document.createElement('span');
-      labelElement.className = 'dial-label';
-      labelElement.textContent = item.label;
-      itemElement.appendChild(labelElement);
-      
+
+      // 悬停显示浮动 tooltip（不再创建 dial-label 子元素）
+      itemElement.addEventListener('mouseenter', () => {
+        this.showTooltip(item.label, parseFloat(item.angle));
+      });
+      itemElement.addEventListener('mouseleave', () => {
+        this.hideTooltip();
+      });
+
       // 绑定点击事件
       itemElement.addEventListener('click', (e) => {
         e.stopPropagation();
         console.log(`[RotaryMenu] 点击: ${item.label}`);
-        
-        // 播放拨号音效（如果有）
-        // SoundEffects.playDial(); 
-        
+
         // 简单的点击反馈动画
         itemElement.classList.add('clicked');
         setTimeout(() => itemElement.classList.remove('clicked'), 200);
-        
+
         if (item.action) {
           // 稍微延迟执行，让动画先播放
           setTimeout(() => item.action(), 150);
         }
       });
-      
+
       this.dialElement.appendChild(itemElement);
       this.itemElements.push(itemElement);
     });
@@ -302,7 +322,7 @@ class RotaryMenuController {
     // 切换动画：先旋转出去
     this.dialElement.classList.add('spinning-out');
     this.dialElement.classList.remove('spinning-in'); // 确保移除入场类
-    
+
     setTimeout(() => {
       // 交换菜单数据
       if (this.currentLevel === 1) {
@@ -310,23 +330,196 @@ class RotaryMenuController {
         this.currentLevel = 2;
         this.renderMenuItems(this.secondLevelItems);
       } else {
+        // 从二级或三级都回到一级
         console.log('[RotaryMenu] 返回一级菜单');
         this.currentLevel = 1;
         this.renderMenuItems(this.menuItems);
       }
-      
+
       // 强制重绘以确保浏览器识别 DOM 变化
       void this.dialElement.offsetWidth;
-      
+
       // 移除出场类，添加入场类
       this.dialElement.classList.remove('spinning-out');
       this.dialElement.classList.add('spinning-in');
-      
+
     }, 300); // 等待出场动画完成 (0.3s)
   }
   
+  // 显示浮动 tooltip（挂在 rotary-menu 上，不受 clip-path 裁切）
+  showTooltip(label, angleDeg) {
+    if (!this.tooltipElement) return;
+    const tooltip = this.tooltipElement;
+    tooltip.textContent = label;
+
+    // 根据菜单项角度，将 tooltip 推到圆环外侧
+    const tooltipRadius = 160; // 比菜单项半径 (115) 更远
+    const radian = (angleDeg - 90) * (Math.PI / 180);
+    const cx = this.menuElement.offsetWidth / 2;
+    const cy = this.menuElement.offsetHeight / 2;
+    const tx = cx + Math.cos(radian) * tooltipRadius;
+    const ty = cy + Math.sin(radian) * tooltipRadius;
+
+    tooltip.style.left = `${tx}px`;
+    tooltip.style.top = `${ty}px`;
+    tooltip.classList.add('dial-tooltip-visible');
+  }
+
+  // 隐藏浮动 tooltip
+  hideTooltip() {
+    if (!this.tooltipElement) return;
+    this.tooltipElement.classList.remove('dial-tooltip-visible');
+  }
+
+  // ========== 状态选择菜单（三级菜单） ==========
+
+  // 动态构建状态菜单（基于当前皮肤的动画配置，不依赖运行时 hasLottie 标志）
+  buildStateMenuItems() {
+    const items = [];
+    const petEmoji = (window.PetAnimations && window.PetAnimations.baseExpression) || '🐱';
+
+    let statesToShow = [];
+
+    // 尝试从 SkinRegistry 获取该皮肤的动画配置（不检查运行时 hasLottie 标志）
+    if (window.SkinRegistry) {
+      const skin = window.SkinRegistry.getSkinByEmoji(petEmoji);
+
+      if (skin && skin.animations && Object.keys(skin.animations).length > 0) {
+        // 收集有独立动画文件的状态（按文件名去重）
+        const seenFiles = new Set();
+
+        for (const [state, config] of Object.entries(skin.animations)) {
+          const fileKey = config.files
+            ? config.files.slice().sort().join(',')
+            : (config.file || '');
+
+          if (!fileKey || seenFiles.has(fileKey)) continue;
+          seenFiles.add(fileKey);
+          statesToShow.push(state);
+        }
+
+        console.log(`[RotaryMenu] 可用 Lottie 动画状态: ${statesToShow.join(', ')}`);
+      }
+    }
+
+    // 无 Lottie 配置时，降级为通用 emoji 状态列表
+    if (statesToShow.length === 0) {
+      console.log('[RotaryMenu] 无 Lottie 配置，使用通用状态列表');
+      statesToShow = ['idle', 'happy', 'sleeping', 'thinking', 'sad'];
+    }
+
+    // 最多显示 5 个状态 + 1 个返回
+    statesToShow = statesToShow.slice(0, 5);
+    const totalItems = statesToShow.length + 1;
+    const angleStep = 360 / totalItems;
+
+    statesToShow.forEach((state, index) => {
+      const display = this.stateDisplayMap[state] || { icon: '🎬', label: state };
+      items.push({
+        id: `state-${state}`,
+        icon: display.icon,
+        label: display.label,
+        state: state,
+        action: () => this.applyPetState(state),
+        angle: index * angleStep
+      });
+    });
+
+    // 返回按钮
+    items.push({
+      id: 'state-back',
+      icon: '◀️',
+      label: '返回',
+      action: () => this.showStateMenu(false),
+      angle: statesToShow.length * angleStep
+    });
+
+    return items;
+  }
+
+  // 显示/隐藏状态选择菜单
+  showStateMenu(entering) {
+    this.dialElement.classList.add('spinning-out');
+    this.dialElement.classList.remove('spinning-in');
+
+    setTimeout(() => {
+      if (entering) {
+        console.log('[RotaryMenu] 进入状态选择菜单');
+        this.currentLevel = 3;
+        // 动态构建状态菜单
+        this.stateMenuItems = this.buildStateMenuItems();
+        this.renderMenuItems(this.stateMenuItems);
+        // 高亮当前激活状态
+        this.highlightActiveState();
+      } else {
+        console.log('[RotaryMenu] 返回二级菜单');
+        this.currentLevel = 2;
+        this.renderMenuItems(this.secondLevelItems);
+      }
+
+      void this.dialElement.offsetWidth;
+      this.dialElement.classList.remove('spinning-out');
+      this.dialElement.classList.add('spinning-in');
+    }, 300);
+  }
+
+  // 高亮当前激活状态
+  highlightActiveState() {
+    const currentState = window.PetAnimations
+      ? window.PetAnimations.currentState
+      : 'idle';
+
+    this.itemElements.forEach(el => {
+      el.classList.remove('dial-item-active');
+      if (el.dataset.id === `state-${currentState}`) {
+        el.classList.add('dial-item-active');
+      }
+    });
+  }
+
+  // 应用宠物状态（使用手动锁定，加载对应 Lottie 动画）
+  applyPetState(state) {
+    console.log(`[RotaryMenu] 手动切换宠物状态: ${state}`);
+
+    if (this.isMenuWindow) {
+      // 菜单独立窗口：通过 IPC 通知主窗口切换状态
+      if (window.electron && window.electron.sendPetState) {
+        window.electron.sendPetState({ state });
+      }
+    } else if (window.PetAnimations) {
+      // 主窗口内联菜单：直接调用
+      if (state === 'idle') {
+        window.PetAnimations.unlockManualState();
+      } else {
+        window.PetAnimations.setManualState(state);
+      }
+    }
+
+    this.close();
+
+    const stateMessages = {
+      idle: '回到待机状态~',
+      happy: '开心起来了！',
+      sleeping: 'Zzz...',
+      exercising: '锻炼身体！💪',
+      playing: '骑着扫帚飞~🧹',
+      thinking: '让我想想...',
+      sad: '有点难过...'
+    };
+    const msg = stateMessages[state] || `切换到 ${state}~`;
+
+    // 菜单窗口通过气泡 IPC 显示消息，主窗口直接调用
+    if (this.isMenuWindow) {
+      if (window.electron && window.electron.showBubble) {
+        window.electron.showBubble(msg, 2000);
+      }
+    } else if (window.showBubbleMessage) {
+      window.showBubbleMessage(msg);
+    }
+  }
+
   // ========== 菜单项动作（复用原有逻辑） ==========
-  
+
   showReminderMenu() {
     console.log('[RotaryMenu] 显示提醒菜单');
     this.close();

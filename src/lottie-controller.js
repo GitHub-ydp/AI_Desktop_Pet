@@ -40,6 +40,9 @@ class LottieController {
     // 过渡动画持续时间
     this.transitionDuration = 300;
 
+    // 手动模式（由 PetAnimations 控制，强制循环播放）
+    this.manualMode = false;
+
     console.log('[LottieController] Lottie 控制器已创建');
   }
 
@@ -62,8 +65,22 @@ class LottieController {
     };
   }
 
+  // 设置手动模式（强制循环播放，禁用自动回弹）
+  setManualMode(enabled) {
+    this.manualMode = enabled;
+    console.log(`[LottieController] 手动模式: ${enabled ? '启用' : '禁用'}`);
+
+    // 启用手动模式且当前动画存在，强制设为循环
+    if (enabled && this.animation) {
+      this.animation.loop = true;
+    }
+  }
+
   // 获取是否循环播放
   shouldLoop(state) {
+    // 手动模式下强制循环
+    if (this.manualMode) return true;
+
     const stateConfig = this.getStateConfig(state);
     if (stateConfig && stateConfig.loop !== undefined) {
       return stateConfig.loop;
@@ -278,6 +295,12 @@ class LottieController {
             newAnimation.addEventListener('complete', () => {
               console.log(`[LottieController] 动画播放完成: ${state}`);
 
+              // 手动模式下不自动切换状态
+              if (this.manualMode) {
+                console.log(`[LottieController] 手动模式，不自动切换`);
+                return;
+              }
+
               // 检查配置中是否有自动切换
               if (stateConfig && stateConfig.onComplete) {
                 const nextState = stateConfig.onComplete;
@@ -372,6 +395,12 @@ class LottieController {
     // 如果不是循环播放，由 complete 事件处理，不需要设置定时器
     if (!shouldLoop) {
       console.log(`[LottieController] 状态 ${state} 为单次播放，由 complete 事件处理`);
+      return;
+    }
+
+    // 手动模式下不设置最小显示时间（用户手动选的，不自动切回）
+    if (this.manualMode) {
+      console.log(`[LottieController] 手动模式，跳过 minDisplayTime`);
       return;
     }
 

@@ -4,7 +4,7 @@
 class PetAnimationController {
   constructor() {
     // 所有可用的动画状态
-    this.states = ['idle', 'happy', 'thinking', 'sleeping', 'dragging', 'clicked', 'talking', 'sad'];
+    this.states = ['idle', 'happy', 'thinking', 'sleeping', 'dragging', 'clicked', 'talking', 'sad', 'exercising', 'playing'];
     
     // 当前状态
     this.currentState = 'idle';
@@ -116,7 +116,12 @@ class PetAnimationController {
     
     // 强制禁用 Lottie（修复黄色方块问题）
     this.forceEmojiMode = false;
-    
+
+    // 手动状态锁定（用户通过菜单手动切换状态时启用）
+    this.manualStateLock = false;
+    // 手动锁定的目标状态
+    this.manualLockedState = null;
+
     console.log('[Animation] 动画控制器已创建');
   }
   
@@ -273,8 +278,13 @@ class PetAnimationController {
       return false;
     }
 
+    // 手动锁定时，阻止自动系统覆盖手动状态
+    if (this.manualStateLock && newState !== this.manualLockedState) {
+      console.log(`[Animation] 手动锁定中，拒绝切换到 ${newState}（锁定: ${this.manualLockedState}）`);
+      return false;
+    }
+
     if (this.currentState === newState) {
-      console.log(`[Animation] 已经是 ${newState} 状态，跳过`);
       return false;
     }
 
@@ -567,6 +577,9 @@ class PetAnimationController {
     console.log('[Animation] 启动自动状态检查');
 
     this.stateCheckInterval = setInterval(() => {
+      // 手动锁定时跳过自动检查
+      if (this.manualStateLock) return;
+
       // 只在 idle 状态下自动切换（避免打扰用户正在观看的动画）
       if (this.currentState === 'idle') {
         const mood = moodGetter ? moodGetter() : 80;
@@ -584,6 +597,54 @@ class PetAnimationController {
       this.stateCheckInterval = null;
       console.log('[Animation] 停止自动状态检查');
     }
+  }
+
+  // 手动设置状态（由用户菜单触发，锁定状态不被自动系统覆盖）
+  setManualState(state) {
+    if (!this.states.includes(state)) {
+      console.warn(`[Animation] 未知状态: ${state}`);
+      return false;
+    }
+
+    console.log(`[Animation] 手动切换状态: ${state}，启用锁定`);
+    this.manualStateLock = true;
+    this.manualLockedState = state;
+
+    // 强制切换（先临时解锁让 setState 通过）
+    const prevLock = this.manualStateLock;
+    this.manualStateLock = false;
+    this.setState(state);
+    this.manualStateLock = prevLock;
+    this.manualLockedState = state;
+
+    // 通知 LottieController 进入手动模式（强制循环）
+    if (this.useLottie && this.lottieController) {
+      this.lottieController.setManualMode(true);
+    }
+
+    return true;
+  }
+
+  // 解除手动状态锁定（由用户交互触发）
+  unlockManualState() {
+    if (!this.manualStateLock) return;
+
+    console.log(`[Animation] 解除手动状态锁定，从 ${this.manualLockedState} 恢复到 idle`);
+    this.manualStateLock = false;
+    this.manualLockedState = null;
+
+    // 通知 LottieController 退出手动模式
+    if (this.useLottie && this.lottieController) {
+      this.lottieController.setManualMode(false);
+    }
+
+    // 恢复到 idle
+    this.setState('idle');
+  }
+
+  // 检查是否处于手动锁定状态
+  isManualLocked() {
+    return this.manualStateLock;
   }
 }
 

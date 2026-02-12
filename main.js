@@ -5,6 +5,10 @@ const { ScreenshotManager } = require('./main-process/screenshot');
 const { createChatRequestId, withTimeout } = require('./src/chat-ipc-utils');
 const { getBubbleWindowBoundsFromMain } = require('./src/bubble-window-utils');
 
+// 忽略 stdout/stderr 管道断开错误（npm start 关闭终端后常见，无需弹窗提示）
+process.stdout.on('error', (err) => { if (err.code === 'EPIPE') return; });
+process.stderr.on('error', (err) => { if (err.code === 'EPIPE') return; });
+
 // 加载环境变量（从 .env 文件）
 require('dotenv').config();
 console.log('[Main Process] dotenv loaded');
@@ -672,6 +676,12 @@ ipcMain.on('chat:response', (event, requestId, payload) => {
 ipcMain.on('settings:change', (event, payload) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('settings:change', payload);
+});
+
+// 菜单窗口宠物状态切换 -> 主窗口
+ipcMain.on('pet:state', (event, payload) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('pet:state', payload);
 });
 
 // 创建子窗口
