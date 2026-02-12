@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>贴图</title>
+  <script src="../src/theme-manager.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: transparent;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    /* 贴图容器 */
+    .pin-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      cursor: grab;
+      -webkit-app-region: drag;
+    }
+
+    .pin-container:active {
+      cursor: grabbing;
+    }
+
+    /* 截图图片 */
+    .pin-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+      border-radius: 4px;
+    }
+
+    /* 发光边框（hover 时显示） */
+    .pin-container::after {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      border: 2px solid var(--neon-cyan, #00fff0);
+      border-radius: 6px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+      box-shadow: var(--glow-sm, 0 0 8px rgba(0, 255, 240, 0.4));
+    }
+
+    .pin-container:hover::after {
+      opacity: 1;
+    }
+
+    /* 贴图控制栏（hover 时在底部显示） */
+    .pin-controls {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      -webkit-app-region: no-drag;
+
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 6px;
+
+      background: rgba(2, 8, 16, 0.9);
+      border: 1px solid var(--border, rgba(0, 255, 240, 0.3));
+      border-radius: 6px;
+
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+    }
+
+    .pin-container:hover .pin-controls {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .pin-ctrl-btn {
+      padding: 3px 8px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text, #cff0ff);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .pin-ctrl-btn:hover {
+      background: rgba(0, 255, 240, 0.1);
+    }
+
+    /* 透明度指示器 */
+    .pin-opacity-indicator {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 2px 6px;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 3px;
+      color: #fff;
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+
+    .pin-opacity-indicator.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="pin-container" id="pinContainer">
+    <img class="pin-image" id="pinImage" />
+    <div class="pin-controls">
+      <button class="pin-ctrl-btn" id="pinCopy">复制</button>
+      <button class="pin-ctrl-btn" id="pinSave">保存</button>
+      <button class="pin-ctrl-btn" id="pinClose">关闭</button>
+    </div>
+    <div class="pin-opacity-indicator" id="opacityIndicator">100%</div>
+  </div>
+  <script>
+    // 贴图窗口逻辑
+    // 通过 preload.js 中的 ScreenshotBridge 与主进程通信
+
+    const pinImage = document.getElementById('pinImage');
+    const opacityIndicator = document.getElementById('opacityIndicator');
+    const pinContainer = document.getElementById('pinContainer');
+
+    // 当前状态
+    let currentOpacity = 1.0;
+    let imageDataURL = null;
+    let opacityHideTimer = null;
+
+    // ===== IPC 通信 =====
+
+    // 接收截图数据（主进程在 did-finish-load 后发送）
+    window.ScreenshotBridge.onPinLoad((dataURL) => {
+      loadImage(dataURL);
+    });
+
+    // 加载截图到图片元素
+    function loadImage(dataURL) {
+      if (!dataURL) return;
+      imageDataURL = dataURL;
+      pinImage.src = dataURL;
+    }
+
+    // ===== 透明度控制 =====
+
+    // 鼠标滚轮调节透明度（30% ~ 100%）
+    pinContainer.addEventListener('wheel', (e) => {
+      e.preventDefault();
+
+      // 滚轮向上增加透明度，向下降低
+      const delta = e.deltaY < 0 ? 0.05 : -0.05;
+      currentOpacity = Math.max(0.3, Math.min(1.0, currentOpacity + delta));
+
+      // 更新指示器显示
+      const percent = Math.round(currentOpacity * 100);
+      opacityIndicator.textContent = percent + '%';
+      opacityIndicator.classList.add('show');
+
+      // 通知主进程设置窗口透明度
+      window.ScreenshotBridge.setPinOpacity(currentOpacity);
+
+      // 3 秒后隐藏指示器
+      if (opacityHideTimer) clearTimeout(opacityHideTimer);
+      opacityHideTimer = setTimeout(() => {
+        opacityIndicator.classList.remove('show');
+      }, 3000);
+    }, { passive: false });
+
+    // ===== 双击关闭 =====
+
+    pinContainer.addEventListener('dblclick', () => {
+      closePin();
+    });
+
+    // ===== 按钮事件 =====
+
+    // 复制按钮
+    document.getElementById('pinCopy').addEventListener('click', () => {
+      if (!imageDataURL) return;
+      window.ScreenshotBridge.copyDataToClipboard(imageDataURL);
+    });
+
+    // 保存按钮
+    document.getElementById('pinSave').addEventListener('click', () => {
+      if (!imageDataURL) return;
+      window.ScreenshotBridge.saveAs(imageDataURL);
+    });
+
+    // 关闭按钮
+    document.getElementById('pinClose').addEventListener('click', () => {
+      closePin();
+    });
+
+    // 关闭贴图窗口
+    function closePin() {
+      window.ScreenshotBridge.closePinWindow();
+    }
+
+    // ===== 键盘快捷键 =====
+
+    document.addEventListener('keydown', (e) => {
+      // ESC 关闭
+      if (e.key === 'Escape') {
+        closePin();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1306,3 +1306,39 @@ body {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* 浮动 tooltip（挂在 rotary-menu 上，不受 dial 的 clip-path 截断） */
+.dial-tooltip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 9px;
+  color: rgb(from var(--neon-cyan) r g b / 0.95);
+  background: rgb(from var(--bg) r g b / 0.88);
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  border: 1px solid rgb(from var(--neon-cyan) r g b / 0.40);
+  box-shadow: 0 0 8px rgb(from var(--neon-cyan) r g b / 0.30);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10;
+  transition: opacity 0.15s ease;
+}
+
+.dial-tooltip.dial-tooltip-visible {
+  opacity: 1;
+}
+
+/* 当前激活状态的菜单项高亮 */
+.dial-item.dial-item-active .dial-hole {
+  border-color: var(--neon-cyan);
+  background: rgb(from var(--neon-cyan) r g b / 0.12);
+  box-shadow:
+    0 0 14px var(--neon-cyan),
+    0 0 30px rgb(from var(--neon-cyan) r g b / 0.50),
+    inset 0 0 10px rgb(from var(--neon-cyan) r g b / 0.15);
+}

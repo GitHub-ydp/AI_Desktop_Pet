@@ -56,6 +56,9 @@ class MemoryStorage {
       const schema = readFileSync(SCHEMA_PATH, 'utf-8');
       this.db.exec(schema);
 
+      // 执行数据库迁移（添加缺失的列）
+      this.runMigrations();
+
       console.log('Memory database initialized at:', this.dbPath);
       return true;
     } catch (error) {
@@ -69,6 +72,62 @@ class MemoryStorage {
     if (this.db) {
       this.db.close();
       this.db = null;
+    }
+  }
+
+  // 执行数据库迁移（添加缺失的列）
+  runMigrations() {
+    if (!this.db) return;
+
+    try {
+      // 检查并添加 memory_chunks 新列
+      const chunksCols = this.getTableColumns('memory_chunks');
+      if (!chunksCols.includes('last_accessed_at')) {
+        this.db.exec('ALTER TABLE memory_chunks ADD COLUMN last_accessed_at INTEGER');
+        console.log('[Migrate] Added column: memory_chunks.last_accessed_at');
+      }
+      if (!chunksCols.includes('access_count')) {
+        this.db.exec('ALTER TABLE memory_chunks ADD COLUMN access_count INTEGER DEFAULT 1');
+        console.log('[Migrate] Added column: memory_chunks.access_count');
+      }
+      if (!chunksCols.includes('importance_score')) {
+        this.db.exec('ALTER TABLE memory_chunks ADD COLUMN importance_score REAL DEFAULT 1.0');
+        console.log('[Migrate] Added column: memory_chunks.importance_score');
+        // 回填数据
+        this.db.exec('UPDATE memory_chunks SET importance_score = 1.0 WHERE importance_score IS NULL');
+      }
+
+      // 检查并添加 embedding_cache 新列
+      const cacheCols = this.getTableColumns('embedding_cache');
+      if (!cacheCols.includes('last_accessed_at')) {
+        this.db.exec('ALTER TABLE embedding_cache ADD COLUMN last_accessed_at INTEGER');
+        console.log('[Migrate] Added column: embedding_cache.last_accessed_at');
+      }
+      if (!cacheCols.includes('access_count')) {
+        this.db.exec('ALTER TABLE embedding_cache ADD COLUMN access_count INTEGER DEFAULT 1');
+        console.log('[Migrate] Added column: embedding_cache.access_count');
+      }
+
+      // 回填数据
+      this.db.exec('UPDATE memory_chunks SET last_accessed_at = updated_at WHERE last_accessed_at IS NULL');
+      this.db.exec('UPDATE embedding_cache SET last_accessed_at = created_at WHERE last_accessed_at IS NULL');
+
+      console.log('[Migrate] Database migrations completed');
+    } catch (error) {
+      console.error('[Migrate] Migration error:', error);
+      // 不抛出异常，允许应用继续运行
+    }
+  }
+
+  // 获取表的列名列表
+  getTableColumns(tableName) {
+    try {
+      const stmt = this.db.prepare(`PRAGMA table_info(${tableName})`);
+      const rows = stmt.all();
+      return rows.map(row => row.name);
+    } catch (error) {
+      console.error(`[Migrate] Failed to get columns for ${tableName}:`, error);
+      return [];
     }
   }
 

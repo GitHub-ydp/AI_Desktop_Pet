@@ -767,11 +767,17 @@ ipcMain.handle('open-devtools', () => {
 
 // ==================== 截图捕获函数 ====================
 
-// 启动截图捕获（由快捷键或菜单触发）
-let screenshotCaptureWindow = null;
-let allDisplays = null; // 保存所有显示器信息
+const { desktopCapturer, nativeImage, dialog, shell } = require('electron');
+const fs = require('fs').promises;
+const crypto = require('crypto');
 
-function startScreenshotCapture() {
+let screenshotCaptureWindow = null;
+const pinWindows = new Map(); // 管理贴图窗口，最多 5 个
+const MAX_PIN_WINDOWS = 5;
+
+// 启动截图捕获（由快捷键或菜单触发）
+// 新流程：先全屏截图获取 dataURL → 发送给覆盖窗口显示为背景
+async function startScreenshotCapture() {
   console.log('[Screenshot] Starting screenshot capture...');
 
   // 如果截图窗口已存在，先关闭它
@@ -780,18 +786,26 @@ function startScreenshotCapture() {
     screenshotCaptureWindow = null;
   }
 
-  // 隐藏主窗口
+  // 隐藏主窗口和所有子窗口
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.hide();
   }
+  if (menuWindow && !menuWindow.isDestroyed()) {
+    menuWindow.hide();
+  }
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+    bubbleWindow.hide();
+  }
+
+  // 等待窗口完全隐藏
+  await new Promise(resolve => setTimeout(resolve, 150));
 
   // 获取所有显示器信息
-  const { screen } = require('electron');
-  allDisplays = screen.getAllDisplays();
+  const displays = screen.getAllDisplays();
 
-  // 计算虚拟屏幕的总边界
+  // 计算虚拟屏幕的总边界（DIP 坐标）
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  allDisplays.forEach(display => {
+  displays.forEach(display => {
     minX = Math.min(minX, display.bounds.x);
     minY = Math.min(minY, display.bounds.y);
     maxX = Math.max(maxX, display.bounds.x + display.bounds.width);
@@ -802,9 +816,9 @@ function startScreenshotCapture() {
   const totalHeight = maxY - minY;
 
   console.log('[Screenshot] Virtual screen bounds:', { minX, minY, totalWidth, totalHeight });
-  console.log('[Screenshot] Displays:', allDisplays.length);
+  console.log('[Screenshot] Displays:', displays.length);
 
-  // 创建全屏透明捕获窗口（覆盖所有显示器）
+  // 创建全屏透明覆盖窗口（安全模式）
   screenshotCaptureWindow = new BrowserWindow({
     width: totalWidth,
     height: totalHeight,
@@ -819,178 +833,111 @@ function startScreenshotCapture() {
     fullscreen: false,
     backgroundColor: '#00000000',
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
-
-  // 加载捕获窗口
-  screenshotCaptureWindow.loadFile('windows/screenshot-capture.html');
-
-  // 监听窗口关闭
-  screenshotCaptureWindow.on('closed', () => {
-    screenshotCaptureWindow = null;
-  });
-
-  // 监听选择完成事件
-  ipcMain.once('screenshot:selected', async (event, bounds) => {
-    console.log('[Screenshot] Region selected:', bounds);
-    await handleScreenshotCapture(bounds);
-  });
-
-  // 监听取消事件
-  ipcMain.once('screenshot:cancelled', () => {
-    console.log('[Screenshot] Capture cancelled');
-    closeScreenshotCapture();
-  });
-}
-
-// 处理截图捕获
-async function handleScreenshotCapture(bounds) {
-  const { desktopCapturer } = require('electron');
-  const { screen } = require('electron');
-
-  try {
-    console.log('[Screenshot] Selected bounds:', bounds);
-
-    // 关闭捕获窗口
-    closeScreenshotCapture();
-
-    // 找到选择区域所在的显示器
-    const selectionCenter = {
-      x: bounds.x + bounds.width / 2,
-      y: bounds.y + bounds.height / 2
-    };
-
-    const targetDisplay = screen.getDisplayMatching({
-      x: selectionCenter.x,
-      y: selectionCenter.y,
-      width: bounds.width,
-      height: bounds.height
-    });
-
-    console.log('[Screenshot] Target display:', targetDisplay);
-
-    // 获取屏幕源（设置高质量 thumbnail）
-    const sources = await desktopCapturer.getSources({
-      types: ['screen', 'monitor'],
-      thumbnailSize: {
-        width: targetDisplay.bounds.width,
-        height: targetDisplay.bounds.height
-      }
-    });
-
-    if (sources.length === 0) {
-      throw new Error('No screen sources found');
-    }
-
-    // 找到对应的屏幕源
-    const source = sources.find(s => {
-      const sourceId = parseInt(s.id);
-      return sourceId === targetDisplay.id;
-    }) || sources[0];
-
-    console.log('[Screenshot] Using source:', source.name, 'ID:', source.id);
-
-    const thumbnail = source.thumbnail;
-    const { nativeImage } = require('electron');
-
-    // 计算相对于目标显示器的坐标
-    const relativeX = bounds.x - targetDisplay.bounds.x;
-    const relativeY = bounds.y - targetDisplay.bounds.y;
-
-    console.log('[Screenshot] Relative coordinates:', { relativeX, relativeY });
-    console.log('[Screenshot] Thumbnail size:', thumbnail.getSize());
-    console.log('[Screenshot] Target display size:', targetDisplay.bounds.width, targetDisplay.bounds.height);
-
-    // 裁剪选区（现在 thumbnail 应该是全分辨率）
-    const croppedImage = thumbnail.crop({
-      x: Math.floor(relativeX),
-      y: Math.floor(relativeY),
-      width: Math.floor(bounds.width),
-      height: Math.floor(bounds.height)
-    });
-
-    console.log('[Screenshot] Cropped image size:', croppedImage.getSize());
-
-    // 保存截图
-    const fs = require('fs').promises;
-    const path = require('path');
-    const crypto = require('crypto');
-
-    const screenshotsDir = path.join(app.getPath('userData'), 'screenshots');
-    await fs.mkdir(screenshotsDir, { recursive: true });
-
-    const filename = `screenshot_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.png`;
-    const filePath = path.join(screenshotsDir, filename);
-
-    const buffer = croppedImage.toPNG();
-    await fs.writeFile(filePath, buffer);
-
-    console.log('[Screenshot] Screenshot saved:', filePath);
-    console.log('[Screenshot] File size:', buffer.length, 'bytes');
-
-    // 保存到数据库
-    if (screenshotSystem) {
-      const screenshotId = screenshotSystem.saveScreenshotRecord({
-        filePath,
-        width: bounds.width,
-        height: bounds.height,
-        fileSize: buffer.length,
-        format: 'png',
-        captureMethod: 'region'
-      });
-
-      // 打开预览窗口
-      openScreenshotPreview(screenshotId, filePath);
-    } else {
-      console.error('[Screenshot] Screenshot system not initialized');
-      showMainWindow();
-    }
-
-  } catch (error) {
-    console.error('[Screenshot] Failed to capture:', error);
-    showMainWindow();
-  }
-}
-
-// 打开截图预览窗口
-function openScreenshotPreview(screenshotId, filePath) {
-  const { BrowserWindow } = require('electron');
-
-  // 创建预览窗口
-  const previewWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
-    frame: false,
-    transparent: false,
-    alwaysOnTop: false,
-    skipTaskbar: false,
-    resizable: false,
-    backgroundColor: '#f5f5f5',
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     }
   });
 
-  previewWindow.loadFile('windows/screenshot-window.html');
+  screenshotCaptureWindow.loadFile('windows/screenshot-capture.html');
 
-  // 窗口加载完成后发送截图数据
-  previewWindow.webContents.on('did-finish-load', () => {
-    previewWindow.webContents.send('screenshot:load', screenshotId, filePath);
+  screenshotCaptureWindow.on('closed', () => {
+    screenshotCaptureWindow = null;
   });
+}
 
-  // 监听关闭请求
-  ipcMain.once('close-screenshot-window', () => {
-    if (previewWindow && !previewWindow.isDestroyed()) {
-      previewWindow.close();
+// 获取全屏截图（主进程在此完成 desktopCapturer 调用）
+// 返回每个显示器的 dataURL + 显示器信息，供覆盖窗口作为静态背景
+async function getScreenCapture() {
+  const displays = screen.getAllDisplays();
+  const displayCaptures = [];
+
+  for (const display of displays) {
+    // 使用物理像素尺寸获取高质量截图
+    const physicalWidth = Math.round(display.bounds.width * display.scaleFactor);
+    const physicalHeight = Math.round(display.bounds.height * display.scaleFactor);
+
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: {
+        width: physicalWidth,
+        height: physicalHeight
+      }
+    });
+
+    // 使用 display_id 匹配正确的屏幕源
+    const source = sources.find(s =>
+      s.display_id === String(display.id)
+    ) || sources[0];
+
+    if (source) {
+      displayCaptures.push({
+        displayId: String(display.id),
+        dataURL: source.thumbnail.toDataURL(),
+        bounds: display.bounds,
+        scaleFactor: display.scaleFactor,
+        physicalWidth,
+        physicalHeight
+      });
+    }
+  }
+
+  return {
+    displays: displayCaptures,
+    virtualBounds: {
+      x: Math.min(...displays.map(d => d.bounds.x)),
+      y: Math.min(...displays.map(d => d.bounds.y)),
+      width: Math.max(...displays.map(d => d.bounds.x + d.bounds.width)) - Math.min(...displays.map(d => d.bounds.x)),
+      height: Math.max(...displays.map(d => d.bounds.y + d.bounds.height)) - Math.min(...displays.map(d => d.bounds.y))
+    }
+  };
+}
+
+// 创建贴图窗口（截图固定到桌面）
+function createPinWindow(imageDataURL, bounds) {
+  // 限制最大贴图窗口数量
+  if (pinWindows.size >= MAX_PIN_WINDOWS) {
+    // 关闭最早的贴图窗口
+    const oldestKey = pinWindows.keys().next().value;
+    const oldestWin = pinWindows.get(oldestKey);
+    if (oldestWin && !oldestWin.isDestroyed()) {
+      oldestWin.close();
+    }
+    pinWindows.delete(oldestKey);
+  }
+
+  const pinId = `pin_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
+  const pinWin = new BrowserWindow({
+    width: Math.max(bounds.width || 300, 100),
+    height: Math.max(bounds.height || 200, 100),
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: true,
+    hasShadow: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
-  // 恢复主窗口
-  showMainWindow();
+  pinWin.loadFile('windows/pin-window.html');
+
+  pinWin.webContents.on('did-finish-load', () => {
+    pinWin.webContents.send('pin:load', imageDataURL);
+  });
+
+  pinWin.on('closed', () => {
+    pinWindows.delete(pinId);
+  });
+
+  pinWindows.set(pinId, pinWin);
+  console.log(`[Screenshot] Pin window created: ${pinId} (total: ${pinWindows.size})`);
+  return pinId;
 }
 
 // 关闭截图捕获窗口
@@ -1081,9 +1028,202 @@ function generateSessionId() {
 // ==================== 截图系统 IPC 处理器 ====================
 
 // 注册截图 IPC 处理器
-function registerScreenshotIPCHandlers(ipcMain) {
+function registerScreenshotIPCHandlers(ipc) {
+
+  // ---- 新版截图流程 IPC（ScreenshotBridge 使用） ----
+
+  // 获取全屏截图 dataURL + 显示器信息（覆盖窗口加载后调用）
+  ipc.handle('screenshot:get-screen-capture', async () => {
+    try {
+      const data = await getScreenCapture();
+      return { success: true, ...data };
+    } catch (error) {
+      console.error('[Screenshot] Failed to get screen capture:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 区域选择完成（由覆盖窗口通过 ScreenshotBridge.selectRegion 调用）
+  ipc.handle('screenshot:region-selected', async (event, bounds) => {
+    try {
+      // 输入校验
+      if (!bounds || typeof bounds.x !== 'number' || typeof bounds.y !== 'number'
+          || typeof bounds.width !== 'number' || typeof bounds.height !== 'number') {
+        throw new Error('Invalid bounds format');
+      }
+      if (bounds.width < 1 || bounds.height < 1
+          || bounds.width > 10000 || bounds.height > 10000) {
+        throw new Error('Bounds out of range');
+      }
+
+      console.log('[Screenshot] Region selected:', bounds);
+      // 关闭覆盖窗口（不恢复主窗口，因为操作还在继续）
+      if (screenshotCaptureWindow && !screenshotCaptureWindow.isDestroyed()) {
+        screenshotCaptureWindow.close();
+        screenshotCaptureWindow = null;
+      }
+      showMainWindow();
+      return { success: true };
+    } catch (error) {
+      console.error('[Screenshot] Region selection failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 取消截图
+  ipc.handle('screenshot:capture-cancel', async () => {
+    console.log('[Screenshot] Capture cancelled');
+    closeScreenshotCapture();
+    return { success: true };
+  });
+
+  // 从 dataURL 复制图片到剪贴板（无需文件路径）
+  ipc.handle('screenshot:copy-data', async (event, dataURL) => {
+    try {
+      if (!screenshotSystem) {
+        throw new Error('截图系统未初始化');
+      }
+      screenshotSystem.copyDataToClipboard(dataURL);
+      return { success: true };
+    } catch (error) {
+      console.error('[Screenshot] Failed to copy data to clipboard:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 快速保存到 userData/screenshots/
+  ipc.handle('screenshot:save-quick', async (event, dataURL) => {
+    try {
+      if (!screenshotSystem) {
+        throw new Error('截图系统未初始化');
+      }
+      const result = await screenshotSystem.saveFromDataURL(dataURL);
+
+      // 保存数据库记录
+      const screenshotId = screenshotSystem.saveScreenshotRecord({
+        filePath: result.filePath,
+        fileSize: result.fileSize,
+        width: result.width,
+        height: result.height,
+        format: 'png',
+        captureMethod: 'region'
+      });
+
+      return { success: true, filePath: result.filePath, screenshotId };
+    } catch (error) {
+      console.error('[Screenshot] Failed to quick save:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 另存为（弹出系统文件选择对话框）
+  ipc.handle('screenshot:save-as', async (event, dataURL) => {
+    try {
+      const result = await dialog.showSaveDialog({
+        title: '保存截图',
+        defaultPath: `screenshot_${Date.now()}.png`,
+        filters: [
+          { name: 'PNG 图片', extensions: ['png'] },
+          { name: 'JPEG 图片', extensions: ['jpg', 'jpeg'] }
+        ]
+      });
+
+      if (result.canceled) {
+        return { success: false, canceled: true };
+      }
+
+      const image = nativeImage.createFromDataURL(dataURL);
+      const ext = path.extname(result.filePath).toLowerCase();
+      const buffer = (ext === '.jpg' || ext === '.jpeg')
+        ? image.toJPEG(90)
+        : image.toPNG();
+
+      await fs.writeFile(result.filePath, buffer);
+      console.log(`[Screenshot] Saved as: ${result.filePath}`);
+      return { success: true, filePath: result.filePath };
+    } catch (error) {
+      console.error('[Screenshot] Failed to save as:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 贴图到桌面（创建置顶小窗口）
+  ipc.handle('screenshot:pin', async (event, dataURL, bounds) => {
+    try {
+      const pinId = createPinWindow(dataURL, bounds || { width: 300, height: 200 });
+      return { success: true, windowId: pinId };
+    } catch (error) {
+      console.error('[Screenshot] Failed to create pin window:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // AI 分析截图（暂用 DeepSeek API 文字分析）
+  // TODO: 接入视觉模型后替换为真正的图像分析
+  ipc.handle('screenshot:analyze-image', async (event, dataURL, prompt) => {
+    try {
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      if (!apiKey) {
+        return { success: false, error: 'API 密钥未配置' };
+      }
+
+      // TODO: 当 DeepSeek 支持视觉输入时，直接发送 base64 图片
+      // 目前仅返回提示信息
+      const result = '暂不支持图像分析。请等待视觉模型接入后使用此功能。';
+      return { success: true, result };
+    } catch (error) {
+      console.error('[Screenshot] Failed to analyze image:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // OCR 文字识别（预留接口）
+  // TODO: 接入 tesseract.js 后实现
+  ipc.handle('screenshot:ocr-image', async (event, dataURL) => {
+    try {
+      return {
+        success: false,
+        error: 'OCR 功能需要安装 tesseract.js。请运行 npm install tesseract.js 后使用。'
+      };
+    } catch (error) {
+      console.error('[Screenshot] Failed to perform OCR:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 贴图窗口：设置透明度（发送者即贴图窗口本身）
+  ipc.handle('pin:set-opacity', (event, opacity) => {
+    try {
+      const senderWin = BrowserWindow.fromWebContents(event.sender);
+      if (senderWin && !senderWin.isDestroyed()) {
+        const clamped = Math.max(0.3, Math.min(1.0, Number(opacity)));
+        senderWin.setOpacity(clamped);
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('[Screenshot] Failed to set pin opacity:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 贴图窗口：关闭自身
+  ipc.handle('pin:close', (event) => {
+    try {
+      const senderWin = BrowserWindow.fromWebContents(event.sender);
+      if (senderWin && !senderWin.isDestroyed()) {
+        senderWin.close();
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('[Screenshot] Failed to close pin window:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ---- 旧版 PetScreenshot API 兼容 IPC ----
+
   // 获取可用的屏幕源
-  ipcMain.handle('screenshot:get-sources', async () => {
+  ipc.handle('screenshot:get-sources', async () => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
@@ -1097,13 +1237,11 @@ function registerScreenshotIPCHandlers(ipcMain) {
   });
 
   // 区域截图
-  ipcMain.handle('screenshot:capture-region', async (event, bounds) => {
+  ipc.handle('screenshot:capture-region', async (event, bounds) => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
       }
-      // 这里需要通过 desktopCapturer 在渲染进程中捕获，然后传递过来
-      // 暂时返回成功，实际捕获在渲染进程中完成
       return { success: true, message: 'Region capture initiated' };
     } catch (error) {
       console.error('Failed to capture region:', error);
@@ -1112,12 +1250,11 @@ function registerScreenshotIPCHandlers(ipcMain) {
   });
 
   // 全屏截图
-  ipcMain.handle('screenshot:capture-fullscreen', async () => {
+  ipc.handle('screenshot:capture-fullscreen', async () => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
       }
-      // 类似区域截图，在渲染进程中完成实际捕获
       return { success: true, message: 'Fullscreen capture initiated' };
     } catch (error) {
       console.error('Failed to capture fullscreen:', error);
@@ -1125,8 +1262,8 @@ function registerScreenshotIPCHandlers(ipcMain) {
     }
   });
 
-  // 复制到剪贴板
-  ipcMain.handle('screenshot:copy-to-clipboard', async (event, filePath) => {
+  // 从文件路径复制到剪贴板（带路径校验）
+  ipc.handle('screenshot:copy-to-clipboard', async (event, filePath) => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
@@ -1139,8 +1276,8 @@ function registerScreenshotIPCHandlers(ipcMain) {
     }
   });
 
-  // 获取截图历史
-  ipcMain.handle('screenshot:get-history', async (event, options = {}) => {
+  // 获取截图历史（sortBy/sortOrder 白名单校验在 ScreenshotManager 中完成）
+  ipc.handle('screenshot:get-history', async (event, options = {}) => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
@@ -1154,7 +1291,7 @@ function registerScreenshotIPCHandlers(ipcMain) {
   });
 
   // 获取单个截图
-  ipcMain.handle('screenshot:get-by-id', async (event, id) => {
+  ipc.handle('screenshot:get-by-id', async (event, id) => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
@@ -1168,7 +1305,7 @@ function registerScreenshotIPCHandlers(ipcMain) {
   });
 
   // 软删除截图
-  ipcMain.handle('screenshot:delete', async (event, id) => {
+  ipc.handle('screenshot:delete', async (event, id) => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
@@ -1182,7 +1319,7 @@ function registerScreenshotIPCHandlers(ipcMain) {
   });
 
   // 永久删除截图
-  ipcMain.handle('screenshot:permanently-delete', async (event, id) => {
+  ipc.handle('screenshot:permanently-delete', async (event, id) => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
@@ -1195,15 +1332,14 @@ function registerScreenshotIPCHandlers(ipcMain) {
     }
   });
 
-  // AI 分析
-  ipcMain.handle('screenshot:analyze', async (event, id, prompt) => {
+  // AI 分析（旧接口 - 按 ID）
+  ipc.handle('screenshot:analyze', async (event, id, prompt) => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
       }
-      // 这里需要调用 AI API 进行分析
-      // 暂时返回模拟数据
-      const result = '分析结果：这是一张截图';
+      // TODO: 接入实际 AI 分析
+      const result = '暂不支持图像分析，请等待视觉模型接入。';
       const analysisId = screenshotSystem.saveAnalysis(id, 'analyze', result, {
         model: 'deepseek',
         prompt
@@ -1215,15 +1351,14 @@ function registerScreenshotIPCHandlers(ipcMain) {
     }
   });
 
-  // OCR 识别
-  ipcMain.handle('screenshot:ocr', async (event, id, lang = 'eng') => {
+  // OCR 识别（旧接口 - 按 ID）
+  ipc.handle('screenshot:ocr', async (event, id, lang = 'eng') => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
       }
-      // 这里需要调用 OCR API
-      // 暂时返回模拟数据
-      const result = 'OCR 识别结果';
+      // TODO: 接入 tesseract.js
+      const result = 'OCR 功能待安装 tesseract.js 后可用';
       const analysisId = screenshotSystem.saveAnalysis(id, 'ocr', result, {
         model: 'tesseract',
         lang
@@ -1236,14 +1371,13 @@ function registerScreenshotIPCHandlers(ipcMain) {
   });
 
   // 翻译
-  ipcMain.handle('screenshot:translate', async (event, id, targetLang = 'zh') => {
+  ipc.handle('screenshot:translate', async (event, id, targetLang = 'zh') => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
       }
-      // 这里需要调用翻译 API
-      // 暂时返回模拟数据
-      const result = '翻译结果';
+      // TODO: 接入实际翻译 API
+      const result = '翻译功能待接入';
       const analysisId = screenshotSystem.saveAnalysis(id, 'translate', result, {
         model: 'deepseek',
         targetLang
@@ -1256,7 +1390,7 @@ function registerScreenshotIPCHandlers(ipcMain) {
   });
 
   // 获取分析结果
-  ipcMain.handle('screenshot:get-analyses', async (event, id) => {
+  ipc.handle('screenshot:get-analyses', async (event, id) => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
@@ -1270,7 +1404,7 @@ function registerScreenshotIPCHandlers(ipcMain) {
   });
 
   // 获取统计信息
-  ipcMain.handle('screenshot:get-statistics', async () => {
+  ipc.handle('screenshot:get-statistics', async () => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
@@ -1284,7 +1418,7 @@ function registerScreenshotIPCHandlers(ipcMain) {
   });
 
   // 清理过期截图
-  ipcMain.handle('screenshot:cleanup', async () => {
+  ipc.handle('screenshot:cleanup', async () => {
     try {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');

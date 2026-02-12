@@ -1,9 +1,13 @@
 // 截图管理模块
 // Screenshot Management Module
-const { desktopCapturer, clipboard, nativeImage, BrowserWindow } = require('electron');
+const { clipboard, nativeImage } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+
+// sortBy / sortOrder 白名单，防止 SQL 注入
+const VALID_SORT_COLUMNS = ['created_at', 'file_size', 'width', 'height', 'accessed_at'];
+const VALID_SORT_ORDERS = ['ASC', 'DESC'];
 
 class ScreenshotManager {
   constructor(options = {}) {
@@ -32,21 +36,31 @@ class ScreenshotManager {
     }
   }
 
-  // 获取可用的屏幕源
-  async getSources() {
+  // 从 dataURL 保存截图到文件
+  async saveFromDataURL(dataURL) {
     try {
-      const sources = await desktopCapturer.getSources({
-        types: ['screen', 'window', 'monitor']
-      });
+      const image = nativeImage.createFromDataURL(dataURL);
+      const size = image.getSize();
+      if (size.width === 0 || size.height === 0) {
+        throw new Error('Invalid image data');
+      }
 
-      return sources.map(source => ({
-        id: source.id,
-        name: source.name,
-        thumbnail: source.thumbnail.toDataURL(),
-        display_id: source.display_id
-      }));
+      const filename = `screenshot_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.png`;
+      const filePath = path.join(this.screenshotsDir, filename);
+      const buffer = image.toPNG();
+      await fs.writeFile(filePath, buffer);
+
+      const fileSize = buffer.length;
+      console.log(`[Screenshot] Saved from dataURL: ${filePath} (${fileSize} bytes)`);
+
+      return {
+        filePath,
+        fileSize,
+        width: size.width,
+        height: size.height
+      };
     } catch (error) {
-      console.error('[Screenshot] Failed to get sources:', error);
+      console.error('[Screenshot] Failed to save from dataURL:', error);
       throw error;
     }
   }
@@ -55,14 +69,8 @@ class ScreenshotManager {
   async saveImage(image, filename) {
     try {
       const filePath = path.join(this.screenshotsDir, filename);
-
-      // 转换为 PNG 格式
       const buffer = image.toPNG();
-
-      // 写入文件
       await fs.writeFile(filePath, buffer);
-
-      // 获取文件信息
       const stats = await fs.stat(filePath);
 
       return {
@@ -77,10 +85,29 @@ class ScreenshotManager {
     }
   }
 
-  // 复制图片到剪贴板
+  // 从 dataURL 复制图片到剪贴板（无需文件路径）
+  copyDataToClipboard(dataURL) {
+    try {
+      const image = nativeImage.createFromDataURL(dataURL);
+      clipboard.writeImage(image);
+      return true;
+    } catch (error) {
+      console.error('[Screenshot] Failed to copy dataURL to clipboard:', error);
+      throw error;
+    }
+  }
+
+  // 从文件路径复制图片到剪贴板（带路径校验）
   async copyToClipboard(filePath) {
     try {
-      const image = nativeImage.createFromPath(filePath);
+      // 路径校验：确保在 screenshotsDir 内
+      const resolvedPath = path.resolve(filePath);
+      const resolvedDir = path.resolve(this.screenshotsDir);
+      if (!resolvedPath.startsWith(resolvedDir + path.sep) && resolvedPath !== resolvedDir) {
+        throw new Error('路径不在截图目录内，拒绝访问');
+      }
+
+      const image = nativeImage.createFromPath(resolvedPath);
       clipboard.writeImage(image);
       return true;
     } catch (error) {
@@ -132,7 +159,7 @@ class ScreenshotManager {
     }
   }
 
-  // 获取截图历史记录
+  // 获取截图历史记录（带白名单校验）
   getHistory(options = {}) {
     if (!this.db) {
       console.error('[Screenshot] Database not available');
@@ -143,10 +170,20 @@ class ScreenshotManager {
       const {
         limit = 50,
         offset = 0,
-        includeDeleted = false,
-        sortBy = 'created_at',
-        sortOrder = 'DESC'
+        includeDeleted = false
       } = options;
+
+      // 白名单校验 sortBy / sortOrder，防止 SQL 注入
+      let sortBy = options.sortBy || 'created_at';
+      let sortOrder = options.sortOrder || 'DESC';
+      if (!VALID_SORT_COLUMNS.includes(sortBy)) {
+        console.warn(`[Screenshot] Invalid sortBy: ${sortBy}, falling back to created_at`);
+        sortBy = 'created_at';
+      }
+      if (!VALID_SORT_ORDERS.includes(sortOrder.toUpperCase())) {
+        console.warn(`[Screenshot] Invalid sortOrder: ${sortOrder}, falling back to DESC`);
+        sortOrder = 'DESC';
+      }
 
       const deletedFilter = includeDeleted ? '' : 'WHERE is_deleted = 0';
       const orderClause = `ORDER BY ${sortBy} ${sortOrder}`;
@@ -160,7 +197,6 @@ class ScreenshotManager {
 
       const records = stmt.all(limit, offset);
 
-      // 解析 JSON 字段
       return records.map(record => ({
         ...record,
         metadata: record.metadata ? JSON.parse(record.metadata) : null,
@@ -230,7 +266,6 @@ class ScreenshotManager {
     }
 
     try {
-      // 获取截图记录
       const record = this.getScreenshotById(id);
       if (!record) {
         console.warn(`[Screenshot] Screenshot not found: ${id}`);
@@ -245,8 +280,7 @@ class ScreenshotManager {
       }
 
       // 删除数据库记录
-      const stmt = this.db.prepare('DELETE FROM screenshots WHERE id = ?');
-      stmt.run(id);
+      this.db.prepare('DELETE FROM screenshots WHERE id = ?').run(id);
 
       // 删除关联的分析记录
       this.db.prepare('DELETE FROM screenshot_analyses WHERE screenshot_id = ?').run(id);
@@ -332,7 +366,6 @@ class ScreenshotManager {
     try {
       const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
 
-      // 获取过期的已删除截图
       const stmt = this.db.prepare(`
         SELECT id, file_path FROM screenshots
         WHERE is_deleted = 1 AND created_at < ?

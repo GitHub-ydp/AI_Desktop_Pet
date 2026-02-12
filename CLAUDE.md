@@ -622,6 +622,25 @@ this.checkIntervalMs = 30000;     // 30 秒
 - `preload.js` - 新增 getEmbeddingStatus、flushFacts、getLayeredContext 通道
 - `package.json` - 添加 `@huggingface/transformers` 依赖
 
+#### 2026-02 截图系统重构
+- `windows/screenshot-capture.html` - 完全重写：4阶段状态机（选择→调整→编辑→操作），8种标注工具，放大镜，键盘快捷键支持
+- `windows/pin-window.html` - 新增：Snipaste 风格贴图窗口，可拖动、调整透明度、双击关闭
+- `main.js` - 重构：截图 IPC 处理器重构，支持多显示器 DPI 缩放，贴图窗口管理
+- `preload.js` - 新增：ScreenshotBridge API（getScreenCapture、selectRegion、cancel、copyDataToClipboard、saveQuick、saveAs、pinToDesktop、analyze、ocr、onPinLoad、setPinOpacity、closePinWindow）
+- `main-process/screenshot.js` - 新增：saveFromDataURL、copyDataToClipboard 方法支持 dataURL 直接操作
+- `main-process/database.js` - 修复：添加 runMigrations() 方法自动迁移缺失的数据库列（importance_score 等）
+- **删除文件**：src/screenshot-capture.js、src/screenshot-editor.js、windows/screenshot-window.html（旧代码已清理）
+
+**截图系统特性：**
+- **三阶段流程**：全屏背景 → 区域选择（带4x放大镜）→ 标注编辑 → 保存/分享
+- **8种标注工具**：矩形、椭圆、箭头、直线、画笔、文字、马赛克、序号标注
+- **编辑工具栏**：颜色选择器（8色）、线宽选择（2/4/6/8px）、撤销/重做
+- **操作选项**：复制到剪贴板、快速保存、另存为、贴图到桌面、AI 分析、OCR 识别
+- **贴图窗口**：最多 5 个置顶窗口，支持透明度调整（30-100%），可拖动缩放
+- **快捷键**：ESC 取消、Enter 确认、Ctrl+Z 撤销、Ctrl+Y 重做、Ctrl+C 复制、Ctrl+S 保存、1-8 切换工具
+- **多显示器支持**：虚拟屏幕边界计算，DPI 缩放处理（scaleFactor）
+- **安全改进**：contextIsolation: true，路径校验，输入验证
+
 ### 提醒测试清单
 - 基本时间表达正常（10分钟后、半小时后）
 - 模糊时间触发澄清（一会儿、晚点）

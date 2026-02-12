@@ -170,7 +170,7 @@ contextBridge.exposeInMainWorld('PetTools', {
     ipcRenderer.invoke('tool:clear-history')
 });
 
-// 暴露截图系统 API 到渲染进程
+// 暴露截图系统 API 到渲染进程（向后兼容，保留旧接口）
 contextBridge.exposeInMainWorld('PetScreenshot', {
   // 获取可用的屏幕源
   getSources: () => ipcRenderer.invoke('screenshot:get-sources'),
@@ -223,4 +223,46 @@ contextBridge.exposeInMainWorld('PetScreenshot', {
   offQuickCapture: (callback) => {
     ipcRenderer.off('screenshot:quick-capture', callback);
   }
+});
+
+// 截图桥接 API（新版，供 screenshot-capture.html 使用）
+// 使用 contextIsolation:true + contextBridge 安全暴露
+contextBridge.exposeInMainWorld('ScreenshotBridge', {
+  // 获取全屏截图背景（返回 dataURL + 显示器信息）
+  getScreenCapture: () => ipcRenderer.invoke('screenshot:get-screen-capture'),
+
+  // 区域选择完成（返回处理结果）
+  selectRegion: (bounds) => ipcRenderer.invoke('screenshot:region-selected', bounds),
+
+  // 取消截图
+  cancel: () => ipcRenderer.invoke('screenshot:capture-cancel'),
+
+  // 从 dataURL 复制到剪贴板
+  copyDataToClipboard: (dataURL) => ipcRenderer.invoke('screenshot:copy-data', dataURL),
+
+  // 快速保存（自动保存到 userData/screenshots/）
+  saveQuick: (dataURL) => ipcRenderer.invoke('screenshot:save-quick', dataURL),
+
+  // 另存为（弹出系统对话框）
+  saveAs: (dataURL) => ipcRenderer.invoke('screenshot:save-as', dataURL),
+
+  // 贴图到桌面（创建置顶小窗口）
+  pinToDesktop: (dataURL, bounds) => ipcRenderer.invoke('screenshot:pin', dataURL, bounds),
+
+  // AI 分析截图
+  analyze: (dataURL, prompt) => ipcRenderer.invoke('screenshot:analyze-image', dataURL, prompt),
+
+  // OCR 文字识别
+  ocr: (dataURL) => ipcRenderer.invoke('screenshot:ocr-image', dataURL),
+
+  // 监听贴图窗口加载事件（解包 event 对象，只传 dataURL）
+  onPinLoad: (callback) => {
+    ipcRenderer.on('pin:load', (e, dataURL) => callback(dataURL));
+  },
+
+  // 设置贴图窗口透明度（由贴图窗口自身调用）
+  setPinOpacity: (opacity) => ipcRenderer.invoke('pin:set-opacity', opacity),
+
+  // 关闭贴图窗口（由贴图窗口自身调用）
+  closePinWindow: () => ipcRenderer.invoke('pin:close')
 });
