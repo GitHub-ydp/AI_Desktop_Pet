@@ -48,22 +48,6 @@ class DatabaseMigrator {
     this.storage.db.prepare(`PRAGMA user_version = ${version}`).run();
   }
 
-  // 执行迁移
-  async runMigrations(currentVersion) {
-    if (currentVersion < 1) {
-      await this.migrateToV1();
-    }
-    if (currentVersion < 2) {
-      await this.migrateToV2();
-    }
-    if (currentVersion < 3) {
-      await this.migrateToV3();
-    }
-    if (currentVersion < 4) {
-      await this.migrateToV4();
-    }
-  }
-
   // 迁移到版本1：修复 reminders 表约束
   async migrateToV1() {
     console.log('[Migrate] Migrating to v1: Fix reminders table constraints...');
@@ -274,9 +258,365 @@ class DatabaseMigrator {
       throw error;
     }
   }
+
+  // 迁移到版本5：健康提醒系统
+  async migrateToV5() {
+    console.log('[Migrate] Migrating to v5: Health reminder system...');
+    try {
+      // 1. 健康提醒配置表
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS health_reminders (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL CHECK(type IN ('sedentary', 'water', 'eyecare', 'custom')),
+          enabled INTEGER DEFAULT 1,
+          interval_minutes INTEGER NOT NULL DEFAULT 45,
+          start_time TEXT DEFAULT '09:00',
+          end_time TEXT DEFAULT '22:00',
+          workdays_only INTEGER DEFAULT 0,
+          custom_message TEXT,
+          last_triggered_at INTEGER,
+          next_trigger_at INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_reminders_type ON health_reminders(type);
+        CREATE INDEX IF NOT EXISTS idx_health_reminders_enabled ON health_reminders(enabled);
+        CREATE INDEX IF NOT EXISTS idx_health_reminders_next_trigger ON health_reminders(next_trigger_at);
+      `);
+
+      // 2. 健康提醒触发历史表
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS health_reminder_history (
+          id TEXT PRIMARY KEY,
+          reminder_id TEXT NOT NULL,
+          reminder_type TEXT NOT NULL,
+          triggered_at INTEGER NOT NULL,
+          responded_at INTEGER,
+          response_action TEXT,
+          snoozed_until INTEGER,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (reminder_id) REFERENCES health_reminders(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_history_reminder_id ON health_reminder_history(reminder_id);
+        CREATE INDEX IF NOT EXISTS idx_health_history_triggered_at ON health_reminder_history(triggered_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_health_history_type ON health_reminder_history(reminder_type);
+      `);
+
+      // 3. 每日健康统计表
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS health_stats (
+          id TEXT PRIMARY KEY,
+          date TEXT NOT NULL UNIQUE,
+          sedentary_count INTEGER DEFAULT 0,
+          water_count INTEGER DEFAULT 0,
+          eyecare_count INTEGER DEFAULT 0,
+          custom_count INTEGER DEFAULT 0,
+          total_reminders INTEGER DEFAULT 0,
+          responded_count INTEGER DEFAULT 0,
+          snoozed_count INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_stats_date ON health_stats(date);
+      `);
+
+      // 4. 插入默认配置
+      const now = Date.now();
+      const defaults = [
+        { id: 'health-sedentary', type: 'sedentary', interval: 45, message: '该起来活动一下啦~' },
+        { id: 'health-water', type: 'water', interval: 30, message: '记得喝水哦~' },
+        { id: 'health-eyecare', type: 'eyecare', interval: 20, message: '看看远处，让眼睛休息一下~' }
+      ];
+
+      const stmt = this.storage.db.prepare(`
+        INSERT OR IGNORE INTO health_reminders (id, type, enabled, interval_minutes, custom_message, created_at, updated_at)
+        VALUES (?, ?, 1, ?, ?, ?, ?)
+      `);
+
+      for (const item of defaults) {
+        stmt.run(item.id, item.type, item.interval, item.message, now, now);
+      }
+
+      console.log('[Migrate] ✓ Migration to v5 complete');
+    } catch (error) {
+      console.error('[Migrate] ✗ Migration to v5 failed:', error);
+      throw error;
+    }
+  }
+
+  // 迁移到版本6：任务管理系统
+  async migrateToV6() {
+    console.log('[Migrate] Migrating to v6: Task management system...');
+    try {
+      // 1. 任务主表
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS tasks (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+          priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high', 'urgent')),
+          category TEXT DEFAULT 'general',
+          tags TEXT,
+          due_date INTEGER,
+          reminder_at INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          completed_at INTEGER,
+          source_conversation_id TEXT,
+          metadata TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+        CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+        CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+        CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
+        CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC);
+      `);
+
+      // 2. 任务状态变更历史表
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS task_history (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          old_status TEXT,
+          new_status TEXT NOT NULL,
+          changed_at INTEGER NOT NULL,
+          note TEXT,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_history_task_id ON task_history(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_history_changed_at ON task_history(changed_at DESC);
+      `);
+
+      // 3. 每日任务统计表
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS task_stats (
+          id TEXT PRIMARY KEY,
+          date TEXT NOT NULL UNIQUE,
+          created_count INTEGER DEFAULT 0,
+          completed_count INTEGER DEFAULT 0,
+          overdue_count INTEGER DEFAULT 0,
+          total_pending INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_stats_date ON task_stats(date);
+      `);
+
+      console.log('[Migrate] ✓ Migration to v6 complete');
+    } catch (error) {
+      console.error('[Migrate] ✗ Migration to v6 failed:', error);
+      throw error;
+    }
+  }
+
+  // 执行迁移
+  async runMigrations(currentVersion) {
+    if (currentVersion < 1) {
+      await this.migrateToV1();
+    }
+    if (currentVersion < 2) {
+      await this.migrateToV2();
+    }
+    if (currentVersion < 3) {
+      await this.migrateToV3();
+    }
+    if (currentVersion < 4) {
+      await this.migrateToV4();
+    }
+    if (currentVersion < 5) {
+      await this.migrateToV5();
+    }
+    if (currentVersion < 6) {
+      await this.migrateToV6();
+    }
+    if (currentVersion < 7) {
+      await this.migrateToV7();
+    }
+  }
+
+  // 迁移到 v7：FSRS 动态记忆强化系统
+  async migrateToV7() {
+    console.log('[Migrate] Migrating to v7: FSRS memory strength system...');
+
+    try {
+      // 1. memory_chunks 新增字段（通过 database.js 的 runMigrations 已做，这里再做一次安全网）
+      const chunksCols = this.storage.db.pragma('table_info(memory_chunks)');
+      const colNames = chunksCols.map(c => c.name);
+
+      if (!colNames.includes('trigger_count')) {
+        this.storage.db.exec('ALTER TABLE memory_chunks ADD COLUMN trigger_count INTEGER DEFAULT 0');
+        console.log('[Migrate] Added column: memory_chunks.trigger_count');
+      }
+      if (!colNames.includes('last_triggered_at')) {
+        this.storage.db.exec('ALTER TABLE memory_chunks ADD COLUMN last_triggered_at INTEGER');
+        console.log('[Migrate] Added column: memory_chunks.last_triggered_at');
+      }
+      if (!colNames.includes('stability')) {
+        this.storage.db.exec('ALTER TABLE memory_chunks ADD COLUMN stability REAL DEFAULT 168.0');
+        console.log('[Migrate] Added column: memory_chunks.stability');
+      }
+      if (!colNames.includes('strength')) {
+        this.storage.db.exec('ALTER TABLE memory_chunks ADD COLUMN strength REAL DEFAULT 1.0');
+        console.log('[Migrate] Added column: memory_chunks.strength');
+      }
+      if (!colNames.includes('emotional_weight')) {
+        this.storage.db.exec('ALTER TABLE memory_chunks ADD COLUMN emotional_weight REAL DEFAULT 1.0');
+        console.log('[Migrate] Added column: memory_chunks.emotional_weight');
+      }
+
+      // 2. 新增索引
+      this.storage.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_memory_chunks_strength
+          ON memory_chunks(strength DESC);
+        CREATE INDEX IF NOT EXISTS idx_memory_chunks_stability
+          ON memory_chunks(stability DESC);
+        CREATE INDEX IF NOT EXISTS idx_memory_chunks_last_triggered
+          ON memory_chunks(last_triggered_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_memory_chunks_embedding_exists
+          ON memory_chunks(updated_at DESC)
+          WHERE embedding IS NOT NULL;
+      `);
+      console.log('[Migrate] Created FSRS and vector search indexes');
+
+      // 3. 修复 memory_facts 的 CHECK 约束（添加 'personal' 类型）
+      // SQLite 不支持直接 ALTER CHECK 约束，需要重建表
+      const factsExists = this.storage.db.prepare(`
+        SELECT name FROM sqlite_master WHERE type='table' AND name='memory_facts'
+      `).get();
+
+      if (factsExists) {
+        // 检查现有约束是否已包含 personal
+        const createSql = this.storage.db.prepare(`
+          SELECT sql FROM sqlite_master WHERE type='table' AND name='memory_facts'
+        `).get();
+
+        if (createSql && !createSql.sql.includes("'personal'")) {
+          // 备份 → 重建 → 恢复
+          const existingData = this.storage.db.prepare('SELECT * FROM memory_facts').all();
+          this.storage.db.exec('DROP TABLE IF EXISTS memory_facts');
+
+          // 重建表，新增 last_confirmed_at 和 source_text 字段
+          this.storage.db.exec(`
+            CREATE TABLE memory_facts (
+              id TEXT PRIMARY KEY,
+              fact_type TEXT NOT NULL CHECK(fact_type IN ('personal', 'preference', 'event', 'relationship', 'routine')),
+              subject TEXT,
+              predicate TEXT NOT NULL,
+              object TEXT,
+              confidence REAL DEFAULT 1.0 CHECK(confidence >= 0 AND confidence <= 1),
+              source_conversation_id TEXT,
+              created_at INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              last_confirmed_at INTEGER,
+              source_text TEXT,
+              FOREIGN KEY (source_conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
+            )
+          `);
+
+          // 重建索引
+          this.storage.db.exec(`
+            CREATE INDEX IF NOT EXISTS idx_memory_facts_type ON memory_facts(fact_type);
+            CREATE INDEX IF NOT EXISTS idx_memory_facts_subject ON memory_facts(subject);
+            CREATE INDEX IF NOT EXISTS idx_memory_facts_confidence ON memory_facts(confidence);
+          `);
+
+          // 恢复数据
+          const insertStmt = this.storage.db.prepare(`
+            INSERT INTO memory_facts (id, fact_type, subject, predicate, object, confidence,
+              source_conversation_id, created_at, updated_at, last_confirmed_at, source_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+
+          for (const row of existingData) {
+            try {
+              insertStmt.run(
+                row.id, row.fact_type, row.subject, row.predicate, row.object,
+                row.confidence, row.source_conversation_id, row.created_at,
+                row.updated_at, row.last_confirmed_at || null, row.source_text || null
+              );
+            } catch (e) {
+              console.warn('[Migrate] Skip fact:', row.id, e.message);
+            }
+          }
+          console.log(`[Migrate] Rebuilt memory_facts with 'personal' type, restored ${existingData.length} rows`);
+        }
+      }
+
+      // 4. 历史数据初始化：为现有 memory_chunks 设置合理的 FSRS 初始值
+      await this._initHistoryStrength();
+
+      console.log('[Migrate] ✓ Migration to v7 complete');
+
+    } catch (error) {
+      console.error('[Migrate] ✗ Migration to v7 failed:', error);
+      throw error;
+    }
+  }
+
+  // 历史数据 strength 初始化
+  async _initHistoryStrength() {
+    const now = Date.now();
+    const F = 19 / 81;
+    const C = -0.5;
+    const initialStability = 168;
+
+    // 批量读取所有需要初始化的 chunk
+    const chunks = this.storage.db.prepare(`
+      SELECT id, updated_at, access_count, importance_score
+      FROM memory_chunks
+      WHERE (strength IS NULL OR stability IS NULL)
+        OR (strength = 1.0 AND stability = 168.0 AND access_count > 1)
+    `).all();
+
+    if (chunks.length === 0) {
+      console.log('[Migrate] No memory chunks need strength initialization');
+      return;
+    }
+
+    console.log(`[Migrate] Initializing strength for ${chunks.length} memory chunks...`);
+
+    const updateStmt = this.storage.db.prepare(`
+      UPDATE memory_chunks SET
+        stability = ?, strength = ?, emotional_weight = ?,
+        trigger_count = ?, last_triggered_at = ?
+      WHERE id = ?
+    `);
+
+    const batch = this.storage.db.transaction((items) => {
+      for (const chunk of items) {
+        // 根据 access_count 估算稳定性（S）
+        // 注意：改为 24h 基础，以实现有效的自然遗忘机制
+        const accessCount = chunk.access_count || 1;
+        let estimatedS = 24; // 默认 1 天（测试反馈调整）
+        if (accessCount >= 5) estimatedS = 24 * 10;      // >= 5 次访问 → 10 天
+        else if (accessCount >= 3) estimatedS = 24 * 7;  // >= 3 次访问 → 7 天
+        else if (accessCount >= 2) estimatedS = 24 * 3;  // 2 次访问 → 3 天
+
+        // 计算当前 R（从 updated_at 算起）
+        const elapsedHours = (now - (chunk.updated_at || now)) / (1000 * 60 * 60);
+        const R = Math.max(0.01, Math.pow(1 + F * elapsedHours / estimatedS, C));
+
+        // 情感权重：旧数据统一设为 1.0（无历史情感数据）
+        const emotionalWeight = 1.0;
+
+        // trigger_count 用 access_count 初始化（假设每次访问都是一次强化）
+        const triggerCount = Math.max(0, accessCount - 1);
+
+        updateStmt.run(
+          estimatedS, R, emotionalWeight,
+          triggerCount, chunk.updated_at || now,
+          chunk.id
+        );
+      }
+    });
+
+    batch(chunks);
+    console.log(`[Migrate] ✓ Initialized strength for ${chunks.length} chunks`);
+  }
 }
 
 // 定义最新版本号
-const LATEST_VERSION = 4;
+const LATEST_VERSION = 7;
 
 module.exports = { DatabaseMigrator, LATEST_VERSION };

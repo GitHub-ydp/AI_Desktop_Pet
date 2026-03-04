@@ -194,6 +194,37 @@ const MEMORY_CONFIG = {
         /我习惯?(.+)/
       ]
     }
+  },
+
+  // ==================== FSRS 动态记忆强化配置 ====================
+  memoryStrength: {
+    enabled: true,
+    // FSRS 参数
+    fsrs: {
+      F: 19 / 81,           // 衰减因子 ≈ 0.2346
+      C: -0.5,              // 衰减指数
+      initialStability: 24,  // 初始稳定性（小时）= 1天（关键参数：影响自然遗忘效果）
+      maxStability: 8760,    // 最大稳定性（小时）= 1年
+      baseGrowth: 2.2        // 基础增长因子
+    },
+    // 强化控制
+    reinforcement: {
+      cooldownMs: 3600000,   // 同一记忆强化冷却时间（1小时）
+      maxDailyReinforcements: 50  // 每日最大强化次数（防滥用）
+    },
+    // 休眠阈值
+    dormant: {
+      softThreshold: 0.1,    // R < 0.1 → 不参与搜索
+      hardThreshold: 0.01,   // R < 0.01 + 180天 → 可硬删除
+      hardDeleteDays: 180,   // 硬删除等待天数
+      protectedEmotionalWeight: 1.3  // 高情感记忆豁免硬删除
+    },
+    // 情感权重
+    emotional: {
+      maxWeight: 1.5,        // 最大情感权重
+      neutralMood: 50,       // 中性心情值
+      deviationScale: 0.5    // 偏差缩放因子
+    }
   }
 };
 

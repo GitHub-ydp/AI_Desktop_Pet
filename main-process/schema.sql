@@ -25,13 +25,19 @@ CREATE TABLE IF NOT EXISTS memory_chunks (
   last_accessed_at INTEGER,
   access_count INTEGER DEFAULT 1,
   importance_score REAL DEFAULT 1.0,
+  -- FSRS 动态强化字段
+  trigger_count INTEGER DEFAULT 0,
+  last_triggered_at INTEGER,
+  stability REAL DEFAULT 24.0,
+  strength REAL DEFAULT 1.0,
+  emotional_weight REAL DEFAULT 1.0,
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
 -- 3. 关键事实表：提取的结构化信息
 CREATE TABLE IF NOT EXISTS memory_facts (
   id TEXT PRIMARY KEY,
-  fact_type TEXT NOT NULL CHECK(fact_type IN ('preference', 'event', 'relationship', 'routine')),
+  fact_type TEXT NOT NULL CHECK(fact_type IN ('personal', 'preference', 'event', 'relationship', 'routine')),
   subject TEXT,
   predicate TEXT NOT NULL,
   object TEXT,
@@ -39,6 +45,8 @@ CREATE TABLE IF NOT EXISTS memory_facts (
   source_conversation_id TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  last_confirmed_at INTEGER,
+  source_text TEXT,
   FOREIGN KEY (source_conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
 );
 
@@ -72,6 +80,16 @@ CREATE INDEX IF NOT EXISTS idx_memory_chunks_updated ON memory_chunks(updated_at
 CREATE INDEX IF NOT EXISTS idx_memory_chunks_importance ON memory_chunks(importance_score DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_chunks_last_accessed ON memory_chunks(last_accessed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_embedding_cache_lru ON embedding_cache(last_accessed_at ASC);
+
+-- FSRS 动态强化索引
+CREATE INDEX IF NOT EXISTS idx_memory_chunks_strength ON memory_chunks(strength DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_chunks_stability ON memory_chunks(stability DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_chunks_last_triggered ON memory_chunks(last_triggered_at DESC);
+
+-- 向量搜索优化：WHERE embedding IS NOT NULL 的偏移索引
+CREATE INDEX IF NOT EXISTS idx_memory_chunks_embedding_exists
+  ON memory_chunks(updated_at DESC)
+  WHERE embedding IS NOT NULL;
 
 -- 触发器：自动同步 FTS 索引
 CREATE TRIGGER IF NOT EXISTS memory_chunks_fts_insert AFTER INSERT ON memory_chunks BEGIN

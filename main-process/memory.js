@@ -10,6 +10,10 @@ const FactExtractor = require('./extractor');
 const ContextBuilder = require('./context');
 const TextChunker = require('./chunker');
 const ReminderScheduler = require('./reminder');
+const HealthReminderScheduler = require('./health-reminder');
+const TaskManager = require('./task-manager');
+const WidgetManager = require('./widget-manager');
+const FileOperationsManager = require('./file-operations');
 const { DatabaseMigrator } = require('./migrate');
 const { MEMORY_CONFIG } = require('./config');
 
@@ -17,6 +21,7 @@ const { MEMORY_CONFIG } = require('./config');
 const EmbeddingEngine = require('./embedding');
 const FactExtractorLLM = require('./fact-extractor');
 const MemoryLayerManager = require('./memory-layer');
+const StrengthCalculator = require('./strength');
 
 class MemoryMainProcess {
   constructor(options = {}) {
@@ -34,6 +39,10 @@ class MemoryMainProcess {
     this.contextBuilder = new ContextBuilder();
     this.textChunker = new TextChunker();
     this.reminderScheduler = new ReminderScheduler(this.storage);
+    this.healthScheduler = new HealthReminderScheduler(this.storage);
+    this.taskManager = new TaskManager(this.storage);
+    this.widgetManager = new WidgetManager(this.storage);
+    this.fileOperations = FileOperationsManager;
 
     // 新组件
     this.embeddingEngine = null;       // 本地 ONNX 嵌入引擎
@@ -50,35 +59,57 @@ class MemoryMainProcess {
       return true;
     }
 
+    // 第一阶段：核心存储（必须成功）
     try {
-      // 初始化存储
+      console.log('[Memory] Step 1: Initializing storage...');
       await this.storage.initialize();
+      console.log('[Memory] Step 1: Storage initialized OK');
 
-      // 执行数据库迁移
+      console.log('[Memory] Step 2: Running migrations...');
       const migrator = new DatabaseMigrator(this.storage);
       await migrator.migrate();
+      console.log('[Memory] Step 2: Migrations OK');
 
-      // 设置原有模块依赖关系
+      // 设置基础模块依赖
       this.embeddingService.setStorage(this.storage);
       this.searchEngine.setStorage(this.storage);
       this.searchEngine.setEmbeddingService(this.embeddingService);
       this.factExtractor.setStorage(this.storage);
       this.reminderScheduler.setStorage(this.storage);
-
-      // 初始化新组件
-      await this._initializeNewComponents();
+      this.healthScheduler.setStorage(this.storage);
+      this.taskManager.setStorage(this.storage);
+      this.widgetManager.setStorage(this.storage);
+      this.fileOperations.setStorage(this.storage);
 
       // 启动提醒调度器
       this.reminderScheduler.start();
+      // 启动健康提醒调度器
+      this.healthScheduler.start();
+      // 启动任务管理器
+      this.taskManager.start();
+      // 初始化小组件管理器
+      this.widgetManager.initialize();
+      console.log('[Memory] Core modules ready (storage + reminder + health + task + widget)');
 
+      // 标记为已初始化（基础功能可用）
       this.isInitialized = true;
-      console.log('MemoryMainProcess initialized successfully');
-      return true;
-
     } catch (error) {
-      console.error('Failed to initialize MemoryMainProcess:', error);
+      console.error('[Memory] Core initialization failed:', error);
+      console.error('[Memory] Stack:', error.stack);
       throw error;
     }
+
+    // 第二阶段：高级组件（失败不影响基础功能）
+    try {
+      console.log('[Memory] Step 3: Initializing advanced components...');
+      await this._initializeNewComponents();
+      console.log('[Memory] Step 3: Advanced components OK');
+    } catch (error) {
+      console.error('[Memory] Advanced components failed (non-fatal):', error.message);
+    }
+
+    console.log('MemoryMainProcess initialized successfully');
+    return true;
   }
 
   // 初始化新组件（异步，不阻塞主流程）
@@ -162,9 +193,7 @@ class MemoryMainProcess {
 
   // 添加对话（集成新组件）
   async addConversation(role, content, metadata = {}) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    await this._ensureInitialized();
 
     try {
       // 1. 保存对话
@@ -178,6 +207,11 @@ class MemoryMainProcess {
 
       // 2. 同步分块处理
       try {
+        const mood = metadata.mood || 80;
+        const emotionalWeight = StrengthCalculator.calcEmotionalWeight(mood);
+        // 初始稳定性改为 24h（1天）以实现有效自然遗忘，根据情感权重调整
+        const initialStability = 24 * emotionalWeight;
+
         const chunk = {
           id: this.storage.generateId(),
           conversationId: conversation.id,
@@ -185,7 +219,13 @@ class MemoryMainProcess {
           text: content,
           embedding: null,
           startPos: 0,
-          endPos: content.length
+          endPos: content.length,
+          // FSRS 动态强化字段
+          triggerCount: 0,
+          lastTriggeredAt: null,
+          stability: initialStability,
+          strength: 1.0,
+          emotionalWeight: emotionalWeight
         };
 
         this.storage.saveMemoryChunk(chunk);
@@ -252,31 +292,33 @@ class MemoryMainProcess {
 
   // 搜索记忆
   async searchMemories(query, options = {}) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    await this._ensureInitialized();
 
     return await this.searchEngine.search(query, options);
   }
 
   // 获取上下文（为 AI 对话准备）
   async getContext(query, options = {}) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    await this._ensureInitialized();
 
     const {
       maxTokens = MEMORY_CONFIG.context.maxTokens,
-      maxMemories = MEMORY_CONFIG.context.maxMemories
+      maxMemories = MEMORY_CONFIG.context.maxMemories,
+      currentMood = 80
     } = options;
 
     // 搜索相关记忆
     const searchResults = await this.searchEngine.search(query, {
       limit: maxMemories * 2,
       minScore: 0.05,
-      mood: 80,
+      mood: currentMood,
       personality: this.options.personality || 'healing'
     });
+
+    // 新增：强化被检索命中的记忆（FSRS 系统）
+    if (searchResults && searchResults.length > 0) {
+      this._reinforceHitMemories(searchResults, { currentMood });
+    }
 
     // 构建上下文（context.js 会自动使用分层或传统模式）
     const context = await this.contextBuilder.build(searchResults, {
@@ -290,18 +332,14 @@ class MemoryMainProcess {
 
   // 获取事实
   async getFacts(options = {}) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    await this._ensureInitialized();
 
     return this.storage.getFacts(options);
   }
 
   // 获取用户画像（优先使用新的分层系统）
   async getUserProfile() {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    await this._ensureInitialized();
 
     // 优先使用 LLM 事实提取器的画像
     if (this.factExtractorLLM) {
@@ -329,9 +367,7 @@ class MemoryMainProcess {
 
   // 数据统计
   getStats() {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    if (!this.isInitialized) return {};
 
     const dbStats = this.storage.getStats();
     const cacheStats = this.embeddingService.getCacheStats();
@@ -366,26 +402,20 @@ class MemoryMainProcess {
 
   // 保存显示器画像
   saveDisplayProfiles(profiles, activeDisplayId = null) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    if (!this.isInitialized) return;
     return this.storage.saveDisplayProfiles(profiles, activeDisplayId);
   }
 
   // 清理旧数据
   clearOldMemories(beforeDate) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    if (!this.isInitialized) return;
 
     return this.storage.clearOldMemories(beforeDate);
   }
 
   // 清空所有数据
   clearAll() {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    if (!this.isInitialized) return;
 
     this.storage.clearAll();
     // 也清空 user_profile 表
@@ -397,11 +427,78 @@ class MemoryMainProcess {
     console.log('All memories cleared');
   }
 
+  // 强化被检索命中的记忆（FSRS 系统）
+  _reinforceHitMemories(searchResults, options = {}) {
+    if (!searchResults || !this.storage || !this.storage.db) return;
+
+    const { currentMood = 80, preventDuplicates = true } = options;
+    const config = MEMORY_CONFIG.memoryStrength?.reinforcement || {};
+    const cooldownMs = config.cooldownMs || 3600000; // 默认 1 小时
+    const now = Date.now();
+
+    // 防重复：记录本次强化的 ID，避免多条结果中同一条 chunk 被重复强化
+    const reinforcedIds = new Set();
+
+    for (const result of searchResults) {
+      if (!result.conversationId) continue;
+
+      // 获取该对话的 memory_chunk
+      try {
+        const chunk = this.storage.db.prepare(`
+          SELECT id, trigger_count, last_triggered_at, stability, emotional_weight
+          FROM memory_chunks
+          WHERE conversation_id = ? LIMIT 1
+        `).get(result.conversationId);
+
+        if (!chunk) continue;
+
+        // 防重复触发：同一条记忆本次不强化第二次
+        if (preventDuplicates && reinforcedIds.has(chunk.id)) {
+          continue;
+        }
+
+        // 防重复触发：同一条记忆冷却期内不强化
+        if (preventDuplicates && chunk.last_triggered_at) {
+          const timeSinceLastTrigger = now - chunk.last_triggered_at;
+          if (timeSinceLastTrigger < cooldownMs) {
+            continue;
+          }
+        }
+
+        // 执行强化
+        StrengthCalculator.reinforceMemory(this.storage.db, chunk.id, currentMood);
+        reinforcedIds.add(chunk.id);
+
+      } catch (error) {
+        console.error('[Memory] Error reinforcing memory:', error.message);
+      }
+    }
+
+    if (reinforcedIds.size > 0) {
+      console.log(`[Memory] Reinforced ${reinforcedIds.size} memories`);
+    }
+  }
+
   // 关闭
   close() {
     // 停止提醒调度器
     if (this.reminderScheduler) {
       this.reminderScheduler.stop();
+    }
+
+    // 停止健康提醒调度器
+    if (this.healthScheduler) {
+      this.healthScheduler.stop();
+    }
+
+    // 停止任务管理器
+    if (this.taskManager) {
+      this.taskManager.stop();
+    }
+
+    // 停止小组件管理器
+    if (this.widgetManager) {
+      this.widgetManager.stopAutoUpdate();
     }
 
     // 刷新待处理的事实提取
@@ -423,58 +520,57 @@ class MemoryMainProcess {
     if (this.reminderScheduler) {
       this.reminderScheduler.setMainWindow(mainWindow);
     }
+    if (this.healthScheduler) {
+      this.healthScheduler.setMainWindow(mainWindow);
+    }
+    if (this.taskManager) {
+      this.taskManager.setMainWindow(mainWindow);
+    }
+    if (this.fileOperations) {
+      this.fileOperations.setMainWindow(mainWindow);
+    }
+  }
+
+  // 确保记忆系统已初始化（自动重试）
+  async _ensureInitialized() {
+    if (this.isInitialized) return;
+    console.log('[Memory] Not initialized, attempting auto-init...');
+    await this.initialize();
   }
 
   // 创建提醒
   async createReminder(reminderData) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
-
+    await this._ensureInitialized();
     return this.reminderScheduler.createReminder(reminderData);
   }
 
   // 获取提醒列表
   async getReminders(options = {}) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
-
+    await this._ensureInitialized();
     return this.reminderScheduler.getReminders(options);
   }
 
   // 获取待处理提醒
   async getPendingReminders() {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
-
+    await this._ensureInitialized();
     return this.reminderScheduler.getPendingReminders();
   }
 
   // 取消提醒
   async cancelReminder(id) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
-
+    await this._ensureInitialized();
     return this.reminderScheduler.cancelReminder(id);
   }
 
   // 删除提醒
   async deleteReminder(id) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
-
+    await this._ensureInitialized();
     return this.reminderScheduler.deleteReminder(id);
   }
 
   // 数据迁移：从 LocalStorage 导入历史
   async migrateFromLocalStorage(localStorageData) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    await this._ensureInitialized();
 
     const { chatHistory = [], petData = {} } = localStorageData;
 
@@ -526,9 +622,7 @@ class MemoryMainProcess {
 
   // 导出数据
   exportData() {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    if (!this.isInitialized) return { conversations: [], facts: [], stats: {} };
 
     const conversations = this.storage.getConversations({ limit: 10000 });
     const facts = this.storage.getFacts();
@@ -555,9 +649,7 @@ class MemoryMainProcess {
 
   // 导入数据
   async importData(data) {
-    if (!this.isInitialized) {
-      throw new Error('MemoryMainProcess not initialized');
-    }
+    await this._ensureInitialized();
 
     console.log('Starting data import');
 
@@ -726,6 +818,34 @@ class MemoryMainProcess {
     ipcMain.handle('reminder:get-history', async (event, options) => {
       return this.reminderScheduler.getReminderHistory(options);
     });
+
+    // ==================== 健康提醒 IPC ====================
+
+    // 注册健康提醒 IPC 处理器
+    if (this.healthScheduler) {
+      this.healthScheduler.registerIPCHandlers();
+    }
+
+    // ==================== 任务管理 IPC ====================
+
+    // 注册任务管理 IPC 处理器
+    if (this.taskManager) {
+      this.taskManager.registerIPCHandlers();
+    }
+
+    // ==================== 小组件 IPC ====================
+
+    // 注册小组件 IPC 处理器
+    if (this.widgetManager) {
+      this.widgetManager.registerIPCHandlers();
+    }
+
+    // ==================== 文件操作 IPC ====================
+
+    // 注册文件操作 IPC 处理器
+    if (this.fileOperations) {
+      this.fileOperations.registerIPCHandlers(ipcMain);
+    }
 
     console.log('Memory IPC handlers registered');
   }
