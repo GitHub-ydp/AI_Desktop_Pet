@@ -143,8 +143,8 @@ let lastApiError = null;
 let consecutiveErrors = 0;
 const MAX_CONSECUTIVE_ERRORS = 3;
 
-async function callDeepSeekAPI(messages, personality) {
-  if (isCallingAPI) return '请稍等，我还在思考~';
+async function callDeepSeekAPI(messages, personality, options = {}) {
+  if (isCallingAPI) return { type: 'text', content: '请稍等，我还在思考~' };
 
   isCallingAPI = true;
   lastApiError = null;
@@ -154,13 +154,13 @@ async function callDeepSeekAPI(messages, personality) {
     let apiKey = await getAPIKey();
     console.log('[API DEBUG] Raw API key type:', typeof apiKey);
     console.log('[API DEBUG] API key result:', apiKey ? `FOUND (${apiKey.length} chars)` : 'NOT FOUND');
-    console.log('[API DEBUG] API key preview:', apiKey ? apiKey.substring(0, 10) + '...' : 'N/A');
+    console.log('[API DEBUG] API key:', apiKey ? `present (${apiKey.length} chars)` : 'NOT SET');
 
     // 打印发送给 API 的消息内容
     console.log('[API] ========== REQUEST MESSAGES START ==========');
     console.log('[API] Total messages:', messages.length);
     messages.forEach((msg, idx) => {
-      const preview = msg.content.length > 100 ? msg.content.substring(0, 100) + '...' : msg.content;
+      const preview = (msg.content || '').length > 100 ? msg.content.substring(0, 100) + '...' : (msg.content || '');
       console.log(`[API] Message ${idx} (${msg.role}):`, preview);
     });
     console.log('[API] ========== REQUEST MESSAGES END ==========');
@@ -170,7 +170,24 @@ async function callDeepSeekAPI(messages, personality) {
       console.error('[API ERROR]', errorMsg);
       lastApiError = errorMsg;
       consecutiveErrors++;
-      return generateErrorResponse(personality, errorMsg);
+      return { type: 'text', content: generateErrorResponse(personality, errorMsg) };
+    }
+
+    // 构建请求体
+    const requestBody = {
+      model: 'deepseek-chat',
+      messages: messages,
+      max_tokens: 500,
+      temperature: 0.8,
+      frequency_penalty: 0.5,
+      presence_penalty: 0.3
+    };
+
+    // 如果启用了工具调用，附加 tools 参数
+    if (options.tools && options.tools.length > 0) {
+      requestBody.tools = options.tools;
+      requestBody.tool_choice = 'auto';
+      console.log(`[API] 附加 ${options.tools.length} 个工具定义`);
     }
 
     console.log('[API DEBUG] Calling DeepSeek API...');
@@ -180,16 +197,7 @@ async function callDeepSeekAPI(messages, personality) {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: messages,
-        max_tokens: 500,
-        temperature: 0.8,
-        // 添加频率惩罚以减少重复
-        frequency_penalty: 0.5,
-        // 添加存在惩罚以增加多样性
-        presence_penalty: 0.3
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
@@ -200,25 +208,21 @@ async function callDeepSeekAPI(messages, personality) {
       } catch (e) {
         errorDetail = await response.text();
       }
-      
+
       const errorMsg = `API 调用失败 (状态码: ${response.status}): ${errorDetail || '未知错误'}`;
       console.error('[API ERROR]', errorMsg);
       lastApiError = errorMsg;
       consecutiveErrors++;
-      
-      // 只在连续错误较少时返回错误提示，避免一直报错
+
       if (consecutiveErrors <= MAX_CONSECUTIVE_ERRORS) {
-        return generateErrorResponse(personality, errorMsg);
+        return { type: 'text', content: generateErrorResponse(personality, errorMsg) };
       }
-      return getMockResponse(personality, messages);
+      return { type: 'text', content: getMockResponse(personality, messages) };
     }
 
     const data = await response.json();
     console.log('[API DEBUG] API response received successfully');
     console.log('[API DEBUG] Response structure:', JSON.stringify(data, null, 2).substring(0, 500) + '...');
-    console.log('[API] ========== FULL RESPONSE START ==========');
-    console.log('[API]', JSON.stringify(data, null, 2));
-    console.log('[API] ========== FULL RESPONSE END ==========');
 
     // 检查响应结构
     if (!data.choices || !data.choices[0]) {
@@ -226,46 +230,124 @@ async function callDeepSeekAPI(messages, personality) {
       console.error('[API ERROR]', errorMsg);
       lastApiError = errorMsg;
       consecutiveErrors++;
-      return generateErrorResponse(personality, errorMsg);
+      return { type: 'text', content: generateErrorResponse(personality, errorMsg) };
     }
 
     if (!data.choices[0].message) {
       const errorMsg = 'API 响应格式异常：缺少 message 字段';
       console.error('[API ERROR]', errorMsg);
-      console.log('[API DEBUG] Choice structure:', JSON.stringify(data.choices[0]));
       lastApiError = errorMsg;
       consecutiveErrors++;
-      return generateErrorResponse(personality, errorMsg);
+      return { type: 'text', content: generateErrorResponse(personality, errorMsg) };
     }
 
-    const content = data.choices[0].message.content;
+    const choice = data.choices[0];
+
+    // 检测 tool_calls（标准 JSON 格式）
+    if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+      console.log(`[API] 检测到 ${choice.message.tool_calls.length} 个工具调用`);
+      return {
+        type: 'tool_calls',
+        toolCalls: choice.message.tool_calls,
+        message: choice.message
+      };
+    }
+
+    const content = choice.message.content;
     console.log('[API DEBUG] Message content length:', content?.length || 0);
     console.log('[API DEBUG] Message content preview:', content?.substring(0, 50) + '...' || 'EMPTY');
-    
+
+    // 检测 DSML 格式的工具调用（DeepSeek 特殊格式）
+    const dsmlToolCalls = parseDSMLToolCalls(content);
+    if (dsmlToolCalls) {
+      return {
+        type: 'tool_calls',
+        toolCalls: dsmlToolCalls,
+        message: choice.message
+      };
+    }
+
     // 检查 AI 返回的内容是否是重复模式
     if (isRepetitivePattern(content)) {
       console.warn('[API WARNING] AI 返回了重复模式，使用模拟回复替代');
-      return getMockResponse(personality, messages);
+      return { type: 'text', content: getMockResponse(personality, messages) };
     }
-    
+
     // 成功调用，重置错误计数
     consecutiveErrors = 0;
-    
-    return content.trim();
+
+    return { type: 'text', content: content.trim() };
 
   } catch (error) {
     const errorMsg = `请求失败: ${error.message}`;
     console.error('[API ERROR]', errorMsg);
     lastApiError = errorMsg;
     consecutiveErrors++;
-    
+
     if (consecutiveErrors <= MAX_CONSECUTIVE_ERRORS) {
-      return generateErrorResponse(personality, errorMsg);
+      return { type: 'text', content: generateErrorResponse(personality, errorMsg) };
     }
-    return getMockResponse(personality, messages);
+    return { type: 'text', content: getMockResponse(personality, messages) };
   } finally {
     isCallingAPI = false;
   }
+}
+
+// 工具调用循环：执行 tool_calls 并回传结果给 AI
+async function handleToolCallsLoop(apiResult, messages, personality) {
+  const MAX_TOOL_ROUNDS = 3;
+  let currentResult = apiResult;
+  let round = 0;
+
+  while (currentResult.type === 'tool_calls' && round < MAX_TOOL_ROUNDS) {
+    round++;
+    console.log(`[API] 工具调用第 ${round} 轮`);
+
+    // 将 assistant 的 tool_calls 消息加入历史
+    messages.push(currentResult.message);
+
+    // 逐个执行工具调用
+    for (const toolCall of currentResult.toolCalls) {
+      const { id, function: fn } = toolCall;
+      const toolName = fn.name;
+      let toolArgs = {};
+      try {
+        toolArgs = JSON.parse(fn.arguments || '{}');
+      } catch (e) {
+        console.warn('[API] 解析工具参数失败:', fn.arguments);
+      }
+
+      console.log(`[API] 执行工具: ${toolName}`, toolArgs);
+
+      let toolResult;
+      try {
+        const result = await window.PetWorkflow.execute(toolName, toolArgs);
+        toolResult = result.success
+          ? JSON.stringify(result.result)
+          : JSON.stringify({ error: result.error });
+      } catch (error) {
+        toolResult = JSON.stringify({ error: error.message });
+      }
+
+      // 将工具结果以 tool role 加入消息
+      messages.push({
+        role: 'tool',
+        tool_call_id: id,
+        content: toolResult
+      });
+    }
+
+    // 再次调用 API，让模型基于工具结果生成回复
+    currentResult = await callDeepSeekAPI(messages, personality);
+  }
+
+  // 返回最终文本
+  if (currentResult.type === 'text') {
+    return currentResult.content;
+  }
+
+  // 超出最大轮数
+  return '操作完成，但结果比较复杂，请问还需要我继续处理吗？';
 }
 
 // 生成错误提示回复（比模拟回复更明确地告知用户问题）
@@ -360,11 +442,13 @@ async function getMemoryContext(query) {
   try {
     console.log('[Memory] Querying context for:', query.substring(0, 50) + (query.length > 50 ? '...' : ''));
 
+    // 从 PetStorage 获取当前实际心情和性格
+    const petData = window.PetStorage ? window.PetStorage.getPetData() : {};
     const context = await window.PetMemory.getContext(query, {
-      maxTokens: 1000,  // 增加 token 限制
-      maxMemories: 8,   // 增加记忆条数
-      currentMood: 80,   // 可以从外部传入
-      currentPersonality: 'healing'
+      maxTokens: 1000,
+      maxMemories: 8,
+      currentMood: petData.mood || 80,
+      currentPersonality: petData.personality || 'healing'
     });
 
     // 检查是否有实际内容
@@ -400,6 +484,58 @@ function isRepetitivePattern(content) {
     /已收到：["']?.*["']?/
   ];
   return repetitivePatterns.some(pattern => pattern.test(content));
+}
+
+// 解析 DeepSeek 的 DSML 格式工具调用
+// 格式示例: <｜DSML｜function_calls><｜DSML｜invoke name="tool_name"><｜DSML｜parameter name="arg">value</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜function_calls>
+function parseDSMLToolCalls(content) {
+  if (!content || !content.includes('<｜DSML｜')) {
+    return null;
+  }
+
+  console.log('[API] 检测到 DSML 格式工具调用');
+  const toolCalls = [];
+
+  // 匹配所有 invoke 块
+  const invokeRegex = /<｜DSML｜invoke\s+name="([^"]+)">([\s\S]*?)<\/｜DSML｜invoke>/g;
+  let match;
+
+  while ((match = invokeRegex.exec(content)) !== null) {
+    const toolName = match[1];
+    const paramsBlock = match[2];
+    const args = {};
+
+    // 解析参数
+    const paramRegex = /<｜DSML｜parameter\s+name="([^"]+)"(?:\s+string="true")?>([^<]*)<\/｜DSML｜parameter>/g;
+    let paramMatch;
+    while ((paramMatch = paramRegex.exec(paramsBlock)) !== null) {
+      const paramName = paramMatch[1];
+      let paramValue = paramMatch[2];
+
+      // 尝试解析为 JSON，否则保持字符串
+      try {
+        args[paramName] = JSON.parse(paramValue);
+      } catch (e) {
+        args[paramName] = paramValue;
+      }
+    }
+
+    toolCalls.push({
+      id: `dsml_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      type: 'function',
+      function: {
+        name: toolName,
+        arguments: JSON.stringify(args)
+      }
+    });
+  }
+
+  if (toolCalls.length === 0) {
+    return null;
+  }
+
+  console.log(`[API] DSML 解析到 ${toolCalls.length} 个工具调用`);
+  return toolCalls;
 }
 
 // 清理历史消息，过滤掉重复模式
@@ -475,7 +611,29 @@ async function chatWithAI(userMessage, personality, chatHistory) {
   // 异步保存用户消息到记忆系统
   saveConversationToMemory('user', userMessage, { personality });
 
-  const response = await callDeepSeekAPI(messages, personality);
+  // 获取可用工具定义
+  let toolDefinitions = [];
+  if (window.PetWorkflow) {
+    try {
+      toolDefinitions = await window.PetWorkflow.listTools();
+      console.log(`[API] 获取到 ${toolDefinitions.length} 个工具定义`);
+    } catch (e) {
+      console.warn('[API] 获取工具定义失败:', e);
+    }
+  }
+
+  // 调用 API（附带工具定义）
+  const apiResult = await callDeepSeekAPI(messages, personality, {
+    tools: toolDefinitions.length > 0 ? toolDefinitions : undefined
+  });
+
+  let response;
+  // 处理返回结果
+  if (apiResult.type === 'tool_calls') {
+    response = await handleToolCallsLoop(apiResult, messages, personality);
+  } else {
+    response = apiResult.content;
+  }
 
   // 异步保存 AI 回复到记忆系统
   saveConversationToMemory('assistant', response, { personality });

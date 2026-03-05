@@ -266,3 +266,154 @@ contextBridge.exposeInMainWorld('ScreenshotBridge', {
   // 关闭贴图窗口（由贴图窗口自身调用）
   closePinWindow: () => ipcRenderer.invoke('pin:close')
 });
+
+// 健康提醒系统 API
+contextBridge.exposeInMainWorld('PetHealth', {
+  // 获取所有配置
+  getAll: () => ipcRenderer.invoke('health:get-all'),
+
+  // 获取单个配置
+  getConfig: (type) => ipcRenderer.invoke('health:get-config', type),
+
+  // 更新配置
+  updateConfig: (id, updates) => ipcRenderer.invoke('health:update-config', id, updates),
+
+  // 批量更新配置
+  batchUpdate: (updates) => ipcRenderer.invoke('health:batch-update', updates),
+
+  // 获取今日统计
+  getTodayStats: () => ipcRenderer.invoke('health:get-today-stats'),
+
+  // 获取历史统计
+  getStatsHistory: (days) => ipcRenderer.invoke('health:get-stats-history', days),
+
+  // 获取提醒历史
+  getHistory: (options) => ipcRenderer.invoke('health:get-history', options),
+
+  // 记录用户响应
+  respond: (historyId, action) => ipcRenderer.invoke('health:respond', historyId, action),
+
+  // 延后提醒
+  snooze: (reminderId, minutes) => ipcRenderer.invoke('health:snooze', reminderId, minutes),
+
+  // 监听健康提醒触发事件
+  onTriggered: (callback) => {
+    ipcRenderer.on('health:triggered', (event, data) => callback(data));
+  },
+
+  // 移除监听
+  offTriggered: (callback) => {
+    ipcRenderer.off('health:triggered', callback);
+  }
+});
+
+// 任务管理系统 API
+contextBridge.exposeInMainWorld('PetTask', {
+  // 创建任务
+  create: (data) => ipcRenderer.invoke('task:create', data),
+
+  // 获取任务
+  get: (id) => ipcRenderer.invoke('task:get', id),
+
+  // 获取任务列表
+  getAll: (options) => ipcRenderer.invoke('task:get-all', options),
+
+  // 获取今日任务
+  getToday: () => ipcRenderer.invoke('task:get-today'),
+
+  // 获取待处理任务
+  getPending: () => ipcRenderer.invoke('task:get-pending'),
+
+  // 更新任务
+  update: (id, updates) => ipcRenderer.invoke('task:update', id, updates),
+
+  // 完成任务
+  complete: (id) => ipcRenderer.invoke('task:complete', id),
+
+  // 取消任务
+  cancel: (id) => ipcRenderer.invoke('task:cancel', id),
+
+  // 删除任务
+  delete: (id) => ipcRenderer.invoke('task:delete', id),
+
+  // 获取今日统计
+  getTodayStats: () => ipcRenderer.invoke('task:get-today-stats'),
+
+  // 获取任务历史
+  getHistory: (taskId) => ipcRenderer.invoke('task:get-history', taskId),
+
+  // 获取日历数据
+  getCalendar: (year, month) => ipcRenderer.invoke('task:get-calendar', year, month),
+
+  // 获取宠物提醒消息
+  getPetReminder: () => ipcRenderer.invoke('task:get-pet-reminder'),
+
+  // 监听任务事件
+  onEvent: (callback) => {
+    ipcRenderer.on('task:event', (event, data) => callback(data));
+  },
+
+  // 移除监听
+  offEvent: (callback) => {
+    ipcRenderer.off('task:event', callback);
+  }
+});
+
+// 小组件系统 API
+contextBridge.exposeInMainWorld('PetWidget', {
+  // 获取所有小组件数据
+  getAll: () => ipcRenderer.invoke('widget:get-all'),
+
+  // 刷新所有数据
+  refresh: () => ipcRenderer.invoke('widget:refresh'),
+
+  // 天气相关
+  getWeather: () => ipcRenderer.invoke('widget:get-weather'),
+  setWeatherLocation: (location) => ipcRenderer.invoke('widget:set-weather-location', location),
+
+  // 日历相关
+  getCalendar: () => ipcRenderer.invoke('widget:get-calendar'),
+
+  // 待办相关
+  getTodo: () => ipcRenderer.invoke('widget:get-todo'),
+
+  // 配置相关
+  getConfig: () => ipcRenderer.invoke('widget:get-config'),
+  updateConfig: (config) => ipcRenderer.invoke('widget:update-config', config),
+  toggle: (widgetId, enabled) => ipcRenderer.invoke('widget:toggle', widgetId, enabled)
+});
+
+// 工作流系统 API（Python 工具调用）
+contextBridge.exposeInMainWorld('PetWorkflow', {
+  execute: (toolName, args) => ipcRenderer.invoke('workflow:execute', toolName, args),
+  listTools: () => ipcRenderer.invoke('workflow:list-tools'),
+  getDesktopPath: () => ipcRenderer.invoke('workflow:get-desktop-path'),
+  abort: (requestId) => ipcRenderer.invoke('workflow:abort', requestId)
+});
+
+// 文件操作系统 API
+contextBridge.exposeInMainWorld('PetFile', {
+  // 获取文件信息
+  getFileInfo: (filePath) => ipcRenderer.invoke('file:get-info', filePath),
+
+  // 复制文件路径到剪贴板
+  copyPath: (filePath) => ipcRenderer.invoke('file:copy-path', filePath),
+
+  // 复制文件内容到剪贴板
+  copyContent: (filePath) => ipcRenderer.invoke('file:copy-content', filePath),
+
+  // 在文件夹中显示
+  showInFolder: (filePath) => ipcRenderer.invoke('file:show-in-folder', filePath),
+
+  // 移动到回收站
+  moveToTrash: (filePath) => ipcRenderer.invoke('file:move-to-trash', filePath),
+
+  // 重命名文件
+  rename: (oldPath, newName) => ipcRenderer.invoke('file:rename', oldPath, newName),
+
+  // 获取文件预览
+  getPreview: (filePath) => ipcRenderer.invoke('file:get-preview', filePath),
+
+  // 获取可用操作列表
+  getAvailableActions: (filePath) => ipcRenderer.invoke('file:get-available-actions', filePath)
+});

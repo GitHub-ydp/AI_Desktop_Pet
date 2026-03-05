@@ -653,6 +653,14 @@ this.checkIntervalMs = 30000;     // 30 秒
 - 重复提醒正确调度下次执行
 
 
+#### 2026-02 菜单回退至旋转拨号样式
+- `src/rotary-menu.js` - 恢复：`RotaryMenuController`，旋转拨号菜单（6项主菜单 + 5项二级菜单）
+- `src/style.css` - 恢复：旋转拨号 CSS（`.rotary-dial`、`.dial-item` 等）
+- `main.js` - 恢复：`medium` 窗口高度 420→300
+- `src/app-vanilla.js` - 恢复：类名 `.rotary-menu`、`.dial-item`
+- `src/menu-window-utils.js` - 恢复：类名 `.rotary-dial`、`.dial-item`
+- `windows/menu-window.js` - 恢复：类名 `.rotary-dial`、`.dial-item`
+
 ### 重要提醒
 - 必须回复我中文
 - 每次重大改动，都要更新CLAUDE.md文件，保证后续开发顺利

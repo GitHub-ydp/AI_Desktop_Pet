@@ -175,6 +175,16 @@ class MemoryLayerManager {
     // 用户消息优先于 AI 回复
     if (memory.role === 'user') importance += 0.1;
 
+    // 新增：应用 FSRS 强度指标（如果有的话）
+    // strength 字段由 memory-layer 的搜索结果提供，代表当前可提取性 R
+    if (memory.strength !== undefined && memory.strength > 0) {
+      importance *= memory.strength;
+    }
+    // 情感权重也应用乘数
+    if (memory.emotionalWeight !== undefined && memory.emotionalWeight > 1.0) {
+      importance *= Math.min(memory.emotionalWeight, 1.5); // 上限 1.5x
+    }
+
     return Math.min(1.0, importance);
   }
 

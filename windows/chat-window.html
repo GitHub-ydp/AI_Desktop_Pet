@@ -243,6 +243,7 @@ body {
   </div>
 
   <div class="chat-container" id="chatContainer">
+    <div class="empty-state" id="emptyState" style="text-align:center;padding:60px 20px;color:var(--text-muted);font-size:13px;">和你的宠物说说话吧~</div>
     <div class="typing-indicator" id="typingIndicator">
       <span></span>
       <span></span>
@@ -273,6 +274,9 @@ body {
 
     function addMessage(role, content) {
       const container = document.getElementById('chatContainer');
+      // 隐藏空状态提示
+      const emptyState = document.getElementById('emptyState');
+      if (emptyState) emptyState.style.display = 'none';
       const message = document.createElement('div');
       message.className = `chat-message ${role}-message`;
       message.textContent = content;

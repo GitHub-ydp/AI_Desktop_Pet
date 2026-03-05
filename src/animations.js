@@ -398,21 +398,24 @@ class PetAnimationController {
   }
   
   // 显示装饰（如粒子、表情符号）
+  // duration <= 0 表示持久显示，不自动消失（需手动调用 clearDecorations）
   showDecoration(content, duration = 2000) {
     if (!this.decorationLayer) return;
-    
+
     const decoration = document.createElement('div');
     decoration.className = 'decoration-item';
     decoration.textContent = content;
     this.decorationLayer.appendChild(decoration);
-    
-    // 自动移除
-    setTimeout(() => {
-      decoration.classList.add('fade-out');
+
+    // duration <= 0 表示不自动移除（持久装饰，如睡觉的 💤）
+    if (duration > 0) {
       setTimeout(() => {
-        decoration.remove();
-      }, 300);
-    }, duration);
+        decoration.classList.add('fade-out');
+        setTimeout(() => {
+          decoration.remove();
+        }, 300);
+      }, duration);
+    }
   }
   
   // 清除所有装饰

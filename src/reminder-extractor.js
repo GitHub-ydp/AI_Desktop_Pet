@@ -220,6 +220,13 @@ class ReminderExtractor {
       return null;
     }
 
+    // 过滤过去时态表达（"了"紧跟在动词后面且在提醒关键词附近，表示回忆而非请求）
+    const pastTensePatterns = [
+      /去了/, /看了/, /做了/, /吃了/, /买了/, /到了(?!时候)/, /完了/, /走了/,
+      /记得.{0,4}(疼|痛|累|难|苦|惨|好玩|有趣|开心|不错)/  // "记得+感受" 表示回忆
+    ];
+    const isPastTense = pastTensePatterns.some(p => p.test(text));
+
     // 提取时间
     let remindAt = null;
     let matchedPattern = null;
@@ -240,6 +247,16 @@ class ReminderExtractor {
 
     if (!remindAt) {
       return null;
+    }
+
+    // 如果检测到过去时态，检查提醒关键词是否为真正的意图
+    // "记得挺疼的"中的"记得"不是提醒意图，但"记得去看牙医"中的"记得去"是提醒意图
+    if (isPastTense) {
+      const actionKeywords = ['记得去', '别忘了去', '别忘去', '该去', '该做', '提醒我', '叫我', '喊我'];
+      const hasActionIntent = actionKeywords.some(kw => text.includes(kw));
+      if (!hasActionIntent) {
+        return null;
+      }
     }
 
     // 提取提醒内容
@@ -448,15 +465,19 @@ class ReminderExtractor {
     // 移除时间部分，保留动作描述
     let content = text;
 
-    // 移除常见前缀
-    content = content.replace(/(记得|别忘了|别忘记|记住|叫我|喊我|告诉我|通知我)/, '');
-    content = content.replace(/(设个提醒|定个闹钟|设置提醒)/, '');
-    content = content.replace(/(提醒[我你]?)/, '');
+    // 移除常见前缀（全局替换）
+    content = content.replace(/(记得|别忘了|别忘记|记住|叫我|喊我|告诉我|通知我)/g, '');
+    content = content.replace(/(设个提醒|定个闹钟|设置提醒)/g, '');
+    content = content.replace(/(提醒[我你]?)/g, '');
 
-    // 移除时间部分 - 需要将正则转换为字符串来替换
+    // 移除所有匹配的时间部分（全局替换）
     if (matchedPattern) {
-      content = content.replace(matchedPattern, '');
+      const globalPattern = new RegExp(matchedPattern.source, 'g');
+      content = content.replace(globalPattern, '');
     }
+
+    // 移除残留的"后"字（如"10分钟后"去掉"10分钟"后剩余的"后"）
+    content = content.replace(/^后/, '');
 
     // 清理
     content = content

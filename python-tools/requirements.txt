@@ -1,0 +1,7 @@
+# Python 工具层依赖
+# 解释器路径：D:\kaifa\Anaconda\envs\main310\python.exe
+# Python 3.8+ 兼容
+# 主要使用标准库
+
+# 回收站操作（Windows）
+Send2Trash>=1.8.0

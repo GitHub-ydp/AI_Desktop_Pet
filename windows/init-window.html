@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>初始化设置</title>
+  <script src="../src/theme-manager.js"></script>
   <style>
     * {
   margin: 0;
@@ -22,6 +23,14 @@
   --text-muted: rgba(160, 220, 240, 0.55);
   --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
   --radius: 8px;
+  --header-bg: rgba(0, 15, 30, 0.98);
+  --input-area-bg: rgba(0, 12, 25, 0.98);
+  --input-field-bg: rgba(0, 15, 35, 0.8);
+  --close-icon: rgba(160, 220, 240, 0.6);
+  --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
+  --accent-hover-bg: rgba(0, 255, 240, 0.1);
+  --scrollbar: rgba(0, 255, 240, 0.35);
+  --scrollbar-hover: rgba(0, 255, 240, 0.6);
 }
 
 body {
@@ -35,7 +44,7 @@ body {
 }
 
 .window-header {
-  background: rgba(0, 15, 30, 0.98);
+  background: var(--header-bg);
   padding: 12px 16px;
   display: flex;
   justify-content: space-between;
@@ -72,7 +81,7 @@ body {
   left: 50%;
   width: 11px;
   height: 1.5px;
-  background: rgba(160, 220, 240, 0.6);
+  background: var(--close-icon);
   border-radius: 2px;
   transform-origin: center;
   transition: background 0.2s;
@@ -83,7 +92,7 @@ body {
 
 .close-btn:hover {
   border-color: var(--neon-magenta);
-  box-shadow: 0 0 8px rgba(255, 45, 120, 0.4);
+  box-shadow: var(--danger-glow);
 }
 
 .close-btn:hover::before,
@@ -131,7 +140,7 @@ body {
   border-radius: 6px;
   font-size: 13px;
   outline: none;
-  background: rgba(0, 15, 35, 0.8);
+  background: var(--input-field-bg);
   color: var(--text);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -154,7 +163,7 @@ body {
   outline: none;
   resize: vertical;
   font-family: inherit;
-  background: rgba(0, 15, 35, 0.8);
+  background: var(--input-field-bg);
   color: var(--text);
   transition: border-color 0.2s, box-shadow 0.2s;
   min-height: 72px;
@@ -195,11 +204,11 @@ body {
   color: var(--neon-magenta);
   font-size: 12px;
   margin-top: 6px;
-  text-shadow: 0 0 6px rgba(255, 45, 120, 0.5);
+  text-shadow: var(--danger-glow);
 }
 
 .footer-buttons {
-  background: rgba(0, 12, 25, 0.98);
+  background: var(--input-area-bg);
   padding: 12px 16px;
   border-top: 1px solid var(--border);
   display: flex;
@@ -224,25 +233,25 @@ body {
 }
 
 .btn-primary:hover {
-  background: rgba(0, 255, 240, 0.1);
+  background: var(--accent-hover-bg);
   box-shadow: var(--glow-sm);
 }
 
 .btn-secondary {
   background: transparent;
   color: var(--text-muted);
-  border: 1px solid rgba(160, 220, 240, 0.25);
+  border: 1px solid var(--border);
 }
 
 .btn-secondary:hover {
-  background: rgba(160, 220, 240, 0.05);
-  border-color: rgba(160, 220, 240, 0.45);
+  background: var(--accent-hover-bg);
+  border-color: var(--border-bright);
 }
 
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(0, 255, 240, 0.35); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 240, 0.6); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
   </style>
 </head>
 <body>

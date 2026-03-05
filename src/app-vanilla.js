@@ -177,10 +177,10 @@ async function init() {
 
   // 点击其他地方关闭菜单
   document.addEventListener('click', (e) => {
-    if (state.quickMenuVisible && 
-        !e.target.closest('.rotary-menu') && 
+    if (state.quickMenuVisible &&
+        !e.target.closest('.rotary-menu') &&
         !e.target.closest('.dial-item') &&
-        !e.target.closest('.quick-menu') && 
+        !e.target.closest('.quick-menu') &&
         !e.target.closest('.pet-wrapper')) {
       closeQuickMenu();
     }
@@ -194,8 +194,14 @@ async function init() {
   initSettingsIpc();
   // 初始化宠物状态 IPC 监听（菜单窗口 -> 主窗口）
   initPetStateIpc();
+  // 初始化健康提醒监听
+  initHealthReminderListener();
+  // 初始化任务监听
+  initTaskListener();
   // 初始化截图功能
   initScreenshot();
+  // 初始化文件拖拽处理
+  initFileDropHandler();
 
   // 启动自动状态检查
   if (window.PetAnimations) {
@@ -710,7 +716,7 @@ function handleVagueTimeConfirmation(extracted) {
 
 // 处理用户对模糊时间的回复
 async function processVagueTimeReply(userReply) {
-  if (!state.pendingReminder) return false;
+  if (!state.pendingReminder) return { success: false };
 
   const pending = state.pendingReminder;
   let minutes = null;
@@ -851,11 +857,83 @@ function openTheme() {
     console.error('[App] electron API 不可用，无法打开主题窗口');
   }
 }
+
+// 健康设置
+function openHealthSettings() {
+  console.log('[App] openHealthSettings 被调用');
+  closeQuickMenu();
+
+  // 创建健康设置子窗口
+  if (window.electron && window.electron.createChildWindow) {
+    console.log('[App] 正在创建健康设置窗口...');
+    window.electron.createChildWindow({
+      id: 'health',
+      title: '健康提醒',
+      width: 420,
+      height: 500,
+      html: 'windows/health-settings-window.html'
+    }).then(result => {
+      console.log('[App] 健康设置窗口创建结果:', result);
+    }).catch(err => {
+      console.error('[App] 健康设置窗口创建失败:', err);
+    });
+  } else {
+    console.error('[App] electron API 不可用，无法打开健康设置窗口');
+    console.log('[App] window.electron:', window.electron);
+  }
+}
+
+// 任务管理
+function openTasks() {
+  closeQuickMenu();
+
+  // 创建任务管理子窗口
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'tasks',
+      title: '任务管理',
+      width: 480,
+      height: 580,
+      html: 'windows/task-window.html'
+    });
+  } else {
+    console.error('[App] electron API 不可用，无法打开任务管理窗口');
+  }
+}
+
+// 小组件
+function openWidgets() {
+  console.log('[App] openWidgets 被调用');
+  closeQuickMenu();
+
+  // 创建小组件子窗口
+  if (window.electron && window.electron.createChildWindow) {
+    console.log('[App] 正在创建小组件窗口...');
+    window.electron.createChildWindow({
+      id: 'widgets',
+      title: '小组件',
+      width: 400,
+      height: 520,
+      html: 'windows/widget-window.html'
+    }).then(result => {
+      console.log('[App] 小组件窗口创建结果:', result);
+    }).catch(err => {
+      console.error('[App] 小组件窗口创建失败:', err);
+    });
+  } else {
+    console.error('[App] electron API 不可用，无法打开小组件窗口');
+    console.log('[App] window.electron:', window.electron);
+  }
+}
+
 // 暴露所有菜单相关函数到全局 window 对象
 window.openChat = openChat;
 window.openSettings = openSettings;
 window.openHistory = openHistory;
 window.openTheme = openTheme;
+window.openHealthSettings = openHealthSettings;
+window.openTasks = openTasks;
+window.openWidgets = openWidgets;
 
 function closeHistory() {
   if (window.electron && window.electron.closeChildWindow) {
@@ -869,23 +947,31 @@ function closeHistoryOnBackdrop(e) {
 
 function renderHistory() {
   const historyList = document.getElementById('historyList');
-  
+
   if (state.chatHistory.length === 0) {
     historyList.innerHTML = '<div class="empty-state">还没有对话记录哦~</div>';
     return;
   }
 
-  let html = '';
+  // 清空旧内容，使用 DOM API 避免 XSS
+  historyList.innerHTML = '';
   state.chatHistory.forEach(msg => {
     const role = msg.role === 'user' ? '你' : '宠物';
-    html += `
-      <div class="history-item ${msg.role}">
-        <div class="role">${role}</div>
-        <div class="content">${msg.content}</div>
-      </div>
-    `;
+    const item = document.createElement('div');
+    item.className = `history-item ${msg.role === 'user' ? 'user' : 'assistant'}`;
+
+    const roleDiv = document.createElement('div');
+    roleDiv.className = 'role';
+    roleDiv.textContent = role;
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'content';
+    contentDiv.textContent = msg.content;
+
+    item.appendChild(roleDiv);
+    item.appendChild(contentDiv);
+    historyList.appendChild(item);
   });
-  historyList.innerHTML = html;
 }
 
 function clearHistory() {
@@ -953,19 +1039,19 @@ function resetData() {
 // 定时器
 function startTimers() {
   if (state.settings.autoSpeak) scheduleAutoSpeak();
-  
+
   // 心情检查定时器
   state.moodCheckTimer = setInterval(() => {
     state.mood = window.PetStorage.checkMoodDecay();
     updateMoodDisplay();
   }, 60000);
-  
+
   // 无互动睡觉检查（5分钟无互动进入睡觉状态）
   let lastInteractionTime = Date.now();
   let isSleeping = false;
-  
-  // 记录用户互动
-  const recordInteraction = () => {
+
+  // 记录用户互动（保存为命名函数，方便 stopTimers 移除）
+  state._recordInteraction = () => {
     lastInteractionTime = Date.now();
     state.lastInteraction = Date.now();  // 同时更新 state
 
@@ -979,13 +1065,13 @@ function startTimers() {
       isSleeping = false;
     }
   };
-  
+
   // 监听用户交互
-  document.addEventListener('click', recordInteraction);
-  document.addEventListener('keydown', recordInteraction);
-  
-  // 检查是否需要睡觉
-  setInterval(() => {
+  document.addEventListener('click', state._recordInteraction);
+  document.addEventListener('keydown', state._recordInteraction);
+
+  // 检查是否需要睡觉（保存引用以便清除）
+  state.sleepCheckTimer = setInterval(() => {
     // 手动锁定时不自动进入睡眠
     if (window.PetAnimations && window.PetAnimations.isManualLocked()) return;
 
@@ -1003,6 +1089,13 @@ function startTimers() {
 function stopTimers() {
   if (state.autoSpeakTimer) clearTimeout(state.autoSpeakTimer);
   if (state.moodCheckTimer) clearInterval(state.moodCheckTimer);
+  if (state.sleepCheckTimer) clearInterval(state.sleepCheckTimer);
+  // 移除交互监听器，避免泄漏
+  if (state._recordInteraction) {
+    document.removeEventListener('click', state._recordInteraction);
+    document.removeEventListener('keydown', state._recordInteraction);
+    state._recordInteraction = null;
+  }
 }
 
 function scheduleAutoSpeak() {
@@ -1212,6 +1305,64 @@ function playReminderSound() {
   // audio.play().catch(e => console.log('Audio play failed:', e));
 }
 
+// 初始化健康提醒监听
+function initHealthReminderListener() {
+  if (!window.PetHealth) {
+    console.log('[Health] PetHealth API not available');
+    return;
+  }
+
+  // 监听健康提醒触发事件
+  window.PetHealth.onTriggered((data) => {
+    console.log('[Health] Triggered:', data);
+
+    // 让宠物"说话"提醒用户
+    showBubbleMessage(data.message);
+
+    // 播放提醒音效
+    playReminderSound();
+
+    // 根据提醒类型播放动画
+    if (window.PetAnimations) {
+      // 可以根据不同类型播放不同动画
+      // 目前统一使用 happy 动画
+      window.PetAnimations.happy(2000);
+    }
+  });
+
+  console.log('[Health] Listener initialized');
+}
+
+// 初始化任务监听
+function initTaskListener() {
+  if (!window.PetTask) {
+    console.log('[Task] PetTask API not available');
+    return;
+  }
+
+  // 监听任务事件
+  window.PetTask.onEvent((data) => {
+    console.log('[Task] Event:', data);
+
+    if (data.action === 'reminder') {
+      // 任务提醒触发
+      showBubbleMessage(`任务提醒：${data.task.title}`);
+      playReminderSound();
+
+      if (window.PetAnimations) {
+        window.PetAnimations.happy(2000);
+      }
+    } else if (data.action === 'updated') {
+      // 任务更新，可以在这里做一些处理
+      console.log('[Task] Task updated:', data.task.title);
+    } else if (data.action === 'deleted') {
+      console.log('[Task] Task deleted:', data.task.id);
+    }
+  });
+
+  console.log('[Task] Listener initialized');
+}
+
 // 简单的音效系统（使用 Web Audio API）
 const SoundEffects = {
   audioContext: null,
@@ -1358,5 +1509,68 @@ function toggleLottieMode() {
 // 初始化截图功能
 function initScreenshot() {
   console.log('[Screenshot] Screenshot functionality initialized (快捷键: Ctrl+Shift+A)');
+}
+
+// 初始化文件拖拽处理器
+function initFileDropHandler() {
+  if (!window.FileDropHandler) {
+    console.log('[FileDrop] FileDropHandler not available');
+    return;
+  }
+
+  if (!window.PetFile) {
+    console.log('[FileDrop] PetFile API not available');
+    return;
+  }
+
+  const success = window.FileDropHandler.initialize({
+    // 拖入时宠物反应
+    onDragEnter: () => {
+      if (window.PetAnimations) {
+        window.PetAnimations.setState('thinking');
+      }
+      showBubbleMessage('这是什么？让我看看~');
+    },
+
+    // 拖出时恢复
+    onDragLeave: () => {
+      if (window.PetAnimations) {
+        window.PetAnimations.setState('idle');
+      }
+    },
+
+    // 文件放下时
+    onFileDrop: (result) => {
+      if (result.error) {
+        showBubbleMessage(`哎呀，出了点问题: ${result.error}`);
+      } else if (result.files) {
+        const count = result.files.length;
+        const file = result.info;
+        if (count === 1) {
+          showBubbleMessage(`${file.isDirectory ? '文件夹' : '文件'} "${file.name}" 放入啦！`);
+        } else {
+          showBubbleMessage(`${count} 个文件放入啦！`);
+        }
+      }
+    },
+
+    // 操作完成时
+    onActionComplete: (result) => {
+      console.log('[FileDrop] Action complete:', result);
+      if (result.message) {
+        showBubbleMessage(result.message);
+      }
+      // 恢复待机状态
+      setTimeout(() => {
+        if (window.PetAnimations) {
+          window.PetAnimations.setState('idle');
+        }
+      }, 1500);
+    }
+  });
+
+  if (success) {
+    console.log('[FileDrop] 文件拖拽处理器初始化完成');
+  }
 }
 

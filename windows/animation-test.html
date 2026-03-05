@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>动画测试</title>
+  <script src="../src/theme-manager.js"></script>
   <style>
     * {
       margin: 0;
@@ -11,9 +12,29 @@
       box-sizing: border-box;
     }
 
+    :root {
+      --bg: #020810;
+      --bg-card: rgba(0, 30, 55, 0.6);
+      --border: rgba(0, 255, 240, 0.3);
+      --border-bright: rgba(0, 255, 240, 0.7);
+      --neon-cyan: #00fff0;
+      --neon-magenta: #ff2d78;
+      --text: #cff0ff;
+      --text-muted: rgba(160, 220, 240, 0.55);
+      --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
+      --radius: 8px;
+      --header-bg: rgba(0, 15, 30, 0.98);
+      --close-icon: rgba(160, 220, 240, 0.6);
+      --accent-bg-dim: rgba(0, 255, 240, 0.08);
+      --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
+      --scrollbar: rgba(0, 255, 240, 0.35);
+      --scrollbar-hover: rgba(0, 255, 240, 0.6);
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: var(--bg);
+      color: var(--text);
       overflow: hidden;
     }
 
@@ -21,42 +42,65 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
-      padding: 20px;
     }
 
     /* 顶部标题栏 */
     .header {
+      background: var(--header-bg);
+      padding: 12px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
       -webkit-app-region: drag;
+      flex-shrink: 0;
     }
 
     .header h1 {
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 600;
-      color: #fff;
+      color: var(--neon-cyan);
+      text-shadow: var(--glow-sm);
+      letter-spacing: 0.5px;
     }
 
     .close-btn {
       -webkit-app-region: no-drag;
-      width: 32px;
-      height: 32px;
-      border: none;
-      background: rgba(255, 255, 255, 0.2);
-      color: #fff;
+      background: transparent;
+      border: 1px solid var(--border);
+      width: 26px;
+      height: 26px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+
+    .close-btn::before,
+    .close-btn::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 11px;
+      height: 1.5px;
+      background: var(--close-icon);
+      border-radius: 2px;
+      transform-origin: center;
       transition: background 0.2s;
     }
 
+    .close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .close-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
+
     .close-btn:hover {
-      background: rgba(255, 255, 255, 0.3);
+      border-color: var(--neon-magenta);
+      box-shadow: var(--danger-glow);
+    }
+
+    .close-btn:hover::before,
+    .close-btn:hover::after {
+      background: var(--neon-magenta);
     }
 
     /* 预览区域 */
@@ -65,9 +109,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      margin-bottom: 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 16px;
       min-height: 200px;
     }
 
@@ -78,12 +123,12 @@
 
     /* 信息显示 */
     .info {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       padding: 12px;
-      margin-bottom: 20px;
-      font-size: 13px;
-      color: #333;
+      margin: 0 16px 16px;
+      font-size: 12px;
     }
 
     .info-item {
@@ -98,106 +143,109 @@
 
     .info-label {
       font-weight: 600;
-      color: #666;
+      color: var(--text-muted);
     }
 
     .info-value {
-      color: #333;
+      color: var(--neon-cyan);
     }
 
     /* 按钮网格 */
     .buttons {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
+      gap: 8px;
       overflow-y: auto;
+      padding: 0 16px 16px;
     }
 
     .anim-btn {
-      padding: 12px 16px;
-      border: none;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 8px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      border-radius: var(--radius);
       cursor: pointer;
-      font-size: 14px;
-      color: #333;
+      font-size: 13px;
+      color: var(--text);
       transition: all 0.2s;
       text-align: left;
     }
 
     .anim-btn:hover {
-      background: #fff;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border-color: var(--border-bright);
+      box-shadow: var(--glow-sm);
     }
 
     .anim-btn:active {
-      transform: translateY(0);
+      transform: scale(0.98);
     }
 
     .anim-btn.active {
-      background: #3b82f6;
-      color: #fff;
+      border-color: var(--neon-cyan);
+      background: var(--accent-bg-dim);
+      box-shadow: var(--glow-sm);
     }
 
     .anim-btn .duration {
-      font-size: 11px;
-      color: #999;
+      font-size: 10px;
+      color: var(--text-muted);
       margin-top: 2px;
     }
 
     .anim-btn.active .duration {
-      color: rgba(255, 255, 255, 0.8);
+      color: var(--neon-cyan);
     }
 
     /* 状态指示 */
     .status {
       position: fixed;
-      top: 60px;
-      right: 20px;
-      padding: 8px 12px;
-      background: rgba(0, 0, 0, 0.8);
-      color: #fff;
+      top: 56px;
+      right: 16px;
+      padding: 6px 12px;
       border-radius: 6px;
-      font-size: 12px;
+      font-size: 11px;
       display: none;
       z-index: 10000;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
     }
 
     .status.show {
       display: block;
+      animation: fadeIn 0.2s ease;
     }
 
     .status.success {
-      background: #10b981;
+      color: #00ff88;
+      border-color: rgba(0, 255, 136, 0.3);
+      background: rgba(0, 255, 136, 0.08);
     }
 
     .status.error {
-      background: #ef4444;
+      color: var(--neon-magenta);
+      border-color: rgba(255, 45, 120, 0.3);
+      background: rgba(255, 45, 120, 0.08);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
     /* 滚动条 */
-    .buttons::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .buttons::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 3px;
-    }
-
-    .buttons::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 3px;
-    }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
   </style>
 </head>
 <body>
   <div class="container">
     <!-- 顶部标题栏 -->
     <div class="header">
-      <h1>🎭 动画测试</h1>
-      <button class="close-btn" id="closeBtn">×</button>
+      <h1>动画测试</h1>
+      <button class="close-btn" id="closeBtn"></button>
     </div>
 
     <!-- 预览区域 -->
@@ -230,16 +278,15 @@
   <!-- 状态提示 -->
   <div class="status" id="status"></div>
 
-  <script src="assets/lib/lottie.min.js"></script>
-  <script src="src/animation-config.js"></script>
+  <script src="../assets/lib/lottie.min.js"></script>
+  <script src="../src/animation-config.js"></script>
   <script>
-    const { ipcRenderer } = require('electron');
-
-    let currentAnimation = null;
-    let currentBtn = null;
+    // 使用 contextBridge API（安全方式）
+    var currentAnimation = null;
+    var currentBtn = null;
 
     // 动画状态定义
-    const animationStates = [
+    var animationStates = [
       { state: 'idle', name: '待机状态', emoji: '😊' },
       { state: 'happy', name: '开心', emoji: '😄' },
       { state: 'sleeping', name: '睡觉', emoji: '😴' },
@@ -260,26 +307,25 @@
 
     // 创建按钮
     function createButtons() {
-      const grid = document.getElementById('buttonGrid');
+      var grid = document.getElementById('buttonGrid');
 
-      animationStates.forEach(({ state, name, emoji }) => {
-        const btn = document.createElement('button');
+      animationStates.forEach(function (item) {
+        var btn = document.createElement('button');
         btn.className = 'anim-btn';
-        btn.dataset.state = state;
+        btn.dataset.state = item.state;
 
         // 获取动画信息
-        const info = getAnimationInfo(state);
-        const durationText = info.duration
-          ? `${info.duration / 1000}秒`
+        var info = getAnimationInfo(item.state);
+        var durationText = info.duration
+          ? (info.duration / 1000) + '秒'
           : '循环';
 
-        btn.innerHTML = `
-          <div>${emoji} ${name}</div>
-          <div class="duration">${info.file} · ${durationText}</div>
-        `;
+        btn.innerHTML =
+          '<div>' + item.emoji + ' ' + item.name + '</div>' +
+          '<div class="duration">' + info.file + ' · ' + durationText + '</div>';
 
-        btn.addEventListener('click', () => {
-          loadAnimation(state);
+        btn.addEventListener('click', function () {
+          loadAnimation(item.state);
           updateActiveButton(btn);
         });
 
@@ -293,15 +339,15 @@
         return { file: 'happy_cat.json', duration: null };
       }
 
-      const file = window.AnimationConfig.getAnimationFile(state, '🐱');
-      const duration = window.AnimationConfig.getStateDuration(state, '🐱');
+      var file = window.AnimationConfig.getAnimationFile(state, '🐱');
+      var duration = window.AnimationConfig.getStateDuration(state, '🐱');
 
-      return { file, duration };
+      return { file: file, duration: duration };
     }
 
     // 更新活动按钮
     function updateActiveButton(activeBtn) {
-      document.querySelectorAll('.anim-btn').forEach(btn => {
+      document.querySelectorAll('.anim-btn').forEach(function (btn) {
         btn.classList.remove('active');
       });
       activeBtn.classList.add('active');
@@ -310,16 +356,16 @@
 
     // 加载动画
     function loadAnimation(state) {
-      const info = getAnimationInfo(state);
-      const animationPath = `lottie/cat/${info.file}`;
+      var info = getAnimationInfo(state);
+      var animationPath = 'lottie/cat/' + info.file;
 
-      console.log(`[AnimationTest] Loading: ${state} (${animationPath})`);
+      console.log('[AnimationTest] Loading: ' + state + ' (' + animationPath + ')');
 
       // 更新信息显示
       document.getElementById('currentState').textContent = state;
       document.getElementById('currentFile').textContent = info.file;
       document.getElementById('currentDuration').textContent = info.duration
-        ? `${info.duration / 1000}秒`
+        ? (info.duration / 1000) + '秒'
         : '循环';
 
       // 销毁旧动画
@@ -328,7 +374,7 @@
       }
 
       // 加载新动画
-      const container = document.getElementById('animationPreview');
+      var container = document.getElementById('animationPreview');
       container.innerHTML = '';
 
       try {
@@ -344,10 +390,10 @@
 
         // 如果有持续时间，自动切换回 idle
         if (info.duration) {
-          setTimeout(() => {
+          setTimeout(function () {
             if (state !== 'idle') {
               loadAnimation('idle');
-              const idleBtn = document.querySelector('[data-state="idle"]');
+              var idleBtn = document.querySelector('[data-state="idle"]');
               if (idleBtn) updateActiveButton(idleBtn);
             }
           }, info.duration);
@@ -360,29 +406,34 @@
     }
 
     // 显示状态提示
-    function showStatus(message, type = 'info') {
-      const status = document.getElementById('status');
+    function showStatus(message, type) {
+      var status = document.getElementById('status');
       status.textContent = message;
-      status.className = `status show ${type}`;
-      setTimeout(() => {
+      status.className = 'status show ' + (type || 'info');
+      setTimeout(function () {
         status.classList.remove('show');
       }, 3000);
     }
 
-    // 关闭窗口
-    document.getElementById('closeBtn').addEventListener('click', () => {
-      ipcRenderer.send('close-child-window', 'animation-test');
-    });
+    // 关闭窗口 - 使用 contextBridge API
+    function closeWindow() {
+      if (window.electron && window.electron.closeChildWindow) {
+        window.electron.closeChildWindow('animation-test');
+      }
+    }
+
+    document.getElementById('closeBtn').addEventListener('click', closeWindow);
 
     // ESC 关闭
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
-        ipcRenderer.send('close-child-window', 'animation-test');
+        closeWindow();
       }
     });
 
     // 初始化
     init();
+    console.log('[animation-test] 主题系统已加载');
   </script>
 </body>
 </html>

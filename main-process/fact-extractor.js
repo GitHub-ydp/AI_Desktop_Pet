@@ -50,6 +50,10 @@ class FactExtractorLLM {
 
     // 数据库引用
     this.storage = config.storage || null;
+
+    // 超时刷新机制（防止缓冲区无限堆积）
+    this._flushTimeout = null;
+    this._flushTimeoutMs = config.flushTimeoutMs || 5 * 60 * 1000; // 默认 5 分钟
   }
 
   setStorage(storage) {
@@ -81,6 +85,20 @@ class FactExtractorLLM {
       return await this.flushBuffer();
     }
 
+    // 如果还没设置超时，设置一个
+    // 防止缓冲区无限堆积（用户长时间不说话但缓冲区有数据）
+    if (!this._flushTimeout && this._buffer.length > 0) {
+      this._flushTimeout = setTimeout(async () => {
+        if (this._buffer.length > 0) {
+          console.log('[FactExtractor] 超时刷新缓冲区，当前有 ' + this._buffer.length + ' 条对话');
+          await this.flushBuffer().catch(err => {
+            console.error('[FactExtractor] 超时刷新失败:', err.message);
+          });
+        }
+        this._flushTimeout = null;
+      }, this._flushTimeoutMs);
+    }
+
     return [];
   }
 
@@ -91,6 +109,12 @@ class FactExtractorLLM {
       console.log('[FactExtractor] 无 API Key，跳过事实提取');
       this._buffer = [];
       return [];
+    }
+
+    // 清除超时计时器（因为我们现在要手动刷新）
+    if (this._flushTimeout) {
+      clearTimeout(this._flushTimeout);
+      this._flushTimeout = null;
     }
 
     this._extracting = true;

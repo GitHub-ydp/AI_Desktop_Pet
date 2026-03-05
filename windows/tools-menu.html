@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>工具菜单</title>
+  <script src="../src/theme-manager.js"></script>
   <style>
     * {
       margin: 0;
@@ -11,9 +12,29 @@
       box-sizing: border-box;
     }
 
+    :root {
+      --bg: #020810;
+      --bg-card: rgba(0, 30, 55, 0.6);
+      --border: rgba(0, 255, 240, 0.3);
+      --border-bright: rgba(0, 255, 240, 0.7);
+      --neon-cyan: #00fff0;
+      --neon-magenta: #ff2d78;
+      --text: #cff0ff;
+      --text-muted: rgba(160, 220, 240, 0.55);
+      --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
+      --radius: 8px;
+      --header-bg: rgba(0, 15, 30, 0.98);
+      --close-icon: rgba(160, 220, 240, 0.6);
+      --accent-hover-bg: rgba(0, 255, 240, 0.1);
+      --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
+      --scrollbar: rgba(0, 255, 240, 0.35);
+      --scrollbar-hover: rgba(0, 255, 240, 0.6);
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: var(--bg);
+      color: var(--text);
       overflow: hidden;
     }
 
@@ -21,76 +42,100 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
-      padding: 20px;
     }
 
     /* 顶部标题栏 */
     .header {
+      background: var(--header-bg);
+      padding: 12px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
       -webkit-app-region: drag;
+      flex-shrink: 0;
     }
 
     .header h1 {
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 600;
-      color: #fff;
+      color: var(--neon-cyan);
+      text-shadow: var(--glow-sm);
+      letter-spacing: 0.5px;
     }
 
     .close-btn {
       -webkit-app-region: no-drag;
-      width: 32px;
-      height: 32px;
-      border: none;
-      background: rgba(255, 255, 255, 0.2);
-      color: #fff;
+      background: transparent;
+      border: 1px solid var(--border);
+      width: 26px;
+      height: 26px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+
+    .close-btn::before,
+    .close-btn::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 11px;
+      height: 1.5px;
+      background: var(--close-icon);
+      border-radius: 2px;
+      transform-origin: center;
       transition: background 0.2s;
     }
 
+    .close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .close-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
+
     .close-btn:hover {
-      background: rgba(255, 255, 255, 0.3);
+      border-color: var(--neon-magenta);
+      box-shadow: var(--danger-glow);
+    }
+
+    .close-btn:hover::before,
+    .close-btn:hover::after {
+      background: var(--neon-magenta);
     }
 
     /* 工具列表 */
     .tools-list {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
       flex: 1;
       overflow-y: auto;
+      padding: 16px;
     }
 
     .tool-item {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 16px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 12px;
+      padding: 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       cursor: pointer;
       transition: all 0.2s;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .tool-item:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border-color: var(--border-bright);
+      box-shadow: var(--glow-sm);
     }
 
     .tool-item:active {
-      transform: translateY(0);
+      transform: scale(0.98);
     }
 
     .tool-icon {
-      font-size: 28px;
+      font-size: 24px;
     }
 
     .tool-info {
@@ -98,72 +143,87 @@
     }
 
     .tool-name {
-      font-size: 16px;
+      font-size: 13px;
       font-weight: 600;
-      color: #333;
-      margin-bottom: 4px;
+      color: var(--text);
+      margin-bottom: 3px;
     }
 
     .tool-desc {
-      font-size: 13px;
-      color: #666;
+      font-size: 11px;
+      color: var(--text-muted);
     }
 
     .tool-shortcut {
-      font-size: 12px;
-      color: #999;
-      background: #f0f0f0;
-      padding: 4px 8px;
+      font-size: 11px;
+      color: var(--neon-cyan);
+      background: rgba(0, 255, 240, 0.08);
+      border: 1px solid var(--border);
+      padding: 3px 8px;
       border-radius: 4px;
     }
 
     /* 分类标题 */
     .category-title {
-      font-size: 14px;
+      font-size: 11px;
       font-weight: 600;
-      color: rgba(255, 255, 255, 0.9);
-      margin-top: 16px;
-      margin-bottom: 8px;
+      color: var(--neon-cyan);
+      margin-top: 8px;
+      margin-bottom: 2px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      text-shadow: var(--glow-sm);
     }
 
     .category-title:first-child {
       margin-top: 0;
     }
 
+    /* 内联提示 */
+    .inline-toast {
+      display: none;
+      color: var(--neon-cyan);
+      font-size: 12px;
+      padding: 8px 12px;
+      background: rgba(0, 255, 240, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin: 8px 16px;
+      text-align: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .inline-toast.show {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
     /* 滚动条样式 */
-    .tools-list::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .tools-list::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 3px;
-    }
-
-    .tools-list::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 3px;
-    }
-
-    .tools-list::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.5);
-    }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
   </style>
 </head>
 <body>
   <div class="container">
     <!-- 顶部标题栏 -->
     <div class="header">
-      <h1>🔧 工具箱</h1>
-      <button class="close-btn" id="closeBtn">×</button>
+      <h1>工具箱</h1>
+      <button class="close-btn" id="closeBtn"></button>
     </div>
+
+    <!-- 内联提示 -->
+    <div class="inline-toast" id="inlineToast"></div>
 
     <!-- 工具列表 -->
     <div class="tools-list">
       <!-- 截图工具 -->
-      <div class="category-title">📸 截图工具</div>
+      <div class="category-title">截图工具</div>
       <div class="tool-item" data-tool="screenshot">
         <div class="tool-icon">📸</div>
         <div class="tool-info">
@@ -181,8 +241,26 @@
         </div>
       </div>
 
+      <!-- 其他工具 -->
+      <div class="category-title">其他</div>
+      <div class="tool-item" data-tool="screenshot-history">
+        <div class="tool-icon">📁</div>
+        <div class="tool-info">
+          <div class="tool-name">截图历史</div>
+          <div class="tool-desc">查看所有截图记录</div>
+        </div>
+      </div>
+
+      <div class="tool-item" data-tool="open-folder">
+        <div class="tool-icon">📂</div>
+        <div class="tool-info">
+          <div class="tool-name">打开截图文件夹</div>
+          <div class="tool-desc">在文件管理器中打开</div>
+        </div>
+      </div>
+
       <!-- 开发工具 -->
-      <div class="category-title">🛠️ 开发工具</div>
+      <div class="category-title">开发</div>
       <div class="tool-item" data-tool="devtools">
         <div class="tool-icon">🐛</div>
         <div class="tool-info">
@@ -201,26 +279,6 @@
         <div class="tool-shortcut">Ctrl+R</div>
       </div>
 
-      <!-- 其他工具 -->
-      <div class="category-title">📦 其他</div>
-      <div class="tool-item" data-tool="screenshot-history">
-        <div class="tool-icon">📁</div>
-        <div class="tool-info">
-          <div class="tool-name">截图历史</div>
-          <div class="tool-desc">查看所有截图记录</div>
-        </div>
-      </div>
-
-      <div class="tool-item" data-tool="open-folder">
-        <div class="tool-icon">📂</div>
-        <div class="tool-info">
-          <div class="tool-name">打开截图文件夹</div>
-          <div class="tool-desc">在文件管理器中打开</div>
-        </div>
-      </div>
-
-      <!-- 开发工具 -->
-      <div class="category-title">🛠️ 开发</div>
       <div class="tool-item" data-tool="animation-test">
         <div class="tool-icon">🎭</div>
         <div class="tool-info">
@@ -232,60 +290,88 @@
   </div>
 
   <script>
-    const { ipcRenderer } = require('electron');
+    // 使用 contextBridge API（安全方式）
+    function closeWindow() {
+      if (window.electron && window.electron.closeChildWindow) {
+        window.electron.closeChildWindow('tools-menu');
+      }
+    }
+
+    // 显示内联提示
+    function showToast(message) {
+      var toast = document.getElementById('inlineToast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(function () {
+        toast.classList.remove('show');
+      }, 3000);
+    }
 
     // 关闭窗口
-    document.getElementById('closeBtn').addEventListener('click', () => {
-      ipcRenderer.send('close-child-window', 'tools-menu');
-    });
+    document.getElementById('closeBtn').addEventListener('click', closeWindow);
 
     // 工具项点击事件
-    document.querySelectorAll('.tool-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const tool = item.dataset.tool;
-        handleToolClick(tool);
+    document.querySelectorAll('.tool-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        handleToolClick(item.dataset.tool);
       });
     });
 
     // 处理工具点击
-    async function handleToolClick(tool) {
+    function handleToolClick(tool) {
       console.log('[ToolsMenu] Tool clicked:', tool);
 
       switch (tool) {
         case 'screenshot':
-          // 启动区域截图 - 通过主进程处理
-          ipcRenderer.send('start-screenshot');
+          // 启动区域截图 - 通过 electron API
+          if (window.electron && window.electron.createChildWindow) {
+            window.electron.createChildWindow({
+              id: 'screenshot',
+              title: '截图',
+              html: 'windows/screenshot-capture.html'
+            });
+          }
           break;
 
         case 'fullscreen-screenshot':
           // 全屏截图
-          ipcRenderer.send('start-fullscreen-screenshot');
+          if (window.electron && window.electron.createChildWindow) {
+            window.electron.createChildWindow({
+              id: 'fullscreen-screenshot',
+              title: '全屏截图',
+              html: 'windows/screenshot-capture.html',
+              fullscreen: true
+            });
+          }
           break;
 
         case 'devtools':
-          // 打开开发者工具
           if (window.electron && window.electron.openDevTools) {
             window.electron.openDevTools();
           }
           break;
 
         case 'reload':
-          // 重新加载
           location.reload();
           break;
 
         case 'screenshot-history':
-          // 查看截图历史（暂时用 alert）
-          alert('截图历史功能开发中...\n\n您可以直接访问截图文件夹查看所有截图');
-          break;
+          // 用内联提示替代 alert
+          showToast('截图历史功能开发中... 可直接访问截图文件夹查看');
+          return; // 不关闭窗口
 
         case 'open-folder':
-          // 打开截图文件夹
-          ipcRenderer.send('open-screenshots-folder');
+          if (window.electron && window.electron.createChildWindow) {
+            // 通过主进程打开文件夹
+            window.electron.createChildWindow({
+              id: 'open-folder',
+              title: '打开文件夹',
+              action: 'open-screenshots-folder'
+            });
+          }
           break;
 
         case 'animation-test':
-          // 打开动画测试窗口
           if (window.electron && window.electron.createChildWindow) {
             window.electron.createChildWindow({
               id: 'animation-test',
@@ -295,26 +381,21 @@
               html: 'windows/animation-test.html'
             });
           }
-          // 不关闭工具菜单，让用户可以看到
-          setTimeout(() => {
-            ipcRenderer.send('close-child-window', 'tools-menu');
-          }, 100);
-          return; // 提前返回，不关闭工具菜单
           break;
       }
 
       // 关闭工具菜单
-      setTimeout(() => {
-        ipcRenderer.send('close-child-window', 'tools-menu');
-      }, 100);
+      setTimeout(closeWindow, 100);
     }
 
     // ESC 关闭
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
-        ipcRenderer.send('close-child-window', 'tools-menu');
+        closeWindow();
       }
     });
+
+    console.log('[tools-menu] 主题系统已加载');
   </script>
 </body>
 </html>

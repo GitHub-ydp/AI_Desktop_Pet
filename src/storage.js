@@ -169,8 +169,14 @@ function checkMoodDecay() {
 
   // 每2小时无互动，心情值降低10分
   if (hoursSinceLastInteraction >= 2) {
-    const decay = Math.floor(hoursSinceLastInteraction / 2) * 10;
-    return setMood(petData.mood - decay);
+    // 计算本次应衰减的量（每满2小时衰减10分）
+    const decayPeriods = Math.floor(hoursSinceLastInteraction / 2);
+    const decay = decayPeriods * 10;
+    // 更新 lastInteraction 为已消耗的衰减周期结束时间，避免重复衰减
+    petData.lastInteraction = petData.lastInteraction + decayPeriods * 2 * 60 * 60 * 1000;
+    petData.mood = Math.max(0, Math.min(100, petData.mood - decay));
+    savePetData(petData);
+    return petData.mood;
   }
 
   return petData.mood;

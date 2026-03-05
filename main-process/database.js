@@ -52,12 +52,29 @@ class MemoryStorage {
       this.db.pragma('cache_size = -64000');
       this.db.pragma('temp_store = memory');
 
-      // 读取并执行 schema
-      const schema = readFileSync(SCHEMA_PATH, 'utf-8');
-      this.db.exec(schema);
-
-      // 执行数据库迁移（添加缺失的列）
+      // 先执行数据库迁移（为旧表添加缺失的列）
+      // 必须在 schema 之前，因为 schema 中的索引依赖这些列
       this.runMigrations();
+
+      // 读取并执行 schema（创建表 + 索引）
+      // 逐语句执行，跳过不支持的语句（如 FTS5）
+      const schema = readFileSync(SCHEMA_PATH, 'utf-8');
+      // 先移除所有 SQL 注释行，再按分号拆分
+      const cleanedSchema = schema
+        .split('\n')
+        .map(line => line.trim().startsWith('--') ? '' : line)
+        .join('\n');
+      const statements = cleanedSchema.split(';')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+      for (const stmt of statements) {
+        try {
+          this.db.exec(stmt + ';');
+        } catch (e) {
+          // 跳过不支持的语句（FTS5 等），只打日志
+          console.warn('[DB] Skipped statement:', e.message, '|', stmt.substring(0, 60) + '...');
+        }
+      }
 
       console.log('Memory database initialized at:', this.dbPath);
       return true;
@@ -95,6 +112,28 @@ class MemoryStorage {
         console.log('[Migrate] Added column: memory_chunks.importance_score');
         // 回填数据
         this.db.exec('UPDATE memory_chunks SET importance_score = 1.0 WHERE importance_score IS NULL');
+      }
+
+      // FSRS 动态强化字段
+      if (!chunksCols.includes('trigger_count')) {
+        this.db.exec('ALTER TABLE memory_chunks ADD COLUMN trigger_count INTEGER DEFAULT 0');
+        console.log('[Migrate] Added column: memory_chunks.trigger_count');
+      }
+      if (!chunksCols.includes('last_triggered_at')) {
+        this.db.exec('ALTER TABLE memory_chunks ADD COLUMN last_triggered_at INTEGER');
+        console.log('[Migrate] Added column: memory_chunks.last_triggered_at');
+      }
+      if (!chunksCols.includes('stability')) {
+        this.db.exec('ALTER TABLE memory_chunks ADD COLUMN stability REAL DEFAULT 168.0');
+        console.log('[Migrate] Added column: memory_chunks.stability');
+      }
+      if (!chunksCols.includes('strength')) {
+        this.db.exec('ALTER TABLE memory_chunks ADD COLUMN strength REAL DEFAULT 1.0');
+        console.log('[Migrate] Added column: memory_chunks.strength');
+      }
+      if (!chunksCols.includes('emotional_weight')) {
+        this.db.exec('ALTER TABLE memory_chunks ADD COLUMN emotional_weight REAL DEFAULT 1.0');
+        console.log('[Migrate] Added column: memory_chunks.emotional_weight');
       }
 
       // 检查并添加 embedding_cache 新列

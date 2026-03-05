@@ -2,6 +2,7 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen } = requ
 const path = require('path');
 const MemoryMainProcess = require('./main-process/memory');
 const { ScreenshotManager } = require('./main-process/screenshot');
+const WorkflowManager = require('./main-process/workflow-manager');
 const { createChatRequestId, withTimeout } = require('./src/chat-ipc-utils');
 const { getBubbleWindowBoundsFromMain } = require('./src/bubble-window-utils');
 
@@ -19,6 +20,7 @@ let tray = null;
 let memorySystem = null;
 let toolSystem = null;
 let screenshotSystem = null;
+let workflowManager = null;
 let childWindows = new Map(); // 管理所有子窗口
 let lastSmallBounds = null; // 记录小窗口位置，避免缩放漂移
 let menuWindow = null;
@@ -74,7 +76,7 @@ function createWindow() {
   });
 
   if (process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools();
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
   mainWindow.on('close', (event) => {
@@ -325,15 +327,15 @@ app.whenReady().then(async () => {
 
   // 初始化记忆系统
   console.log('Initializing memory system...');
+  memorySystem = new MemoryMainProcess({
+    apiKey: process.env.DEEPSEEK_API_KEY || ''
+  });
+  // 先注册 IPC handlers，确保渲染进程的调用不会因初始化失败而无 handler
+  memorySystem.registerIPCHandlers(ipcMain);
+  // 设置主窗口引用（提醒通知需要）
+  memorySystem.setMainWindow(mainWindow);
   try {
-    memorySystem = new MemoryMainProcess({
-      apiKey: process.env.DEEPSEEK_API_KEY || ''
-    });
     await memorySystem.initialize();
-    // 注册 IPC handlers
-    memorySystem.registerIPCHandlers(ipcMain);
-    // 设置主窗口用于提醒通知
-    memorySystem.setMainWindow(mainWindow);
     console.log('Memory system initialized successfully');
     recordDisplayProfiles('startup');
   } catch (error) {
@@ -367,6 +369,38 @@ app.whenReady().then(async () => {
     console.error('Failed to initialize screenshot system:', error);
   }
 
+  // 初始化工作流系统（Python 工具调用）
+  console.log('Initializing workflow manager...');
+  try {
+    workflowManager = new WorkflowManager();
+    workflowManager.initialize();
+    console.log('Workflow manager initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize workflow manager:', error);
+  }
+
+  // 注册工作流 IPC handlers
+  ipcMain.handle('workflow:execute', async (event, toolName, args) => {
+    if (!workflowManager) {
+      return { success: false, error: '工作流系统未初始化' };
+    }
+    return await workflowManager.execute(toolName, args);
+  });
+
+  ipcMain.handle('workflow:list-tools', () => {
+    if (!workflowManager) return [];
+    return workflowManager.getToolDefinitions();
+  });
+
+  ipcMain.handle('workflow:get-desktop-path', () => {
+    return app.getPath('desktop');
+  });
+
+  ipcMain.handle('workflow:abort', (event, requestId) => {
+    if (!workflowManager) return false;
+    return workflowManager.abort(requestId);
+  });
+
   // 注册开发者工具快捷键
   console.log('Registering developer tools shortcuts...');
   try {
@@ -376,7 +410,8 @@ app.whenReady().then(async () => {
         if (mainWindow.webContents.isDevToolsOpened()) {
           mainWindow.webContents.closeDevTools();
         } else {
-          mainWindow.webContents.openDevTools();
+          // 以独立窗口模式打开 DevTools，并设置大小
+          mainWindow.webContents.openDevTools({ mode: 'detach' });
         }
       }
     });
@@ -438,6 +473,10 @@ app.on('before-quit', () => {
   // 关闭记忆系统
   if (memorySystem) {
     memorySystem.close();
+  }
+  // 关闭工作流 Python 进程
+  if (workflowManager) {
+    workflowManager.shutdown();
   }
 });
 
@@ -579,10 +618,11 @@ ipcMain.handle('resize-window', (event, size, anchor) => {
         width: WINDOW_SIZES.small.width,
         height: WINDOW_SIZES.small.height
       };
+      // 向下扩展：顶边保持不动，宽度向两侧均等扩展
+      // 这样宠物保持同屏位置，面板只在宠物下方新增区域展开
       const centerX = base.x + base.width / 2;
-      const centerY = base.y + base.height / 2;
       const newX = Math.round(centerX - targetSize.width / 2);
-      const newY = Math.round(centerY - targetSize.height / 2);
+      const newY = base.y; // 顶边不动，向下扩展
       nextBounds = {
         x: newX,
         y: newY,

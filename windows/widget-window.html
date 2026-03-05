@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小组件</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+      background: #020810;
+      color: #e0e0e0;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .container {
+      padding: 16px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(0, 255, 240, 0.2);
+    }
+
+    .header h1 {
+      font-size: 18px;
+      color: #00fff0;
+      text-shadow: 0 0 10px rgba(0, 255, 240, 0.5);
+    }
+
+    .close-btn {
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: 1px solid rgba(255, 45, 120, 0.5);
+      color: #ff2d78;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 45, 120, 0.2);
+      box-shadow: 0 0 10px rgba(255, 45, 120, 0.5);
+    }
+
+    /* 小组件卡片 */
+    .widget-card {
+      background: rgba(0, 30, 55, 0.6);
+      border: 1px solid rgba(0, 255, 240, 0.2);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .widget-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .widget-title {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.8);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .widget-title .icon {
+      font-size: 16px;
+    }
+
+    .refresh-btn {
+      padding: 4px 8px;
+      background: transparent;
+      border: 1px solid rgba(0, 255, 240, 0.3);
+      color: rgba(0, 255, 240, 0.7);
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .refresh-btn:hover {
+      border-color: #00fff0;
+      color: #00fff0;
+    }
+
+    /* 天气小组件 */
+    .weather-main {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .weather-icon {
+      font-size: 48px;
+    }
+
+    .weather-temp {
+      font-size: 36px;
+      font-weight: bold;
+      color: #00fff0;
+    }
+
+    .weather-temp span {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .weather-desc {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .weather-location {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 8px;
+    }
+
+    .weather-details {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .weather-detail {
+      text-align: center;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+    }
+
+    .weather-detail-value {
+      font-size: 16px;
+      color: #fff;
+    }
+
+    .weather-detail-label {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* 日历小组件 */
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .calendar-month {
+      font-size: 14px;
+      color: #fff;
+    }
+
+    .calendar-nav {
+      display: flex;
+      gap: 4px;
+    }
+
+    .calendar-nav-btn {
+      width: 24px;
+      height: 24px;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .calendar-nav-btn:hover {
+      border-color: #00fff0;
+      color: #00fff0;
+    }
+
+    .calendar-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-bottom: 4px;
+    }
+
+    .calendar-weekday {
+      text-align: center;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.4);
+      padding: 4px 0;
+    }
+
+    .calendar-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+
+    .calendar-day {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .calendar-day:hover {
+      background: rgba(0, 255, 240, 0.1);
+    }
+
+    .calendar-day.empty {
+      cursor: default;
+    }
+
+    .calendar-day.today {
+      background: rgba(0, 255, 240, 0.3);
+      color: #00fff0;
+      font-weight: bold;
+    }
+
+    .calendar-day.has-task {
+      position: relative;
+    }
+
+    .calendar-day.has-task::after {
+      content: '';
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 4px;
+      height: 4px;
+      background: #ff2d78;
+      border-radius: 50%;
+    }
+
+    /* 待办小组件 */
+    .todo-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .todo-stat {
+      text-align: center;
+      padding: 12px 8px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .todo-stat:hover {
+      background: rgba(0, 255, 240, 0.1);
+    }
+
+    .todo-stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #00fff0;
+    }
+
+    .todo-stat.overdue .todo-stat-value {
+      color: #ff2d78;
+    }
+
+    .todo-stat-label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-top: 4px;
+    }
+
+    /* 位置设置 */
+    .location-setting {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .location-input {
+      display: flex;
+      gap: 8px;
+    }
+
+    .location-input input {
+      flex: 1;
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(0, 255, 240, 0.3);
+      border-radius: 4px;
+      color: #fff;
+      font-size: 12px;
+    }
+
+    .location-input input:focus {
+      outline: none;
+      border-color: #00fff0;
+    }
+
+    .location-input button {
+      padding: 6px 12px;
+      background: rgba(0, 255, 240, 0.2);
+      border: 1px solid #00fff0;
+      color: #00fff0;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    /* 消息提示 */
+    .message {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 16px;
+      background: rgba(0, 255, 240, 0.2);
+      border: 1px solid #00fff0;
+      border-radius: 4px;
+      color: #00fff0;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+
+    .message.show {
+      opacity: 1;
+    }
+
+    .message.error {
+      background: rgba(255, 45, 120, 0.2);
+      border-color: #ff2d78;
+      color: #ff2d78;
+    }
+
+    /* 加载状态 */
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: rgba(255, 255, 255, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>小组件</h1>
+      <button class="close-btn" onclick="window.close()">X</button>
+    </div>
+
+    <!-- 天气小组件 -->
+    <div class="widget-card" id="weatherWidget">
+      <div class="widget-header">
+        <div class="widget-title">
+          <span class="icon">🌤️</span>
+          <span>天气</span>
+        </div>
+        <button class="refresh-btn" onclick="refreshWeather()">刷新</button>
+      </div>
+      <div id="weatherContent">
+        <div class="loading">加载中...</div>
+      </div>
+      <div class="location-setting">
+        <div class="location-input">
+          <input type="text" id="locationInput" placeholder="输入城市名（如：Beijing）">
+          <button onclick="setLocation()">设置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 日历小组件 -->
+    <div class="widget-card" id="calendarWidget">
+      <div class="widget-header">
+        <div class="widget-title">
+          <span class="icon">📅</span>
+          <span>日历</span>
+        </div>
+      </div>
+      <div id="calendarContent">
+        <div class="loading">加载中...</div>
+      </div>
+    </div>
+
+    <!-- 待办小组件 -->
+    <div class="widget-card" id="todoWidget">
+      <div class="widget-header">
+        <div class="widget-title">
+          <span class="icon">📋</span>
+          <span>待办</span>
+        </div>
+        <button class="refresh-btn" onclick="refreshTodo()">刷新</button>
+      </div>
+      <div id="todoContent">
+        <div class="loading">加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="message" id="message"></div>
+
+  <script>
+    // 当前日历月份
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth() + 1;
+
+    // 加载天气
+    async function loadWeather() {
+      const container = document.getElementById('weatherContent');
+
+      try {
+        const weather = await window.PetWidget.getWeather();
+
+        container.innerHTML = `
+          <div class="weather-location">📍 ${weather.location || '未获取位置'}</div>
+          <div class="weather-main">
+            <div class="weather-icon">${weather.weatherIcon}</div>
+            <div>
+              <div class="weather-temp">${weather.temperature}<span>°C</span></div>
+              <div class="weather-desc">${weather.weatherDesc}</div>
+            </div>
+          </div>
+          <div class="weather-details">
+            <div class="weather-detail">
+              <div class="weather-detail-value">${weather.humidity}%</div>
+              <div class="weather-detail-label">湿度</div>
+            </div>
+            <div class="weather-detail">
+              <div class="weather-detail-value">${weather.windSpeed}km/h</div>
+              <div class="weather-detail-label">风速</div>
+            </div>
+            <div class="weather-detail">
+              <div class="weather-detail-value">${weather.feelsLike}°</div>
+              <div class="weather-detail-label">体感</div>
+            </div>
+          </div>
+        `;
+      } catch (error) {
+        console.error('[Widget] Weather load failed:', error);
+        container.innerHTML = '<div class="loading">获取天气失败</div>';
+      }
+    }
+
+    // 刷新天气
+    async function refreshWeather() {
+      showMessage('刷新中...');
+      await loadWeather();
+      showMessage('天气已更新');
+    }
+
+    // 设置位置
+    async function setLocation() {
+      const input = document.getElementById('locationInput');
+      const location = input.value.trim();
+
+      if (!location) {
+        showMessage('请输入城市名', true);
+        return;
+      }
+
+      try {
+        await window.PetWidget.setWeatherLocation(location);
+        showMessage('位置已更新');
+        await loadWeather();
+      } catch (error) {
+        showMessage('设置失败', true);
+      }
+    }
+
+    // 加载日历
+    async function loadCalendar() {
+      const container = document.getElementById('calendarContent');
+
+      try {
+        const calendar = await window.PetWidget.getCalendar();
+
+        // 如果返回的数据包含年月，使用它
+        if (calendar.year && calendar.month) {
+          currentYear = calendar.year;
+          currentMonth = calendar.month;
+        }
+
+        const weekdaysHtml = (calendar.weekdays || ['日', '一', '二', '三', '四', '五', '六'])
+          .map(d => `<div class="calendar-weekday">${d}</div>`).join('');
+
+        const weeksHtml = (calendar.weeks || []).map(week => {
+          return week.map(day => {
+            if (day === null) {
+              return '<div class="calendar-day empty"></div>';
+            }
+
+            const isToday = day === calendar.today;
+            const hasTask = calendar.taskMarks && calendar.taskMarks[day];
+            let classes = 'calendar-day';
+            if (isToday) classes += ' today';
+            if (hasTask) classes += ' has-task';
+
+            return `<div class="${classes}">${day}</div>`;
+          }).join('');
+        }).join('');
+
+        container.innerHTML = `
+          <div class="calendar-header">
+            <div class="calendar-month">${calendar.monthName || currentYear + '年' + currentMonth + '月'}</div>
+            <div class="calendar-nav">
+              <button class="calendar-nav-btn" onclick="prevMonth()">◀</button>
+              <button class="calendar-nav-btn" onclick="nextMonth()">▶</button>
+            </div>
+          </div>
+          <div class="calendar-weekdays">${weekdaysHtml}</div>
+          <div class="calendar-days">${weeksHtml}</div>
+        `;
+      } catch (error) {
+        console.error('[Widget] Calendar load failed:', error);
+        container.innerHTML = '<div class="loading">加载失败</div>';
+      }
+    }
+
+    // 上个月
+    function prevMonth() {
+      currentMonth--;
+      if (currentMonth < 1) {
+        currentMonth = 12;
+        currentYear--;
+      }
+      loadCalendar();
+    }
+
+    // 下个月
+    function nextMonth() {
+      currentMonth++;
+      if (currentMonth > 12) {
+        currentMonth = 1;
+        currentYear++;
+      }
+      loadCalendar();
+    }
+
+    // 加载待办
+    async function loadTodo() {
+      const container = document.getElementById('todoContent');
+
+      try {
+        const todo = await window.PetWidget.getTodo();
+
+        container.innerHTML = `
+          <div class="todo-stats">
+            <div class="todo-stat" onclick="openTasks()">
+              <div class="todo-stat-value">${todo.todayCount || 0}</div>
+              <div class="todo-stat-label">今日任务</div>
+            </div>
+            <div class="todo-stat overdue" onclick="openTasks()">
+              <div class="todo-stat-value">${todo.overdueCount || 0}</div>
+              <div class="todo-stat-label">已逾期</div>
+            </div>
+            <div class="todo-stat" onclick="openTasks()">
+              <div class="todo-stat-value">${todo.pendingCount || 0}</div>
+              <div class="todo-stat-label">全部待办</div>
+            </div>
+          </div>
+        `;
+      } catch (error) {
+        console.error('[Widget] Todo load failed:', error);
+        container.innerHTML = '<div class="loading">加载失败</div>';
+      }
+    }
+
+    // 刷新待办
+    async function refreshTodo() {
+      showMessage('刷新中...');
+      await loadTodo();
+      showMessage('待办已更新');
+    }
+
+    // 打开任务管理
+    function openTasks() {
+      if (window.openTasks) {
+        window.openTasks();
+      }
+    }
+
+    // 显示消息
+    function showMessage(text, isError = false) {
+      const messageEl = document.getElementById('message');
+      messageEl.textContent = text;
+      messageEl.classList.toggle('error', isError);
+      messageEl.classList.add('show');
+
+      setTimeout(() => {
+        messageEl.classList.remove('show');
+      }, 2000);
+    }
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', async () => {
+      await Promise.all([
+        loadWeather(),
+        loadCalendar(),
+        loadTodo()
+      ]);
+    });
+  </script>
+</body>
+</html>

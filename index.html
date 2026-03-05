@@ -20,13 +20,6 @@
       <div class="pet-emoji" id="petEmoji" style="display: none;">🐱</div>
     </div>
 
-    <!-- 快捷菜单 -->
-    <div class="quick-menu" id="quickMenu" style="display: none;">
-      <div class="quick-menu-item" onclick="openChat()" title="对话">💬</div>
-      <div class="quick-menu-item" onclick="openSettings()" title="设置">⚙️</div>
-      <div class="quick-menu-item" onclick="openHistory()" title="历史">📜</div>
-      <div class="quick-menu-item" onclick="closeQuickMenu()" title="关闭">❌</div>
-    </div>
   </div>
 
   <!-- Lottie 动画库 -->
@@ -35,75 +28,14 @@
   <script src="src/storage.js"></script>
   <script src="src/prompts.js"></script>
   <script src="src/api.js"></script>
-  <script src="fix-memory.js"></script>
   <script src="src/reminder-extractor.js"></script>
   <script src="src/skin-registry.js"></script>
   <script src="src/animation-config.js"></script>
   <script src="src/lottie-controller.js"></script>
   <script src="src/animations.js"></script>
   <script src="src/rotary-menu.js"></script>
+  <script src="src/file-drop-handler.js"></script>
   <script src="src/app-vanilla.js"></script>
 
-  <!-- 工具系统测试脚本 - 按 Ctrl+Shift+I 打开控制台查看 -->
-  <script>
-    // 延迟执行，确保所有API都已加载
-    setTimeout(async () => {
-      console.log('\n[TOOL] 工具系统测试开始\n');
-      console.log('='.repeat(60));
-
-      // 测试1: 检查API
-      console.log('[TEST] 测试1: 检查 PetTools API');
-      if (typeof window.PetTools === 'undefined') {
-        console.error('[ERROR] PetTools API 未找到！');
-        console.log('请检查：');
-        console.log('1. 应用是否完全启动？');
-        console.log('2. preload.js 是否正确配置？');
-        console.log('3. 主进程工具系统是否初始化成功？');
-      } else {
-        console.log('[OK] PetTools API 已加载');
-
-        // 测试2: 列出工具
-        console.log('\n[TEST] 测试2: 列出所有工具');
-        try {
-          const tools = await window.PetTools.list();
-          console.log(`[OK] 找到 ${tools.length} 个工具:`);
-          tools.forEach(tool => {
-            const safe = tool.safe ? '[SAFE]' : '[WARN]';
-            const approval = tool.requiresApproval ? '[LOCK]' : '[OPEN]';
-            console.log(`  ${safe} ${approval} ${tool.name} - ${tool.description}`);
-          });
-
-          // 测试3: 执行工具
-          console.log('\n[TEST] 测试3: 执行 system.info');
-          const result = await window.PetTools.execute('system.info', {
-            info_type: 'all'
-          });
-          if (result.success) {
-            console.log('[OK] 执行成功！');
-            console.log(`  OS: ${result.result.os.platform} ${result.result.os.release}`);
-            console.log(`  CPU: ${result.result.cpu.cores} 核心`);
-            console.log(`  内存: ${result.result.memory.total}`);
-          } else {
-            console.error('[ERROR] 执行失败:', result.error);
-          }
-
-          // 测试4: 查看历史
-          console.log('\n[TEST] 测试4: 查看执行历史');
-          const history = await window.PetTools.getHistory({ limit: 5 });
-          console.log(`[OK] 找到 ${history.length} 条记录`);
-
-          console.log('\n' + '='.repeat(60));
-          console.log('[SUCCESS] 所有测试完成！工具系统工作正常！');
-          console.log('\n[TIP] 你可以继续测试：');
-          console.log('- window.PetTools.list()');
-          console.log('- window.PetTools.execute("system.uptime", {})');
-          console.log('- window.PetTools.getHistory()');
-        } catch (error) {
-          console.error('[ERROR] 测试失败:', error.message);
-        }
-      }
-      console.log('');
-    }, 2000);
-  </script>
 </body>
 </html>

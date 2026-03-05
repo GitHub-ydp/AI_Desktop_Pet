@@ -3,6 +3,7 @@
 // CommonJS 版本 - 用于主进程
 
 const { MEMORY_CONFIG } = require('./config');
+const StrengthCalculator = require('./strength');
 
 class MemorySearchEngine {
   constructor(options = {}) {
@@ -160,23 +161,49 @@ class MemorySearchEngine {
       const kw = keywordResults.get(conv.id) || { keywordScore: 0, temporalScore: 0, importanceScore: 0 };
       const vs = vectorResults.get(conv.id) || { vectorScore: 0 };
 
-      let finalScore;
+      let finalScore = 0;
+
+      // 查询该对话的 memory_chunk，获取 FSRS 强度指标
+      // strength = R × emotionalWeight（归一化到0-1），直接替代 temporalScore
+      // 避免时间因素双重计算：strength 已内含时间衰减+强化次数+情感权重
+      let R = 1.0;
+      let emotionalWeight = 1.0;
+      let strengthScore = 1.0;  // 替代 temporalScore 的综合强度分
+      try {
+        const chunk = this.storage?.db?.prepare(`
+          SELECT stability, last_triggered_at, emotional_weight
+          FROM memory_chunks
+          WHERE conversation_id = ? LIMIT 1
+        `).get(conv.id);
+
+        if (chunk) {
+          // 实时计算当前的可提取性 R（FSRS 幂函数）
+          R = StrengthCalculator.calcRetrievability(
+            chunk.stability || 24,
+            chunk.last_triggered_at,
+            now
+          );
+          emotionalWeight = chunk.emotional_weight || 1.0;
+          // 综合强度分：归一化到 0-1，替代 temporalScore
+          strengthScore = Math.min(1.0, R * emotionalWeight);
+        }
+      } catch (error) {
+        // 查询失败时使用默认值，不中断搜索
+      }
+
+      // 重新计算 finalScore：strength 替代 temporal（避免时间双重计算）
       if (hasVector) {
-        // 有向量搜索时用完整公式
         finalScore =
           weights.keyword * kw.keywordScore +
           weights.vector * vs.vectorScore +
-          weights.temporal * kw.temporalScore +
+          weights.temporal * strengthScore +      // strength 替代 temporal
           weights.importance * kw.importanceScore;
       } else {
-        // 无向量时回退到旧逻辑（关键词为主）
-        finalScore = kw.keywordScore * 0.5 + kw.temporalScore * 0.3 + kw.importanceScore * 0.2;
+        finalScore = kw.keywordScore * 0.5 + strengthScore * 0.3 + kw.importanceScore * 0.2;
       }
 
-      // 用户消息加权
+      // 用户消息加权（重新应用，因为 finalScore 被重算了）
       if (conv.role === 'user') finalScore += 0.05;
-
-      // 心情相似度
       if (conv.mood !== undefined && mood !== undefined) {
         if (Math.abs(conv.mood - mood) < 20) finalScore += 0.05;
       }
@@ -191,13 +218,29 @@ class MemorySearchEngine {
         personality: conv.personality,
         mood: conv.mood,
         score: finalScore,
-        type: hasVector && vs.vectorScore > 0 ? 'hybrid' : 'keyword'
+        type: hasVector && vs.vectorScore > 0 ? 'hybrid' : 'keyword',
+        // 传递 FSRS 信息供后续使用
+        strength: R,
+        emotionalWeight: emotionalWeight
       };
     });
 
     // 过滤并排序
     let filteredResults = mergedResults
-      .filter(r => r.score >= minScore)
+      .filter(r => {
+        // 基础分数过滤
+        if (r.score < minScore) return false;
+
+        // 新增：休眠记忆过滤（R < 0.1 的记忆不参与搜索）
+        // 这是 FSRS 的"软删除"机制
+        const config = MEMORY_CONFIG.memoryStrength?.dormant || {};
+        const softThreshold = config.softThreshold || 0.1;
+        if (r.strength !== undefined && r.strength < softThreshold) {
+          return false;
+        }
+
+        return true;
+      })
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
