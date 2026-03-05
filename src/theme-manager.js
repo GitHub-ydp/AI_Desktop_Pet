@@ -1,8 +1,8 @@
 // 主题管理器 - 管理应用的视觉主题
-// 支持赛博朋克和懒猫橘两种主题
+// 支持赛博朋克、懒猫橘、小清新三种主题
 
 (function () {
-  // 两套主题定义
+  // 主题定义
   var THEMES = {
     cyberpunk: {
       name: '赛博朋克',
@@ -76,6 +76,80 @@
         '--danger-border': 'rgba(255, 107, 53, 0.5)',
         '--scrollbar': 'rgba(255, 175, 70, 0.35)',
         '--scrollbar-hover': 'rgba(255, 175, 70, 0.6)',
+      }
+    },
+    freshSpring: {
+      name: '小清新',
+      icon: '🍃',
+      desc: '浅色清爽，薄荷蓝绿',
+      vars: {
+        '--bg': '#eef8f6',
+        '--bg-surface': 'rgba(245, 253, 251, 0.98)',
+        '--bg-card': 'rgba(220, 242, 236, 0.68)',
+        '--border': 'rgba(90, 178, 162, 0.30)',
+        '--border-bright': 'rgba(90, 178, 162, 0.65)',
+        '--neon-cyan': '#4aaea0',
+        '--neon-magenta': '#6fa7d8',
+        '--text': '#25454a',
+        '--text-muted': 'rgba(54, 104, 110, 0.58)',
+        '--glow-sm': '0 0 8px rgba(90, 178, 162, 0.30)',
+        '--glow-md': '0 0 16px rgba(90, 178, 162, 0.24), 0 0 4px rgba(90, 178, 162, 0.45)',
+        '--radius': '8px',
+        '--header-bg': 'rgba(230, 247, 244, 0.98)',
+        '--input-area-bg': 'rgba(236, 250, 247, 0.98)',
+        '--input-field-bg': 'rgba(255, 255, 255, 0.88)',
+        '--personality-bg': 'rgba(214, 239, 232, 0.58)',
+        '--confirm-bg': 'rgba(240, 252, 249, 0.98)',
+        '--bubble-bg': 'rgba(232, 249, 245, 0.96)',
+        '--bubble-border': 'rgba(90, 178, 162, 0.35)',
+        '--bubble-shadow': 'rgba(90, 178, 162, 0.16)',
+        '--close-icon': 'rgba(66, 132, 124, 0.65)',
+        '--accent-bg-faint': 'rgba(90, 178, 162, 0.08)',
+        '--accent-bg-dim': 'rgba(90, 178, 162, 0.12)',
+        '--accent-bg-checked': 'rgba(90, 178, 162, 0.28)',
+        '--accent-hover-bg': 'rgba(90, 178, 162, 0.16)',
+        '--danger-glow': '0 0 8px rgba(111, 167, 216, 0.30)',
+        '--danger-hover-bg': 'rgba(111, 167, 216, 0.10)',
+        '--danger-border': 'rgba(111, 167, 216, 0.42)',
+        '--scrollbar': 'rgba(90, 178, 162, 0.35)',
+        '--scrollbar-hover': 'rgba(90, 178, 162, 0.58)',
+      }
+    },
+    milkBlush: {
+      name: '奶白淡粉',
+      icon: '🌸',
+      desc: '奶白柔和，浅粉点缀',
+      vars: {
+        '--bg': '#fffaf8',
+        '--bg-surface': 'rgba(255, 252, 250, 0.98)',
+        '--bg-card': 'rgba(255, 238, 240, 0.62)',
+        '--border': 'rgba(231, 166, 183, 0.30)',
+        '--border-bright': 'rgba(231, 166, 183, 0.62)',
+        '--neon-cyan': '#d98ca8',
+        '--neon-magenta': '#e8a0b7',
+        '--text': '#5b3b49',
+        '--text-muted': 'rgba(120, 82, 96, 0.56)',
+        '--glow-sm': '0 0 8px rgba(231, 166, 183, 0.28)',
+        '--glow-md': '0 0 16px rgba(231, 166, 183, 0.22), 0 0 4px rgba(231, 166, 183, 0.40)',
+        '--radius': '8px',
+        '--header-bg': 'rgba(255, 245, 247, 0.98)',
+        '--input-area-bg': 'rgba(255, 248, 250, 0.98)',
+        '--input-field-bg': 'rgba(255, 255, 255, 0.92)',
+        '--personality-bg': 'rgba(255, 232, 238, 0.55)',
+        '--confirm-bg': 'rgba(255, 250, 251, 0.98)',
+        '--bubble-bg': 'rgba(255, 244, 247, 0.96)',
+        '--bubble-border': 'rgba(231, 166, 183, 0.35)',
+        '--bubble-shadow': 'rgba(231, 166, 183, 0.14)',
+        '--close-icon': 'rgba(153, 96, 117, 0.64)',
+        '--accent-bg-faint': 'rgba(231, 166, 183, 0.08)',
+        '--accent-bg-dim': 'rgba(231, 166, 183, 0.12)',
+        '--accent-bg-checked': 'rgba(231, 166, 183, 0.26)',
+        '--accent-hover-bg': 'rgba(231, 166, 183, 0.16)',
+        '--danger-glow': '0 0 8px rgba(217, 140, 168, 0.30)',
+        '--danger-hover-bg': 'rgba(217, 140, 168, 0.10)',
+        '--danger-border': 'rgba(217, 140, 168, 0.42)',
+        '--scrollbar': 'rgba(231, 166, 183, 0.34)',
+        '--scrollbar-hover': 'rgba(231, 166, 183, 0.56)',
       }
     }
   };

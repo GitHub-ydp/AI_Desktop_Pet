@@ -173,6 +173,14 @@
       background: linear-gradient(135deg, #1a0e05 0%, #2e1808 100%);
     }
 
+    .preview-freshSpring {
+      background: linear-gradient(135deg, #eef8f6 0%, #dff3ee 100%);
+    }
+
+    .preview-milkBlush {
+      background: linear-gradient(135deg, #fffaf8 0%, #ffeef2 100%);
+    }
+
     .preview-bar {
       display: flex;
       gap: 5px;
@@ -203,6 +211,16 @@
     .preview-lazyCat .preview-line { background: rgba(255, 175, 70, 0.25); }
     .preview-lazyCat .preview-text { font-size: 11px; font-weight: 700; color: #ffb347; text-shadow: 0 0 8px rgba(255, 180, 70, 0.6); }
     .preview-lazyCat .preview-sub  { font-size: 9px; color: rgba(255, 205, 155, 0.55); }
+
+    .preview-freshSpring .preview-dot { background: #4aaea0; box-shadow: 0 0 5px rgba(74, 174, 160, 0.65); }
+    .preview-freshSpring .preview-line { background: rgba(74, 174, 160, 0.3); }
+    .preview-freshSpring .preview-text { font-size: 11px; font-weight: 700; color: #2f7470; text-shadow: 0 0 6px rgba(74, 174, 160, 0.35); }
+    .preview-freshSpring .preview-sub  { font-size: 9px; color: rgba(53, 114, 122, 0.62); }
+
+    .preview-milkBlush .preview-dot { background: #d98ca8; box-shadow: 0 0 5px rgba(217, 140, 168, 0.6); }
+    .preview-milkBlush .preview-line { background: rgba(231, 166, 183, 0.32); }
+    .preview-milkBlush .preview-text { font-size: 11px; font-weight: 700; color: #97576f; text-shadow: 0 0 6px rgba(217, 140, 168, 0.3); }
+    .preview-milkBlush .preview-sub  { font-size: 9px; color: rgba(120, 82, 96, 0.62); }
 
     .theme-info {
       padding: 10px 14px;
@@ -332,6 +350,52 @@
           <div>
             <div class="theme-name">懒猫橘</div>
             <div class="theme-desc">暖橘 + 橙红，与宠物相配</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 小清新 -->
+      <div class="theme-card" id="card-freshSpring" data-theme="freshSpring">
+        <span class="active-badge">✓ 当前主题</span>
+        <div class="theme-preview preview-freshSpring">
+          <div class="preview-bar">
+            <div class="preview-dot"></div>
+            <div class="preview-line"></div>
+            <div class="preview-dot" style="background:#6fa7d8;box-shadow:0 0 5px rgba(111,167,216,.55)"></div>
+          </div>
+          <div>
+            <div class="preview-text">🍃 小清新</div>
+            <div class="preview-sub">薄荷 · 浅青 · 轻盈</div>
+          </div>
+        </div>
+        <div class="theme-info">
+          <div class="theme-icon">🍃</div>
+          <div>
+            <div class="theme-name">小清新</div>
+            <div class="theme-desc">浅色清爽，薄荷蓝绿系列</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 奶白淡粉 -->
+      <div class="theme-card" id="card-milkBlush" data-theme="milkBlush">
+        <span class="active-badge">✓ 当前主题</span>
+        <div class="theme-preview preview-milkBlush">
+          <div class="preview-bar">
+            <div class="preview-dot"></div>
+            <div class="preview-line"></div>
+            <div class="preview-dot" style="background:#e8a0b7;box-shadow:0 0 5px rgba(232,160,183,.55)"></div>
+          </div>
+          <div>
+            <div class="preview-text">🌸 奶白淡粉</div>
+            <div class="preview-sub">奶白 · 柔粉 · 温柔</div>
+          </div>
+        </div>
+        <div class="theme-info">
+          <div class="theme-icon">🌸</div>
+          <div>
+            <div class="theme-name">奶白淡粉</div>
+            <div class="theme-desc">奶白底色，淡粉点缀更柔和</div>
           </div>
         </div>
       </div>

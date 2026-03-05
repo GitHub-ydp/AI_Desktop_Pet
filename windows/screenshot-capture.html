@@ -30,17 +30,17 @@
       --scrollbar-hover: rgba(0, 255, 240, 0.6);
 
       /* 截图专用扩展变量 */
-      --screenshot-overlay: rgba(0, 0, 0, 0.55);
+      --screenshot-overlay: rgba(0, 0, 0, 0.36);
       --screenshot-selection-border: var(--neon-cyan);
       --screenshot-handle-size: 8px;
       --screenshot-handle-fill: var(--neon-cyan);
-      --screenshot-handle-border: #fff;
-      --screenshot-toolbar-bg: rgba(2, 8, 16, 0.92);
+      --screenshot-handle-border: color-mix(in srgb, var(--text) 85%, #fff 15%);
+      --screenshot-toolbar-bg: var(--bg-surface);
       --screenshot-toolbar-border: var(--border);
       --screenshot-toolbar-radius: 10px;
       --screenshot-tool-size: 32px;
       --screenshot-magnifier-border: var(--neon-cyan);
-      --screenshot-magnifier-bg: rgba(0, 0, 0, 0.85);
+      --screenshot-magnifier-bg: color-mix(in srgb, var(--bg) 85%, transparent);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -82,10 +82,11 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: var(--screenshot-overlay);
+      background: transparent;
       pointer-events: none;
       z-index: 1;
       transition: background 0.15s ease;
+      display: none;
     }
 
     /* ===== 选区框 ===== */
@@ -1134,7 +1135,7 @@
 
     <!-- 颜色选择器 -->
     <div class="color-picker-btn" id="colorPicker">
-      <div class="color-preview" id="colorPreview" style="background:#ff2d78;"></div>
+      <div class="color-preview" id="colorPreview"></div>
       <div class="dropdown-arrow"></div>
       <div class="color-palette" id="colorPalette"></div>
     </div>
@@ -1218,9 +1219,19 @@
     // =============================================
 
     // ===== 常量 =====
+    const getThemeColor = (name, fallback) => {
+      const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return value || fallback;
+    };
     const ANNOTATION_COLORS = [
-      '#ff2d78', '#00fff0', '#ffb347', '#4ade80',
-      '#60a5fa', '#fbbf24', '#ffffff', '#000000'
+      getThemeColor('--neon-magenta', '#ff2d78'),
+      getThemeColor('--neon-cyan', '#00fff0'),
+      getThemeColor('--text', '#cff0ff'),
+      '#4ade80',
+      '#60a5fa',
+      '#fbbf24',
+      '#ffffff',
+      '#000000'
     ];
     const LINE_WIDTHS = [2, 4, 6, 8];
     const MIN_SELECTION_SIZE = 20;
@@ -1273,6 +1284,7 @@
       dragStart: { x: 0, y: 0 },
       dragType: null, // 'create' | 'move' | 'resize-nw' | 'resize-n' | ...
       dragSelStart: null, // 拖拽开始时选区位置
+      toolbarHiddenDuringAdjust: false,
       // 全屏截图 dataURL
       screenCapture: null,
       // 全屏截图的 Image 对象
@@ -1737,18 +1749,47 @@
       try {
         // 获取全屏截图作为背景
         const captureData = await window.ScreenshotBridge.getScreenCapture();
-        if (captureData && captureData.dataURL) {
+        if (!captureData || captureData.success === false) {
+          throw new Error(captureData && captureData.error ? captureData.error : 'No capture data');
+        }
+
+        // 设置 bgCanvas 尺寸为窗口大小
+        bgCanvas.width = window.innerWidth;
+        bgCanvas.height = window.innerHeight;
+
+        // 兼容旧格式：直接返回 dataURL
+        if (captureData.dataURL) {
           state.screenCapture = captureData.dataURL;
           const img = new Image();
           img.onload = () => {
             state.screenImage = img;
-            // 设置 bgCanvas 尺寸为窗口大小
-            bgCanvas.width = window.innerWidth;
-            bgCanvas.height = window.innerHeight;
-            // 绘制截图到 bgCanvas
             bgCtx.drawImage(img, 0, 0, bgCanvas.width, bgCanvas.height);
           };
           img.src = captureData.dataURL;
+          return;
+        }
+
+        // 新格式：返回 displays + virtualBounds
+        if (Array.isArray(captureData.displays) && captureData.displays.length > 0) {
+          const vb = captureData.virtualBounds || { x: 0, y: 0 };
+          const drawTasks = captureData.displays
+            .filter(d => d && d.dataURL && d.bounds)
+            .map(d => new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                const dx = Math.round(d.bounds.x - vb.x);
+                const dy = Math.round(d.bounds.y - vb.y);
+                const dw = Math.round(d.bounds.width);
+                const dh = Math.round(d.bounds.height);
+                bgCtx.drawImage(img, dx, dy, dw, dh);
+                resolve();
+              };
+              img.onerror = () => resolve();
+              img.src = d.dataURL;
+            }));
+          await Promise.all(drawTasks);
+        } else {
+          throw new Error('Unsupported screen capture payload');
         }
       } catch (err) {
         console.error('[截图] 获取屏幕截图失败:', err);
@@ -1822,12 +1863,18 @@
           state.dragType = 'resize-' + handleDir;
           state.dragStart = { x, y };
           state.dragSelStart = { ...state.selection };
+          // 调整大小时先隐藏操作栏，避免遮挡选区
+          actionBar.style.display = 'none';
+          state.toolbarHiddenDuringAdjust = true;
         } else if (isInsideSelection(x, y)) {
           // 移动选区
           state.isDragging = true;
           state.dragType = 'move';
           state.dragStart = { x, y };
           state.dragSelStart = { ...state.selection };
+          // 移动选区时同样隐藏操作栏，防止遮挡
+          actionBar.style.display = 'none';
+          state.toolbarHiddenDuringAdjust = true;
         } else {
           // 点击选区外，重新开始
           resetToSelecting();
@@ -1912,6 +1959,10 @@
       } else if (state.dragType === 'move' || state.dragType.startsWith('resize-')) {
         state.isDragging = false;
         updateSizeInfo();
+        if (state.phase === 'adjusting' && state.toolbarHiddenDuringAdjust) {
+          showActionBar();
+          state.toolbarHiddenDuringAdjust = false;
+        }
       } else if (state.dragType === 'draw') {
         const localX = x - state.selection.x;
         const localY = y - state.selection.y;
@@ -2093,9 +2144,9 @@
       magnifier.style.display = 'none';
       magnifierInfo.style.display = 'none';
       updateSizeInfo();
-      // 显示操作按钮栏（选区完成后直接提供操作，也可进入编辑）
+      // 调整阶段仅显示操作栏，避免出现两个关闭按钮
       showActionBar();
-      showEditToolbar();
+      editToolbar.style.display = 'none';
     }
 
     function enterEditPhase() {
@@ -2345,10 +2396,12 @@
       try {
         const composite = annotationMgr.composite();
         const dataURL = composite.toDataURL('image/png');
-        const result = await window.ScreenshotBridge.saveQuick(dataURL);
+        const result = await window.ScreenshotBridge.saveAs(dataURL);
         if (result && result.success) {
           showToast('已保存到 ' + result.filePath, 'success');
           setTimeout(() => closeScreenshot(), 800);
+        } else if (result && result.canceled) {
+          showToast('已取消保存', 'info');
         } else {
           showToast('保存失败', 'error');
         }

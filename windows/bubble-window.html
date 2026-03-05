@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -10,8 +10,6 @@
 
     :root {
       --bubble-bg: rgba(2, 12, 28, 0.96);
-      --bubble-border: rgba(0, 255, 240, 0.45);
-      --bubble-shadow: rgba(0, 255, 240, 0.2);
       --text: #cff0ff;
     }
 
@@ -31,11 +29,12 @@
       padding: 9px 13px;
       border-radius: 10px;
       background: var(--bubble-bg);
-      border: 1px solid var(--bubble-border);
+      border: none;
       color: var(--text);
       font-size: 12px;
       line-height: 1.45;
-      box-shadow: 0 0 14px var(--bubble-shadow), 0 6px 16px rgba(0, 0, 0, 0.5);
+      word-break: break-word;
+      box-shadow: none;
       opacity: 0;
       transform: translateY(6px);
       transition: opacity 0.2s ease, transform 0.2s ease;
@@ -46,7 +45,6 @@
       transform: translateY(0);
     }
 
-    /* 下方指针箭头 - 居中指向宠物头顶 */
     .bubble::after {
       content: '';
       position: absolute;
@@ -57,22 +55,11 @@
       height: 0;
       border-left: 7px solid transparent;
       border-right: 7px solid transparent;
-      border-top: 7px solid var(--bubble-border);
+      border-top: 7px solid var(--bubble-bg);
     }
 
-    /* 内层三角覆盖，形成填充效果 */
     .bubble::before {
-      content: '';
-      position: absolute;
-      left: 50%;
-      transform: translateX(-50%);
-      bottom: -5px;
-      width: 0;
-      height: 0;
-      border-left: 6px solid transparent;
-      border-right: 6px solid transparent;
-      border-top: 6px solid var(--bubble-bg);
-      z-index: 1;
+      content: none;
     }
   </style>
 </head>

@@ -380,25 +380,16 @@ class RotaryMenuController {
 
     let statesToShow = [];
 
-    // 尝试从 SkinRegistry 获取该皮肤的动画配置（不检查运行时 hasLottie 标志）
-    if (window.SkinRegistry) {
-      const skin = window.SkinRegistry.getSkinByEmoji(petEmoji);
-
-      if (skin && skin.animations && Object.keys(skin.animations).length > 0) {
-        // 收集有独立动画文件的状态（按文件名去重）
-        const seenFiles = new Set();
-
-        for (const [state, config] of Object.entries(skin.animations)) {
-          const fileKey = config.files
-            ? config.files.slice().sort().join(',')
-            : (config.file || '');
-
-          if (!fileKey || seenFiles.has(fileKey)) continue;
-          seenFiles.add(fileKey);
-          statesToShow.push(state);
-        }
-
-        console.log(`[RotaryMenu] 可用 Lottie 动画状态: ${statesToShow.join(', ')}`);
+    // 优先按目录 JSON 文件名动态生成状态（名称与数量完全同步）
+    if (window.electron && typeof window.electron.listLottieJsonFiles === 'function') {
+      const files = window.electron.listLottieJsonFiles('cat') || [];
+      statesToShow = files
+        .filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.json'))
+        .map(name => name.replace(/\.json$/i, '').trim())
+        .filter(Boolean);
+      statesToShow = Array.from(new Set(statesToShow));
+      if (statesToShow.length > 0) {
+        console.log(`[RotaryMenu] 按目录动态加载状态: ${statesToShow.join(', ')}`);
       }
     }
 
@@ -408,8 +399,6 @@ class RotaryMenuController {
       statesToShow = ['idle', 'happy', 'sleeping', 'thinking', 'sad'];
     }
 
-    // 最多显示 5 个状态 + 1 个返回
-    statesToShow = statesToShow.slice(0, 5);
     const totalItems = statesToShow.length + 1;
     const angleStep = 360 / totalItems;
 

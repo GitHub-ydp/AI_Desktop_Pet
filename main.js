@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen } = require('electron');
 const path = require('path');
+const fsSync = require('fs');
 const MemoryMainProcess = require('./main-process/memory');
 const { ScreenshotManager } = require('./main-process/screenshot');
 const WorkflowManager = require('./main-process/workflow-manager');
@@ -25,6 +26,8 @@ let childWindows = new Map(); // 管理所有子窗口
 let lastSmallBounds = null; // 记录小窗口位置，避免缩放漂移
 let menuWindow = null;
 let bubbleWindow = null;
+let bubbleWindowReady = false;
+let pendingBubblePayload = null;
 const pendingChatRequests = new Map();
 
 // 窗口尺寸常量
@@ -34,6 +37,43 @@ const WINDOW_SIZES = {
 };
 const MENU_WINDOW_SIZE = { width: 340, height: 340 };
 const BUBBLE_WINDOW_SIZE = { width: 260, height: 110 };
+const DEFAULT_BUBBLE_OFFSET = { x: 0, y: 8 };
+let currentPetAnimationState = 'idle';
+let currentPetVisualState = null;
+let bubbleOffsetByState = {
+  idle: { ...DEFAULT_BUBBLE_OFFSET }
+};
+
+function normalizeBubbleOffsetByState(input) {
+  const fallback = { idle: { ...DEFAULT_BUBBLE_OFFSET } };
+  if (!input || typeof input !== 'object') return fallback;
+
+  const normalized = {};
+  for (const [state, offset] of Object.entries(input)) {
+    if (!offset || typeof offset !== 'object') continue;
+    const x = Number(offset.x);
+    const y = Number(offset.y);
+    normalized[state] = {
+      x: Number.isFinite(x) ? Math.max(-200, Math.min(200, Math.round(x))) : DEFAULT_BUBBLE_OFFSET.x,
+      y: Number.isFinite(y) ? Math.max(-200, Math.min(200, Math.round(y))) : DEFAULT_BUBBLE_OFFSET.y
+    };
+  }
+
+  if (!normalized.idle) {
+    normalized.idle = { ...DEFAULT_BUBBLE_OFFSET };
+  }
+  return normalized;
+}
+
+function getBubbleOffsetForState(state) {
+  if (currentPetVisualState && bubbleOffsetByState[currentPetVisualState]) {
+    return bubbleOffsetByState[currentPetVisualState];
+  }
+  if (state && bubbleOffsetByState[state]) {
+    return bubbleOffsetByState[state];
+  }
+  return bubbleOffsetByState.idle || DEFAULT_BUBBLE_OFFSET;
+}
 
 // 创建主窗口（只显示宠物本体）
 function createWindow() {
@@ -152,10 +192,15 @@ function getBubbleWindowBounds() {
     return { x: 0, y: 0, width: BUBBLE_WINDOW_SIZE.width, height: BUBBLE_WINDOW_SIZE.height };
   }
   const bounds = mainWindow.getBounds();
-  return getBubbleWindowBoundsFromMain(bounds, BUBBLE_WINDOW_SIZE, { x: 0, y: 8 });
+  return getBubbleWindowBoundsFromMain(
+    bounds,
+    BUBBLE_WINDOW_SIZE,
+    getBubbleOffsetForState(currentPetAnimationState)
+  );
 }
 
 function createBubbleWindow() {
+  bubbleWindowReady = false;
   bubbleWindow = new BrowserWindow({
     width: BUBBLE_WINDOW_SIZE.width,
     height: BUBBLE_WINDOW_SIZE.height,
@@ -177,8 +222,18 @@ function createBubbleWindow() {
   bubbleWindow.loadFile('windows/bubble-window.html');
   bubbleWindow.setIgnoreMouseEvents(true, { forward: true });
 
+  bubbleWindow.webContents.on('did-finish-load', () => {
+    bubbleWindowReady = true;
+    if (pendingBubblePayload && bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.webContents.send('bubble:show', pendingBubblePayload);
+      pendingBubblePayload = null;
+    }
+  });
+
   bubbleWindow.on('closed', () => {
     bubbleWindow = null;
+    bubbleWindowReady = false;
+    pendingBubblePayload = null;
   });
 }
 
@@ -189,6 +244,10 @@ function showBubbleWindow(message, duration) {
   const bounds = getBubbleWindowBounds();
   bubbleWindow.setBounds(bounds, false);
   bubbleWindow.showInactive();
+  if (!bubbleWindowReady || bubbleWindow.webContents.isLoading()) {
+    pendingBubblePayload = { message, duration };
+    return;
+  }
   bubbleWindow.webContents.send('bubble:show', { message, duration });
 }
 
@@ -678,6 +737,43 @@ ipcMain.handle('menu:is-open', () => {
   return !!(menuWindow && !menuWindow.isDestroyed() && menuWindow.isVisible());
 });
 
+// Lottie 动画文件列表（由主进程读取，preload 只做桥接）
+ipcMain.handle('lottie:list-json-files', (event, folder = 'cat') => {
+  try {
+    const safeFolder = String(folder || 'cat').replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeFolder) return [];
+    const target = path.join(__dirname, 'lottie', safeFolder);
+    if (!fsSync.existsSync(target)) return [];
+    return fsSync.readdirSync(target)
+      .filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.json'))
+      .sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  } catch (error) {
+    console.warn('[Main] list lottie files failed:', error.message);
+    return [];
+  }
+});
+
+ipcMain.on('lottie:list-json-files-sync', (event, folder = 'cat') => {
+  try {
+    const safeFolder = String(folder || 'cat').replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeFolder) {
+      event.returnValue = [];
+      return;
+    }
+    const target = path.join(__dirname, 'lottie', safeFolder);
+    if (!fsSync.existsSync(target)) {
+      event.returnValue = [];
+      return;
+    }
+    event.returnValue = fsSync.readdirSync(target)
+      .filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.json'))
+      .sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  } catch (error) {
+    console.warn('[Main] list lottie files sync failed:', error.message);
+    event.returnValue = [];
+  }
+});
+
 // 气泡窗口控制
 ipcMain.handle('bubble:show', (event, message, duration) => {
   showBubbleWindow(message, duration);
@@ -714,6 +810,23 @@ ipcMain.on('chat:response', (event, requestId, payload) => {
 
 // 设置窗口通知 -> 主窗口
 ipcMain.on('settings:change', (event, payload) => {
+  if (payload && payload.type === 'bubble-offset-update') {
+    bubbleOffsetByState = normalizeBubbleOffsetByState(payload.offsets);
+    if (payload.state && typeof payload.state === 'string') {
+      currentPetAnimationState = payload.state;
+    }
+    if (bubbleWindow && !bubbleWindow.isDestroyed() && bubbleWindow.isVisible()) {
+      bubbleWindow.setBounds(getBubbleWindowBounds(), false);
+    }
+  } else if (payload && payload.type === 'bubble-offset-preview') {
+    if (payload.state && typeof payload.state === 'string') {
+      currentPetAnimationState = payload.state;
+      if (bubbleWindow && !bubbleWindow.isDestroyed() && bubbleWindow.isVisible()) {
+        bubbleWindow.setBounds(getBubbleWindowBounds(), false);
+      }
+    }
+  }
+
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('settings:change', payload);
 });
@@ -722,6 +835,18 @@ ipcMain.on('settings:change', (event, payload) => {
 ipcMain.on('pet:state', (event, payload) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('pet:state', payload);
+});
+
+// 主窗口动画状态上报 -> 主进程（用于按状态调整气泡位置）
+ipcMain.on('pet:state-updated', (event, payload) => {
+  if (!payload || typeof payload.state !== 'string') return;
+  currentPetAnimationState = payload.state;
+  currentPetVisualState = (payload.visualState && typeof payload.visualState === 'string')
+    ? payload.visualState
+    : null;
+  if (bubbleWindow && !bubbleWindow.isDestroyed() && bubbleWindow.isVisible()) {
+    bubbleWindow.setBounds(getBubbleWindowBounds(), false);
+  }
 });
 
 // 创建子窗口
@@ -812,6 +937,7 @@ const fs = require('fs').promises;
 const crypto = require('crypto');
 
 let screenshotCaptureWindow = null;
+let cachedScreenCaptureData = null;
 const pinWindows = new Map(); // 管理贴图窗口，最多 5 个
 const MAX_PIN_WINDOWS = 5;
 
@@ -839,6 +965,14 @@ async function startScreenshotCapture() {
 
   // 等待窗口完全隐藏
   await new Promise(resolve => setTimeout(resolve, 150));
+
+  // 先抓屏并缓存，避免把截图覆盖窗口自身（提示文案/工具栏）截进去
+  try {
+    cachedScreenCaptureData = await getScreenCapture();
+  } catch (error) {
+    console.error('[Screenshot] Pre-capture failed:', error);
+    cachedScreenCaptureData = null;
+  }
 
   // 获取所有显示器信息
   const displays = screen.getAllDisplays();
@@ -883,6 +1017,7 @@ async function startScreenshotCapture() {
 
   screenshotCaptureWindow.on('closed', () => {
     screenshotCaptureWindow = null;
+    cachedScreenCaptureData = null;
   });
 }
 
@@ -986,6 +1121,7 @@ function closeScreenshotCapture() {
     screenshotCaptureWindow.close();
     screenshotCaptureWindow = null;
   }
+  cachedScreenCaptureData = null;
   showMainWindow();
 }
 
@@ -1075,7 +1211,7 @@ function registerScreenshotIPCHandlers(ipc) {
   // 获取全屏截图 dataURL + 显示器信息（覆盖窗口加载后调用）
   ipc.handle('screenshot:get-screen-capture', async () => {
     try {
-      const data = await getScreenCapture();
+      const data = cachedScreenCaptureData || await getScreenCapture();
       return { success: true, ...data };
     } catch (error) {
       console.error('[Screenshot] Failed to get screen capture:', error);

@@ -45,7 +45,18 @@ const MEMORY_CONFIG = {
     minScore: 0.6,
     vectorWeight: 0.7,
     textWeight: 0.3,
-    timeout: 5000
+    timeout: 5000,
+    // MMR 去重配置
+    mmr: {
+      enabled: true,
+      lambda: 0.5  // 0=纯多样性, 0.5=平衡, 1.0=纯相关性（退化为原排序）
+    },
+    // BM25 关键词搜索配置（纯 JS 实现，不依赖 FTS5）
+    bm25: {
+      enabled: true,
+      k1: 1.2,   // 词频饱和参数
+      b: 0.75    // 文档长度归一化参数
+    }
   },
 
   // 上下文配置

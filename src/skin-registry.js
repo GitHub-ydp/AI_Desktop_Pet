@@ -18,6 +18,134 @@ class SkinRegistry {
     console.log('[SkinRegistry] 皮肤注册中心已创建');
   }
 
+  _getCatLottieFiles() {
+    const fromBridge = window.electron && typeof window.electron.listLottieJsonFiles === 'function'
+      ? window.electron.listLottieJsonFiles('cat')
+      : [];
+
+    if (Array.isArray(fromBridge) && fromBridge.length > 0) {
+      return fromBridge;
+    }
+
+    // 降级默认列表（桥接不可用时）
+    return ['举腿.json', '举重.json', '猫坐在枕头上.json', '玩球.json', '睡觉.json', '骑扫帚.json'];
+  }
+
+  _buildCatAnimations() {
+    const files = this._getCatLottieFiles();
+    const uniqueFiles = Array.from(new Set(files.filter(Boolean)));
+    const hasFile = (name) => uniqueFiles.includes(name);
+    const pickDefault = (...candidates) => candidates.find(hasFile) || uniqueFiles[0] || '猫坐在枕头上.json';
+    const defaultIdleFile = pickDefault('猫坐在枕头上.json', '睡觉.json');
+
+    const animations = {};
+
+    // 1) 动态状态：按文件名生成，后续新增 JSON 自动同步到菜单
+    uniqueFiles.forEach((file) => {
+      const stateName = file.replace(/\.json$/i, '').trim();
+      if (!stateName) return;
+      animations[stateName] = {
+        file,
+        loop: true,
+        priority: 6,
+        transitions: ['idle'],
+        description: `动态状态: ${stateName}`
+      };
+    });
+
+    // 2) 兼容现有英文状态（供自动状态机和交互逻辑使用）
+    animations.idle = {
+      file: defaultIdleFile,
+      loop: true,
+      priority: 0,
+      transitions: ['happy', 'sleeping', 'playing', 'exercising'],
+      description: '待机状态，默认加载猫坐在枕头上'
+    };
+    animations.happy = {
+      file: pickDefault('玩球.json', defaultIdleFile),
+      loop: true,
+      priority: 10,
+      transitions: ['idle'],
+      triggers: ['mood_high', 'user_interaction', 'praise'],
+      minDisplayTime: 5000,
+      description: '开心状态'
+    };
+    animations.sleeping = {
+      file: pickDefault('睡觉.json', '猫坐在枕头上.json', defaultIdleFile),
+      loop: true,
+      priority: 5,
+      transitions: ['idle', 'happy'],
+      triggers: ['inactive_long', 'night_time', 'manual'],
+      wakeTriggers: ['user_interaction', 'loud_noise'],
+      description: '睡觉状态'
+    };
+    animations.exercising = {
+      files: uniqueFiles.filter(f => f === '举重.json' || f === '举腿.json'),
+      file: pickDefault('举重.json', '举腿.json', defaultIdleFile),
+      loop: false,
+      priority: 8,
+      transitions: ['idle', 'happy'],
+      triggers: ['mood_very_high', 'exercise_time', 'random'],
+      onComplete: 'idle',
+      description: '锻炼状态'
+    };
+    animations.playing = {
+      file: pickDefault('骑扫帚.json', defaultIdleFile),
+      loop: false,
+      priority: 7,
+      transitions: ['idle', 'happy'],
+      triggers: ['random_play', 'mood_high', 'user_interaction'],
+      onComplete: 'idle',
+      description: '玩耍状态'
+    };
+    animations.thinking = {
+      file: defaultIdleFile,
+      loop: true,
+      priority: 9,
+      transitions: ['idle', 'talking'],
+      triggers: ['question_asked', 'processing'],
+      minDisplayTime: 2000,
+      description: '思考状态'
+    };
+    animations.talking = {
+      file: defaultIdleFile,
+      loop: true,
+      priority: 10,
+      transitions: ['idle', 'thinking'],
+      triggers: ['conversation_active'],
+      description: '聊天状态'
+    };
+    animations.dragging = {
+      file: defaultIdleFile,
+      loop: true,
+      priority: 15,
+      transitions: ['idle'],
+      triggers: ['drag_start'],
+      description: '拖拽状态'
+    };
+    animations.clicked = {
+      file: pickDefault('玩球.json', defaultIdleFile),
+      loop: false,
+      priority: 12,
+      transitions: ['happy'],
+      triggers: ['click'],
+      onComplete: 'happy',
+      description: '点击状态'
+    };
+    animations.sad = {
+      file: defaultIdleFile,
+      loop: true,
+      priority: 8,
+      transitions: ['idle'],
+      triggers: ['mood_low', 'ignored_long'],
+      duration: 5000,
+      description: '伤心状态'
+    };
+
+    console.log(`[SkinRegistry] 猫皮肤动态加载 JSON: ${uniqueFiles.length} 个`, uniqueFiles);
+    return animations;
+  }
+
   // 注册默认皮肤配置
   _registerDefaults() {
     // 猫咪 - 有完整 Lottie 动画
@@ -27,94 +155,7 @@ class SkinRegistry {
       emoji: '🐱',
       folder: 'cat',
       hasLottie: true,
-      animations: {
-        idle: {
-          file: 'happy_cat.json',
-          loop: true,
-          priority: 0,
-          transitions: ['happy', 'sleeping', 'playing', 'exercising'],
-          description: '待机状态，宠物正在休息'
-        },
-        happy: {
-          file: '玩球.json',
-          loop: true,
-          priority: 10,
-          transitions: ['idle'],
-          triggers: ['mood_high', 'user_interaction', 'praise'],
-          minDisplayTime: 5000,     // 至少展示 5 秒，避免立即回弹
-          description: '宠物很开心，正在玩球'
-        },
-        sleeping: {
-          file: '猫坐在枕头上.json',
-          loop: true,
-          priority: 5,
-          transitions: ['idle', 'happy'],
-          triggers: ['inactive_long', 'night_time', 'manual'],
-          wakeTriggers: ['user_interaction', 'loud_noise'],
-          description: '宠物正在睡觉'
-        },
-        exercising: {
-          files: ['举重.json', '举腿.json'],
-          loop: false,
-          priority: 8,
-          transitions: ['idle', 'happy'],
-          triggers: ['mood_very_high', 'exercise_time', 'random'],
-          onComplete: 'idle',
-          description: '宠物正在锻炼'
-        },
-        playing: {
-          file: '骑扫帚.json',
-          loop: false,
-          priority: 7,
-          transitions: ['idle', 'happy'],
-          triggers: ['random_play', 'mood_high', 'user_interaction'],
-          onComplete: 'idle',
-          description: '宠物正在玩耍（骑扫帚）'
-        },
-        thinking: {
-          file: 'happy_cat.json',
-          loop: true,
-          priority: 9,
-          transitions: ['idle', 'talking'],
-          triggers: ['question_asked', 'processing'],
-          minDisplayTime: 2000,
-          description: '宠物正在思考'
-        },
-        talking: {
-          file: 'happy_cat.json',
-          loop: true,
-          priority: 10,
-          transitions: ['idle', 'thinking'],
-          triggers: ['conversation_active'],
-          description: '宠物正在和你聊天'
-        },
-        dragging: {
-          file: 'happy_cat.json',
-          loop: true,
-          priority: 15,
-          transitions: ['idle'],
-          triggers: ['drag_start'],
-          description: '宠物被拖拽中'
-        },
-        clicked: {
-          file: '玩球.json',
-          loop: false,
-          priority: 12,
-          transitions: ['happy'],
-          triggers: ['click'],
-          onComplete: 'happy',      // 点击后进入 happy 持续展示，而非直接回 idle
-          description: '宠物被点击了'
-        },
-        sad: {
-          file: 'happy_cat.json',
-          loop: true,
-          priority: 8,
-          transitions: ['idle'],
-          triggers: ['mood_low', 'ignored_long'],
-          duration: 5000,
-          description: '宠物很伤心'
-        }
-      }
+      animations: this._buildCatAnimations()
     });
 
     // 狗狗 - 暂无 Lottie 动画

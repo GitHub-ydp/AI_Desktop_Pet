@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const taskEventListenerMap = new WeakMap();
 
 // 暴露Electron API到渲染进程
 contextBridge.exposeInMainWorld('electron', {
@@ -7,6 +8,7 @@ contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAPIKey: () => ipcRenderer.invoke('get-api-key'),
   openDevTools: () => ipcRenderer.invoke('open-devtools'),
+  listLottieJsonFiles: (folder) => ipcRenderer.sendSync('lottie:list-json-files-sync', folder),
   onWindowMove: (callback) => {
     ipcRenderer.on('window-move', callback);
   },
@@ -42,6 +44,7 @@ contextBridge.exposeInMainWorld('electron', {
   },
   // 宠物状态切换通信（菜单窗口 -> 主窗口）
   sendPetState: (payload) => ipcRenderer.send('pet:state', payload),
+  sendPetStateUpdate: (payload) => ipcRenderer.send('pet:state-updated', payload),
   onPetState: (callback) => {
     ipcRenderer.on('pet:state', callback);
   },
@@ -350,12 +353,22 @@ contextBridge.exposeInMainWorld('PetTask', {
 
   // 监听任务事件
   onEvent: (callback) => {
-    ipcRenderer.on('task:event', (event, data) => callback(data));
+    if (typeof callback !== 'function') return;
+    const existing = taskEventListenerMap.get(callback);
+    if (existing) {
+      ipcRenderer.off('task:event', existing);
+    }
+    const wrapped = (event, data) => callback(data);
+    taskEventListenerMap.set(callback, wrapped);
+    ipcRenderer.on('task:event', wrapped);
   },
 
   // 移除监听
   offEvent: (callback) => {
-    ipcRenderer.off('task:event', callback);
+    const wrapped = taskEventListenerMap.get(callback);
+    if (!wrapped) return;
+    ipcRenderer.off('task:event', wrapped);
+    taskEventListenerMap.delete(callback);
   }
 });
 

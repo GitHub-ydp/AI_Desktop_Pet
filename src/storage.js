@@ -6,6 +6,10 @@ const STORAGE_KEYS = {
   SETTINGS: 'settings'
 };
 
+const DEFAULT_BUBBLE_STATE_OFFSETS = {
+  idle: { x: 0, y: 8 }
+};
+
 // 默认值
 const DEFAULTS = {
   pet: {
@@ -16,9 +20,34 @@ const DEFAULTS = {
   },
   settings: {
     autoSpeak: true,
-    selectedPet: '🐱'
+    selectedPet: '🐱',
+    bubbleStateOffsets: DEFAULT_BUBBLE_STATE_OFFSETS,
+    bubblePreviewState: 'idle'
   }
 };
+
+function normalizeBubbleStateOffsets(offsets) {
+  if (!offsets || typeof offsets !== 'object') {
+    return { ...DEFAULT_BUBBLE_STATE_OFFSETS };
+  }
+
+  const normalized = {};
+  for (const [state, offset] of Object.entries(offsets)) {
+    if (!offset || typeof offset !== 'object') continue;
+    const x = Number(offset.x);
+    const y = Number(offset.y);
+    normalized[state] = {
+      x: Number.isFinite(x) ? Math.max(-200, Math.min(200, Math.round(x))) : 0,
+      y: Number.isFinite(y) ? Math.max(-200, Math.min(200, Math.round(y))) : 8
+    };
+  }
+
+  if (!normalized.idle) {
+    normalized.idle = { ...DEFAULT_BUBBLE_STATE_OFFSETS.idle };
+  }
+
+  return normalized;
+}
 
 // 获取宠物数据
 function getPetData() {
@@ -123,7 +152,15 @@ function clearChatHistory() {
 function getSettings() {
   try {
     const settings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    return settings ? { ...DEFAULTS.settings, ...JSON.parse(settings) } : { ...DEFAULTS.settings };
+    if (!settings) return { ...DEFAULTS.settings };
+
+    const parsed = JSON.parse(settings);
+    const merged = { ...DEFAULTS.settings, ...parsed };
+    merged.bubbleStateOffsets = normalizeBubbleStateOffsets(parsed.bubbleStateOffsets || DEFAULTS.settings.bubbleStateOffsets);
+    if (typeof merged.bubblePreviewState !== 'string' || !merged.bubblePreviewState) {
+      merged.bubblePreviewState = 'idle';
+    }
+    return merged;
   } catch (error) {
     console.error('Error reading settings:', error);
     return { ...DEFAULTS.settings };
@@ -145,6 +182,27 @@ function saveSettings(settings) {
 function updateSetting(key, value) {
   const settings = getSettings();
   settings[key] = value;
+  return saveSettings(settings);
+}
+
+function getBubbleStateOffsets() {
+  return getSettings().bubbleStateOffsets || { ...DEFAULT_BUBBLE_STATE_OFFSETS };
+}
+
+function saveBubbleStateOffsets(offsets) {
+  const settings = getSettings();
+  settings.bubbleStateOffsets = normalizeBubbleStateOffsets(offsets);
+  return saveSettings(settings);
+}
+
+function getBubblePreviewState() {
+  return getSettings().bubblePreviewState || 'idle';
+}
+
+function setBubblePreviewState(state) {
+  if (!state || typeof state !== 'string') return false;
+  const settings = getSettings();
+  settings.bubblePreviewState = state;
   return saveSettings(settings);
 }
 
@@ -196,6 +254,10 @@ window.PetStorage = {
   getSettings,
   saveSettings,
   updateSetting,
+  getBubbleStateOffsets,
+  saveBubbleStateOffsets,
+  getBubblePreviewState,
+  setBubblePreviewState,
   resetAllData,
   checkMoodDecay
 };

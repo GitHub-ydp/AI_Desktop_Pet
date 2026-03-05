@@ -59,6 +59,7 @@ class TaskManager {
 
     console.log('[TaskManager] Starting scheduler...');
     this.isRunning = true;
+    this.ensureSchedulerIndexes();
 
     // 检查到期任务
     await this.checkDueTasks();
@@ -103,20 +104,22 @@ class TaskManager {
         await this.triggerTaskReminder(task);
       }
 
-      // 检查今日待完成任务数量（用于宠物主动提醒）
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(todayStart);
-      todayEnd.setDate(todayEnd.getDate() + 1);
-
-      const todayTasks = this.storage.db.prepare(`
+      // 全部待办数量（pending + in_progress）
+      const pendingTasks = this.storage.db.prepare(`
         SELECT COUNT(*) as count FROM tasks
         WHERE status IN ('pending', 'in_progress')
-        AND (due_date IS NULL OR due_date >= ? AND due_date < ?)
-      `).get(todayStart.getTime(), todayEnd.getTime());
+      `).get();
+
+      // 逾期数量（有截止时间且已过期）
+      const overdueTasks = this.storage.db.prepare(`
+        SELECT COUNT(*) as count FROM tasks
+        WHERE status IN ('pending', 'in_progress')
+        AND due_date IS NOT NULL
+        AND due_date < ?
+      `).get(now);
 
       // 更新今日统计
-      this.updateDailyStats(todayTasks.count || 0);
+      this.updateDailyStats(pendingTasks.count || 0, overdueTasks.count || 0);
 
     } catch (error) {
       console.error('[TaskManager] Error checking due tasks:', error);
@@ -324,18 +327,26 @@ class TaskManager {
 
   // 获取今日任务
   getTodayTasks() {
+    if (!this.storage || !this.storage.db) return [];
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(todayStart);
     todayEnd.setDate(todayEnd.getDate() + 1);
 
-    return this.getTasks({
-      status: 'pending', // 包含进行中
-      dueAfter: todayStart.getTime(),
-      dueBefore: todayEnd.getTime(),
-      orderBy: 'priority',
-      orderDir: 'DESC'
-    });
+    try {
+      const stmt = this.storage.db.prepare(`
+        SELECT * FROM tasks
+        WHERE status IN ('pending', 'in_progress')
+        AND due_date IS NOT NULL
+        AND due_date >= ? AND due_date < ?
+        ORDER BY priority DESC, due_date ASC
+      `);
+      return stmt.all(todayStart.getTime(), todayEnd.getTime()).map(t => this.formatTask(t));
+    } catch (error) {
+      console.error('[TaskManager] Failed to get today tasks:', error);
+      return [];
+    }
   }
 
   // 获取待处理任务（包括进行中）
@@ -478,7 +489,7 @@ class TaskManager {
   }
 
   // 更新每日统计
-  updateDailyStats(pendingCount) {
+  updateDailyStats(pendingCount, overdueCount = 0) {
     if (!this.storage || !this.storage.db) return;
 
     try {
@@ -489,18 +500,35 @@ class TaskManager {
 
       if (existing) {
         this.storage.db.prepare(`
-          UPDATE task_stats SET total_pending = ?, updated_at = ?
+          UPDATE task_stats SET total_pending = ?, overdue_count = ?, updated_at = ?
           WHERE date = ?
-        `).run(pendingCount, now, date);
+        `).run(pendingCount, overdueCount, now, date);
       } else {
         const id = `stats-${date}`;
         this.storage.db.prepare(`
-          INSERT INTO task_stats (id, date, total_pending, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?)
-        `).run(id, date, pendingCount, now, now);
+          INSERT INTO task_stats (id, date, overdue_count, total_pending, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, date, overdueCount, pendingCount, now, now);
       }
     } catch (error) {
       console.error('[TaskManager] Failed to update stats:', error);
+    }
+  }
+
+  // 为调度查询补充索引，避免任务量上来后全表扫描
+  ensureSchedulerIndexes() {
+    if (!this.storage || !this.storage.db) return;
+    try {
+      this.storage.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_status_reminder_at
+        ON tasks(status, reminder_at);
+      `);
+      this.storage.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_status_due_date
+        ON tasks(status, due_date);
+      `);
+    } catch (error) {
+      console.error('[TaskManager] Failed to ensure scheduler indexes:', error);
     }
   }
 

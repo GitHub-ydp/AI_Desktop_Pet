@@ -4,7 +4,8 @@
 class PetAnimationController {
   constructor() {
     // 所有可用的动画状态
-    this.states = ['idle', 'happy', 'thinking', 'sleeping', 'dragging', 'clicked', 'talking', 'sad', 'exercising', 'playing'];
+    this.baseStates = ['idle', 'happy', 'thinking', 'sleeping', 'dragging', 'clicked', 'talking', 'sad', 'exercising', 'playing'];
+    this.states = [...this.baseStates];
     
     // 当前状态
     this.currentState = 'idle';
@@ -123,6 +124,16 @@ class PetAnimationController {
     this.manualLockedState = null;
 
     console.log('[Animation] 动画控制器已创建');
+  }
+
+  // 根据当前皮肤同步可用状态（包含动态 JSON 状态名）
+  refreshAvailableStates() {
+    const merged = new Set(this.baseStates);
+    if (window.SkinRegistry && typeof window.SkinRegistry.getAnimationConfigForSkin === 'function') {
+      const config = window.SkinRegistry.getAnimationConfigForSkin(this.baseExpression);
+      Object.keys(config || {}).forEach((key) => merged.add(key));
+    }
+    this.states = Array.from(merged);
   }
   
   // 初始化（在 DOM 加载后调用）
@@ -274,6 +285,10 @@ class PetAnimationController {
   // 设置动画状态
   setState(newState, duration = null) {
     if (!this.states.includes(newState)) {
+      // 兜底刷新一次，确保新加的 JSON 状态可立即识别
+      this.refreshAvailableStates();
+    }
+    if (!this.states.includes(newState)) {
       console.warn(`[Animation] 未知状态: ${newState}`);
       return false;
     }
@@ -322,6 +337,21 @@ class PetAnimationController {
 
     // 注意：状态持续时间现在由 LottieController 统一管理
     // 不在这里重复设置，避免双重定时器
+
+    // 广播状态变化（供主进程同步气泡位置等场景使用）
+    try {
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('pet-state-changed', {
+          detail: {
+            state: this.currentState,
+            previousState: this.previousState,
+            manualLocked: this.manualStateLock
+          }
+        }));
+      }
+    } catch (error) {
+      // 不阻塞动画主流程
+    }
 
     return true;
   }
@@ -475,6 +505,7 @@ class PetAnimationController {
   setBasePet(petEmoji) {
     this.baseExpression = petEmoji;
     console.log(`[Animation] 设置宠物类型: ${petEmoji}`);
+    this.refreshAvailableStates();
 
     // 通过 SkinRegistry 检查该皮肤是否支持 Lottie
     const skinHasLottie = window.SkinRegistry
@@ -605,6 +636,10 @@ class PetAnimationController {
   // 手动设置状态（由用户菜单触发，锁定状态不被自动系统覆盖）
   setManualState(state) {
     if (!this.states.includes(state)) {
+      // 兜底刷新一次，避免菜单动态状态被误判为未知
+      this.refreshAvailableStates();
+    }
+    if (!this.states.includes(state)) {
       console.warn(`[Animation] 未知状态: ${state}`);
       return false;
     }
@@ -655,3 +690,5 @@ class PetAnimationController {
 window.PetAnimations = new PetAnimationController();
 
 console.log('[Animation] 动画模块已加载');
+// 初始化时同步一次可用状态（含动态 JSON 状态）
+window.PetAnimations.refreshAvailableStates();

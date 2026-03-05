@@ -144,8 +144,13 @@ class MemorySearchEngine {
       return [];
     }
 
-    // 1. 关键词搜索
-    const keywordResults = this._keywordScoreConversations(query, conversations, now, mood);
+    // 1. 关键词搜索（BM25 或旧版 includes 匹配）
+    let keywordResults;
+    if (MEMORY_CONFIG.search.bm25?.enabled) {
+      keywordResults = this._bm25ScoreConversations(query, conversations, now, mood);
+    } else {
+      keywordResults = this._keywordScoreConversations(query, conversations, now, mood);
+    }
 
     // 2. 向量搜索（如果嵌入引擎可用）
     let vectorResults = new Map();
@@ -221,7 +226,9 @@ class MemorySearchEngine {
         type: hasVector && vs.vectorScore > 0 ? 'hybrid' : 'keyword',
         // 传递 FSRS 信息供后续使用
         strength: R,
-        emotionalWeight: emotionalWeight
+        emotionalWeight: emotionalWeight,
+        // 传递 embedding 供 MMR 使用（避免二次查询 DB）
+        embedding: vs.embedding || null
       };
     });
 
@@ -243,6 +250,14 @@ class MemorySearchEngine {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
+
+    // MMR 去重：减少高度相似结果，提升多样性
+    if (MEMORY_CONFIG.search.mmr?.enabled && hasVector && filteredResults.length > 1) {
+      filteredResults = this._applyMMR(filteredResults, {
+        lambda: MEMORY_CONFIG.search.mmr.lambda,
+        limit: limit
+      });
+    }
 
     // 降级：如果没有结果，返回最近对话
     if (filteredResults.length === 0 && conversations.length > 0) {
@@ -273,7 +288,7 @@ class MemorySearchEngine {
     return filteredResults;
   }
 
-  // 关键词评分（返回 Map<id, scores>）
+  // 关键词评分（旧版 includes 匹配，BM25 禁用时的降级方案，返回 Map<id, scores>）
   _keywordScoreConversations(query, conversations, now, mood) {
     const queryLower = query.toLowerCase().trim();
     const queryWords = queryLower.split(/\s+/).filter(w => w.length >= 1);
@@ -329,7 +344,236 @@ class MemorySearchEngine {
     return results;
   }
 
-  // 向量搜索（返回 Map<conversationId, {vectorScore}>）
+  // BM25 关键词评分（替代简单 includes 匹配，返回 Map<id, scores>）
+  _bm25ScoreConversations(query, conversations, now, mood) {
+    const bm25Config = MEMORY_CONFIG.search.bm25 || {};
+    const k1 = bm25Config.k1 || 1.2;
+    const b = bm25Config.b || 0.75;
+
+    const queryTokens = this._tokenize(query);
+    const results = new Map();
+    const importantKeywords = ['名字', '叫', '是', '性别', '生日', '喜欢', '爱好', '工作', '职业', '住'];
+    const totalDocs = conversations.length || 1;
+
+    // 预处理：为每条对话分词 + 计算文档频率
+    const docTokens = new Map(); // convId → tokens[]
+    const docFreq = new Map();   // token → 包含该 token 的文档数
+    let totalLen = 0;
+
+    for (const conv of conversations) {
+      const tokens = this._tokenize(conv.content || '');
+      docTokens.set(conv.id, tokens);
+      totalLen += tokens.length;
+
+      // 统计 DF（每个 token 在多少文档中出现）
+      const uniqueTokens = new Set(tokens);
+      for (const t of uniqueTokens) {
+        docFreq.set(t, (docFreq.get(t) || 0) + 1);
+      }
+    }
+
+    const avgdl = totalLen / totalDocs;
+
+    // 计算每条对话的 BM25 分数
+    const rawBm25Scores = new Map();
+
+    for (const conv of conversations) {
+      const tokens = docTokens.get(conv.id);
+      const dl = tokens.length;
+      if (dl === 0) {
+        rawBm25Scores.set(conv.id, 0);
+        continue;
+      }
+
+      // 统计文档内词频
+      const tf = new Map();
+      for (const t of tokens) {
+        tf.set(t, (tf.get(t) || 0) + 1);
+      }
+
+      // BM25 求和
+      let bm25 = 0;
+      for (const qt of queryTokens) {
+        const f = tf.get(qt) || 0;
+        if (f === 0) continue;
+
+        const n = docFreq.get(qt) || 0;
+        // IDF: ln((N - n + 0.5) / (n + 0.5) + 1)
+        const idf = Math.log((totalDocs - n + 0.5) / (n + 0.5) + 1);
+        // TF 饱和: f(t,d) × (k1+1) / (f(t,d) + k1 × (1 - b + b × |d|/avgdl))
+        const tfSat = (f * (k1 + 1)) / (f + k1 * (1 - b + b * dl / avgdl));
+
+        bm25 += idf * tfSat;
+      }
+
+      rawBm25Scores.set(conv.id, bm25);
+    }
+
+    // min-max 归一化 BM25 分数到 0-1
+    const allScores = Array.from(rawBm25Scores.values());
+    const maxBm25 = Math.max(...allScores, 0.001);
+
+    for (const conv of conversations) {
+      const contentLower = (conv.content || '').toLowerCase();
+      const rawBm25 = rawBm25Scores.get(conv.id) || 0;
+
+      // 归一化 BM25 + 基础分
+      let keywordScore = 0.1 + (rawBm25 / maxBm25) * 0.9;
+
+      // 重要关键词加权（与旧方法保持一致）
+      importantKeywords.forEach(kw => {
+        if (query.toLowerCase().includes(kw) && contentLower.includes(kw)) {
+          keywordScore += 0.1;
+        }
+      });
+      keywordScore = Math.min(1.0, keywordScore);
+
+      // 时间衰减分数
+      const ageInDays = (now - conv.timestamp) / 86400000;
+      let temporalScore = 0;
+      if (ageInDays < 1) temporalScore = 1.0;
+      else if (ageInDays < 3) temporalScore = 0.7;
+      else if (ageInDays < 7) temporalScore = 0.5;
+      else if (ageInDays < 30) temporalScore = 0.3;
+      else temporalScore = 0.1;
+
+      // 重要性分数
+      let importanceScore = 0;
+      if (conv.content && conv.content.length > 50) importanceScore += 0.3;
+      if (conv.content && conv.content.length > 100) importanceScore += 0.2;
+      if (conv.role === 'user') importanceScore += 0.2;
+      if (importantKeywords.some(kw => contentLower.includes(kw))) importanceScore += 0.3;
+      importanceScore = Math.min(1.0, importanceScore);
+
+      results.set(conv.id, { keywordScore, temporalScore, importanceScore });
+    }
+
+    return results;
+  }
+
+  // 中文 bigram + 标点分割分词器（用于 BM25）
+  _tokenize(text) {
+    if (!text) return [];
+    const phrases = text.split(/[\s,，。！？；：""''（）\(\)、\n]+/).filter(Boolean);
+    const tokens = [];
+
+    for (const phrase of phrases) {
+      // 中文字符：生成 bigram + 单字
+      if (/[\u4e00-\u9fff]/.test(phrase)) {
+        for (let i = 0; i < phrase.length - 1; i++) {
+          if (/[\u4e00-\u9fff]/.test(phrase[i]) && /[\u4e00-\u9fff]/.test(phrase[i + 1])) {
+            tokens.push(phrase[i] + phrase[i + 1]);
+          }
+        }
+        // 单字（用于短查询匹配）
+        for (const ch of phrase) {
+          if (/[\u4e00-\u9fff]/.test(ch)) tokens.push(ch);
+        }
+      }
+      // 英文/数字作为整词
+      const words = phrase.match(/[a-zA-Z0-9]+/g);
+      if (words) tokens.push(...words.map(w => w.toLowerCase()));
+    }
+
+    return tokens;
+  }
+
+  // MMR 去重算法（Maximal Marginal Relevance）
+  // 在保持相关性的同时，减少结果间的冗余，提升多样性
+  // 使用结果中附带的 embedding（由 _vectorSearchConversations 传递），无需二次查询 DB
+  _applyMMR(results, options = {}) {
+    if (!results || results.length <= 1) return results;
+
+    const lambda = options.lambda ?? 0.5;
+    const targetCount = options.limit || results.length;
+
+    // 检查是否有任何 embedding 可用
+    const hasAnyEmbedding = results.some(r => r.embedding);
+
+    // 降级：所有结果都无 embedding 时，完全跳过 MMR
+    if (!hasAnyEmbedding) {
+      return results;
+    }
+
+    const selected = [];
+    const candidates = [...results];
+
+    // 迭代选择：每次选 MMR 得分最高的候选
+    while (selected.length < targetCount && candidates.length > 0) {
+      let bestScore = -Infinity;
+      let bestIdx = 0;
+
+      for (let i = 0; i < candidates.length; i++) {
+        // 相关性分（原始搜索得分）
+        const relevance = candidates[i].score;
+
+        // 与已选结果的最大相似度（多样性惩罚）
+        let maxSim = 0;
+        if (selected.length > 0) {
+          for (const s of selected) {
+            let sim = 0;
+            if (candidates[i].embedding && s.embedding) {
+              // 优先用向量余弦相似度
+              sim = this._cosineSimilarity(candidates[i].embedding, s.embedding);
+            } else {
+              // 降级：文本 Jaccard 相似度
+              sim = this._textSimilarity(
+                candidates[i].text || candidates[i].content || '',
+                s.text || s.content || ''
+              );
+            }
+            if (sim > maxSim) maxSim = sim;
+          }
+        }
+
+        // MMR 公式：lambda × 相关性 - (1-lambda) × 最大相似度
+        const mmrScore = lambda * relevance - (1 - lambda) * maxSim;
+        if (mmrScore > bestScore) {
+          bestScore = mmrScore;
+          bestIdx = i;
+        }
+      }
+
+      selected.push(candidates[bestIdx]);
+      candidates.splice(bestIdx, 1);
+    }
+
+    return selected;
+  }
+
+  // 独立的余弦相似度计算（不依赖 embeddingEngine 实例）
+  _cosineSimilarity(a, b) {
+    if (!a || !b || a.length !== b.length) return 0;
+
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+
+    normA = Math.sqrt(normA);
+    normB = Math.sqrt(normB);
+
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (normA * normB);
+  }
+
+  // 文本 Jaccard 相似度（MMR 降级方案：无 embedding 时使用）
+  _textSimilarity(textA, textB) {
+    if (!textA || !textB) return 0;
+    const setA = new Set(textA.split(/[\s,，。！？；：""''（）\(\)、\n]+/).filter(Boolean));
+    const setB = new Set(textB.split(/[\s,，。！？；：""''（）\(\)、\n]+/).filter(Boolean));
+    const intersection = new Set([...setA].filter(x => setB.has(x)));
+    const union = new Set([...setA, ...setB]);
+    if (union.size === 0) return 0;
+    return intersection.size / union.size;
+  }
+
+  // 向量搜索（返回 Map<conversationId, {vectorScore, embedding}>）
   async _vectorSearchConversations(query, limit) {
     const results = new Map();
 
@@ -353,10 +597,10 @@ class MemorySearchEngine {
         // 归一化相似度到 0-1（余弦相似度已经是 -1 到 1）
         const normalizedScore = Math.max(0, (similarity + 1) / 2);
 
-        // 取每个对话的最高分
+        // 取每个对话的最高分，同时保留 embedding 供 MMR 使用
         const existing = results.get(chunk.conversation_id);
         if (!existing || normalizedScore > existing.vectorScore) {
-          results.set(chunk.conversation_id, { vectorScore: normalizedScore });
+          results.set(chunk.conversation_id, { vectorScore: normalizedScore, embedding });
         }
       }
 

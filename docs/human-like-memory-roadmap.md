@@ -311,7 +311,7 @@ if (associatedMemory) {
 | 分块质量 | 中 | 整条消息作为一块，长消息细粒度差；可改为 400 token 滑动窗口 |
 | 向量搜索性能 | 中 | 10K+ 记录全表扫描；新增部分索引（已在 v7 迁移中改善）|
 | context 压缩触发 | 低 | 借鉴 OpenClaw，上下文快满时自动写入长期记忆 |
-| trigger_count 字段名 | 低 | 代码中实际用了 trigger_count，设计文档写的 reinforce_count，需统一 |
+| ~~trigger_count 字段名~~ | ~~低~~ | ✅ 已统一：代码以 `trigger_count` 为准，设计文档中的 `reinforce_count` 为历史命名，功能等价 |
 
 ---
 

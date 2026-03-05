@@ -170,6 +170,7 @@ async function init() {
   }
 
   loadData();
+  syncBubbleOffsetSettingsToMain();
   updateUI();
   startTimers();
 
@@ -194,6 +195,8 @@ async function init() {
   initSettingsIpc();
   // 初始化宠物状态 IPC 监听（菜单窗口 -> 主窗口）
   initPetStateIpc();
+  // 初始化宠物状态同步（主窗口 -> 主进程）
+  initPetStateSyncToMain();
   // 初始化健康提醒监听
   initHealthReminderListener();
   // 初始化任务监听
@@ -268,6 +271,11 @@ function initSettingsIpc() {
       updateUI();
       stopTimers();
       startTimers();
+    } else if (data.type === 'bubble-offset-update') {
+      state.settings.bubbleStateOffsets = data.offsets || { idle: { x: 0, y: 8 } };
+      state.settings.bubblePreviewState = data.state || 'idle';
+    } else if (data.type === 'bubble-offset-preview') {
+      state.settings.bubblePreviewState = data.state || state.settings.bubblePreviewState || 'idle';
     }
   });
 }
@@ -286,6 +294,57 @@ function initPetStateIpc() {
         window.PetAnimations.setManualState(s);
       }
     }
+  });
+}
+
+// 主窗口动画状态 -> 主进程（用于提示框位置按状态调整）
+function initPetStateSyncToMain() {
+  if (!window.electron || !window.electron.sendPetStateUpdate) return;
+
+  const resolveVisualState = (stateName) => {
+    try {
+      if (!window.SkinRegistry || typeof window.SkinRegistry.getAnimationForState !== 'function') {
+        return stateName;
+      }
+      const petEmoji = (window.PetAnimations && window.PetAnimations.baseExpression) || state.currentPet || '🐱';
+      const animInfo = window.SkinRegistry.getAnimationForState(petEmoji, stateName);
+      if (animInfo && animInfo.file) {
+        return String(animInfo.file).replace(/\.json$/i, '');
+      }
+    } catch (error) {
+      // 忽略异常，回退逻辑状态
+    }
+    return stateName;
+  };
+
+  if (window.PetAnimations && typeof window.PetAnimations.getState === 'function') {
+    const initialState = window.PetAnimations.getState();
+    window.electron.sendPetStateUpdate({
+      state: initialState,
+      visualState: resolveVisualState(initialState),
+      source: 'init'
+    });
+  }
+
+  window.addEventListener('pet-state-changed', (event) => {
+    const stateName = event && event.detail && event.detail.state;
+    if (!stateName) return;
+    window.electron.sendPetStateUpdate({
+      state: stateName,
+      visualState: resolveVisualState(stateName),
+      source: 'runtime'
+    });
+  });
+}
+
+function syncBubbleOffsetSettingsToMain() {
+  if (!window.electron || !window.electron.sendSettingsChange) return;
+  if (!state.settings) return;
+
+  window.electron.sendSettingsChange({
+    type: 'bubble-offset-update',
+    offsets: state.settings.bubbleStateOffsets || { idle: { x: 0, y: 8 } },
+    state: state.settings.bubblePreviewState || 'idle'
   });
 }
 

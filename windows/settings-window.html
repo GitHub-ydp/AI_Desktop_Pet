@@ -255,6 +255,56 @@
       color: var(--neon-cyan);
     }
 
+    .bubble-debug-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .bubble-debug-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .bubble-debug-row label {
+      min-width: 54px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .bubble-debug-select,
+    .bubble-debug-input {
+      width: 100%;
+      padding: 7px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(0, 16, 32, 0.75);
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+    }
+
+    .bubble-debug-range {
+      width: 100%;
+      accent-color: var(--neon-cyan);
+    }
+
+    .bubble-debug-hint {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .btn-small {
+      padding: 7px 10px;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
     .confirm-dialog {
       display: none;
       background: var(--confirm-bg);
@@ -408,6 +458,38 @@
     </div>
 
     <div class="setting-group">
+      <h3>提示框位置调试（测试用）</h3>
+      <div class="bubble-debug-row">
+        <label for="bubbleStateSelect">状态</label>
+        <select id="bubbleStateSelect" class="bubble-debug-select" onchange="onBubbleStateChange()"></select>
+      </div>
+      <div class="bubble-debug-grid">
+        <div>
+          <div class="bubble-debug-row">
+            <label for="bubbleOffsetXInput">X 偏移</label>
+            <input id="bubbleOffsetXInput" class="bubble-debug-input" type="number" min="-200" max="200" step="1" onchange="onBubbleOffsetInput('x', this.value)">
+          </div>
+          <input id="bubbleOffsetXRange" class="bubble-debug-range" type="range" min="-200" max="200" step="1" oninput="onBubbleOffsetRange('x', this.value)">
+        </div>
+        <div>
+          <div class="bubble-debug-row">
+            <label for="bubbleOffsetYInput">Y 偏移</label>
+            <input id="bubbleOffsetYInput" class="bubble-debug-input" type="number" min="-200" max="200" step="1" onchange="onBubbleOffsetInput('y', this.value)">
+          </div>
+          <input id="bubbleOffsetYRange" class="bubble-debug-range" type="range" min="-200" max="200" step="1" oninput="onBubbleOffsetRange('y', this.value)">
+        </div>
+      </div>
+      <div class="bubble-debug-row">
+        <button class="btn btn-primary btn-small" onclick="previewBubbleState()">预览该状态</button>
+        <button class="btn btn-primary btn-small" onclick="resetCurrentBubbleOffset()">重置当前状态</button>
+      </div>
+      <div class="bubble-debug-hint">
+        说明：该功能仅用于测试 Lottie 不同状态下提示框位置。<br>
+        偏移会实时保存并立即生效；后续你可隐藏此面板。
+      </div>
+    </div>
+
+    <div class="setting-group">
       <h3>心情状态</h3>
       <div class="mood-display" id="moodDisplay">💚 超级开心</div>
       <div class="success-toast" id="resetSuccessToast">✓ 数据已重置！</div>
@@ -431,6 +513,68 @@
   <script src="../src/settings-window-utils.js"></script>
   <script>
     const SettingsUtils = window.SettingsWindowUtils;
+    let BUBBLE_DEBUG_STATES = [];
+    let bubbleOffsets = { idle: { x: 0, y: 8 } };
+    let currentBubbleState = 'idle';
+
+    function getBubbleDebugStates() {
+      try {
+        if (window.electron && typeof window.electron.listLottieJsonFiles === 'function') {
+          const files = window.electron.listLottieJsonFiles('cat') || [];
+          const states = files
+            .filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.json'))
+            .map(name => name.replace(/\.json$/i, '').trim())
+            .filter(Boolean);
+          const uniqueStates = Array.from(new Set(states));
+          if (uniqueStates.length > 0) {
+            return uniqueStates;
+          }
+        }
+      } catch (error) {
+        console.warn('[Settings] 获取 Lottie 状态失败:', error);
+      }
+      return ['猫坐在枕头上'];
+    }
+
+    function clampOffset(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return 0;
+      return Math.max(-200, Math.min(200, Math.round(n)));
+    }
+
+    function ensureBubbleOffsetState(stateName) {
+      if (!bubbleOffsets[stateName]) {
+        bubbleOffsets[stateName] = { x: 0, y: 8 };
+      }
+      return bubbleOffsets[stateName];
+    }
+
+    function applyBubbleOffsetEditors() {
+      const offset = ensureBubbleOffsetState(currentBubbleState);
+      document.getElementById('bubbleOffsetXInput').value = offset.x;
+      document.getElementById('bubbleOffsetXRange').value = offset.x;
+      document.getElementById('bubbleOffsetYInput').value = offset.y;
+      document.getElementById('bubbleOffsetYRange').value = offset.y;
+    }
+
+    function persistBubbleOffsets(shouldPreview = false) {
+      SettingsUtils.saveBubbleStateOffsets(window.PetStorage, bubbleOffsets);
+      SettingsUtils.setBubblePreviewState(window.PetStorage, currentBubbleState);
+
+      if (window.electron && window.electron.sendSettingsChange) {
+        window.electron.sendSettingsChange({
+          type: 'bubble-offset-update',
+          offsets: bubbleOffsets,
+          state: currentBubbleState
+        });
+        if (shouldPreview) {
+          window.electron.sendSettingsChange({
+            type: 'bubble-offset-preview',
+            state: currentBubbleState
+          });
+        }
+      }
+    }
 
     // 加载当前设置
     function loadSettings() {
@@ -451,6 +595,23 @@
 
       // 显示心情
       updateMoodDisplay(snapshot.mood);
+
+      // 动态加载状态列表（按 lottie/cat 目录 JSON 文件）
+      BUBBLE_DEBUG_STATES = getBubbleDebugStates();
+
+      // 加载提示框位置调试数据
+      bubbleOffsets = snapshot.bubbleStateOffsets || { idle: { x: 0, y: 8 } };
+      currentBubbleState = snapshot.bubblePreviewState || 'idle';
+      if (!BUBBLE_DEBUG_STATES.includes(currentBubbleState)) {
+        currentBubbleState = BUBBLE_DEBUG_STATES.includes('猫坐在枕头上')
+          ? '猫坐在枕头上'
+          : BUBBLE_DEBUG_STATES[0];
+      }
+
+      const select = document.getElementById('bubbleStateSelect');
+      select.innerHTML = BUBBLE_DEBUG_STATES.map(s => `<option value="${s}">${s}</option>`).join('');
+      select.value = currentBubbleState;
+      applyBubbleOffsetEditors();
     }
 
     function selectPet(pet) {
@@ -481,6 +642,53 @@
       if (window.electron && window.electron.sendSettingsChange) {
         window.electron.sendSettingsChange({ type: 'autoSpeak', autoSpeak: checked });
       }
+    }
+
+    function onBubbleStateChange() {
+      currentBubbleState = document.getElementById('bubbleStateSelect').value;
+      applyBubbleOffsetEditors();
+      SettingsUtils.setBubblePreviewState(window.PetStorage, currentBubbleState);
+      if (window.electron && window.electron.sendPetState) {
+        window.electron.sendPetState({ state: currentBubbleState });
+      }
+      if (window.electron && window.electron.showBubble) {
+        window.electron.showBubble(`切换预览状态: ${currentBubbleState}`, 1500);
+      }
+    }
+
+    function onBubbleOffsetInput(axis, value) {
+      const v = clampOffset(value);
+      const offset = ensureBubbleOffsetState(currentBubbleState);
+      offset[axis] = v;
+      applyBubbleOffsetEditors();
+      persistBubbleOffsets(false);
+    }
+
+    function onBubbleOffsetRange(axis, value) {
+      const v = clampOffset(value);
+      const offset = ensureBubbleOffsetState(currentBubbleState);
+      offset[axis] = v;
+      applyBubbleOffsetEditors();
+      persistBubbleOffsets(false);
+    }
+
+    function previewBubbleState() {
+      persistBubbleOffsets(true);
+      if (window.electron && window.electron.sendPetState) {
+        window.electron.sendPetState({ state: currentBubbleState });
+      }
+      if (window.electron && window.electron.showBubble) {
+        const previewText = `预览状态: ${currentBubbleState} (x:${ensureBubbleOffsetState(currentBubbleState).x}, y:${ensureBubbleOffsetState(currentBubbleState).y})`;
+        setTimeout(() => {
+          window.electron.showBubble(previewText, 2400);
+        }, 120);
+      }
+    }
+
+    function resetCurrentBubbleOffset() {
+      bubbleOffsets[currentBubbleState] = { x: 0, y: 8 };
+      applyBubbleOffsetEditors();
+      persistBubbleOffsets(true);
     }
 
     function updateMoodDisplay(mood) {

@@ -156,7 +156,7 @@ class LottieController {
 
     // 降级：使用默认路径
     console.warn('[LottieController] 无法从 SkinRegistry 获取路径，使用默认');
-    return `lottie/cat/happy_cat.json`;
+    return 'lottie/cat/猫坐在枕头上.json';
   }
 
   // 播放指定状态的动画
@@ -243,6 +243,11 @@ class LottieController {
       const tempContainer = document.createElement('div');
       tempContainer.style.width = '100%';
       tempContainer.style.height = '100%';
+      tempContainer.style.display = 'flex';
+      tempContainer.style.alignItems = 'center';
+      tempContainer.style.justifyContent = 'center';
+      // 某些状态图层会超出边界，禁止裁剪避免显示不全
+      tempContainer.style.overflow = 'visible';
 
       // 加载新动画到临时容器
       const newAnimation = this.lottieLib.loadAnimation({
@@ -250,7 +255,11 @@ class LottieController {
         renderer: 'svg',
         loop: shouldLoop,
         autoplay: true,
-        path: animationPath
+        path: animationPath,
+        rendererSettings: {
+          preserveAspectRatio: 'xMidYMid meet',
+          clearCanvas: true
+        }
       });
 
       // 监听加载完成
@@ -278,6 +287,12 @@ class LottieController {
             const svg = this.container.querySelector('svg');
             const shapes = svg.querySelectorAll('path, circle, ellipse, rect, g');
             console.log(`[LottieController] SVG 包含 ${shapes.length} 个元素`);
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            svg.style.maxWidth = '100%';
+            svg.style.maxHeight = '100%';
+            svg.style.display = 'block';
+            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
             // 修复 viewBox 问题
             if (!svg.getAttribute('viewBox') && svg.getAttribute('width') && svg.getAttribute('height')) {

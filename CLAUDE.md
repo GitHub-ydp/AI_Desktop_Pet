@@ -163,8 +163,8 @@ user_profile        - 用户画像汇总表（由事实提取器维护）
 
 **为什么不用 FTS5？**
 - 问题：SQLite 编译时未包含 FTS5 模块
-- 方案：直接 SQL 查询配合 LIKE 过滤
-- 结果：运行可靠，性能良好
+- 方案：JS 端 BM25 实现（`_bm25ScoreConversations()`），搭配中文 bigram 分词
+- 结果：运行可靠，区分度显著优于原 LIKE 匹配，可通过 `search.bm25.enabled` 关闭回退
 
 ### 数据库位置
 ```
@@ -175,12 +175,13 @@ Windows: C:\Users\<用户名>\AppData\Roaming\ai-desktop-pet\pet-memory.db
 ```
 1. 用户发送消息 → "我叫什么名字？"
 2. 搜索引擎查询 conversations 表
-3. 关键词匹配："名字" "叫"
-4. 向量搜索：生成查询嵌入 → 余弦相似度匹配（如果引擎就绪）
-5. 合并评分：关键词 × 0.3 + 向量 × 0.4 + 时间 × 0.2 + 重要性 × 0.1
-6. 按分数排序，返回 Top N
-7. 分层上下文构建器格式化（用户画像 + 相关回忆 + 最近对话）
-8. AI 使用上下文生成个性化回复
+3. BM25 关键词评分（中文 bigram 分词 + 标准 BM25 公式，可降级为 LIKE）
+4. 向量搜索：生成查询嵌入 → 余弦相似度匹配（如果引擎就绪），同时附带 embedding 向量
+5. 合并评分：关键词 × 0.3 + 向量 × 0.4 + strength × 0.2 + 重要性 × 0.1
+6. MMR 去重（λ=0.5，向量余弦相似度，降级 Jaccard 文本相似度）
+7. 按 MMR 分数排序，返回 Top N
+8. 分层上下文构建器格式化（用户画像 + 相关回忆 + 最近对话）
+9. AI 使用上下文生成个性化回复
 ```
 
 ### 配置 (`main-process/config.js`)
@@ -216,7 +217,16 @@ search: {
   defaultLimit: 5,
   minScore: 0.6,
   vectorWeight: 0.7,
-  textWeight: 0.3
+  textWeight: 0.3,
+  mmr: {
+    enabled: true,   // MMR 去重：λ=0.5 均衡相关性与多样性
+    lambda: 0.5      // 0=纯多样性, 1=纯相关性
+  },
+  bm25: {
+    enabled: true,   // JS 端 BM25（中文 bigram 分词），false 时退回 LIKE 匹配
+    k1: 1.2,
+    b: 0.75
+  }
 }
 ```
 
@@ -652,6 +662,24 @@ this.checkIntervalMs = 30000;     // 30 秒
 - 过期提醒正确处理
 - 重复提醒正确调度下次执行
 
+
+#### 2026-03 搜索系统升级（MMR + BM25）
+- `main-process/search.js` - 新增：`_applyMMR()`（MMR 去重算法）、`_bm25ScoreConversations()`（标准 BM25 评分）、`_tokenize()`（中文 bigram + 英文整词分词）、`_textSimilarity()`（Jaccard 文本降级）、`_cosineSimilarity()`；修改：`_vectorSearchConversations()` 附带 embedding 向量、`_keywordScoreConversations()` 恢复为降级方案、`search()` 集成 MMR 和 BM25
+- `main-process/config.js` - 新增：`search.mmr`（enabled/lambda）和 `search.bm25`（enabled/k1/b）配置节
+- `docs/memory-upgrade-design.md` - 新增：MMR + BM25 设计文档
+- `docs/memory-upgrade-test-report.md` - 新增：20/20 通过的代码审查报告
+
+**MMR 特性：**
+- λ=0.5 均衡模式，可配置（0=纯多样性，1=纯相关性）
+- 三层降级：向量余弦相似度 → Jaccard 文本 → 跳过 MMR
+- embedding 通过搜索结果传递，无二次 DB 查询
+- `hasVector` 守卫：向量引擎未就绪时自动跳过
+
+**BM25 特性：**
+- 标准 BM25 公式（IDF 防负数 +1，TF 饱和 k1=1.2，文档长度归一化 b=0.75）
+- 中文 bigram + 单字双重分词 + 英文整词，无需分词词典
+- `bm25.enabled=false` 可回退到原始 LIKE 匹配
+- min-max 归一化到 [0.1, 1.0]
 
 #### 2026-02 菜单回退至旋转拨号样式
 - `src/rotary-menu.js` - 恢复：`RotaryMenuController`，旋转拨号菜单（6项主菜单 + 5项二级菜单）
