@@ -649,6 +649,7 @@ this.checkIntervalMs = 30000;     // 30 秒
 - **贴图窗口**：最多 5 个置顶窗口，支持透明度调整（30-100%），可拖动缩放
 - **快捷键**：ESC 取消、Enter 确认、Ctrl+Z 撤销、Ctrl+Y 重做、Ctrl+C 复制、Ctrl+S 保存、1-8 切换工具
 - **多显示器支持**：虚拟屏幕边界计算，DPI 缩放处理（scaleFactor）
+- **窗口检测模式**：类微信截图的窗口识别，悬停高亮边框 + 标题标签，点击直接选中窗口区域
 - **安全改进**：contextIsolation: true，路径校验，输入验证
 
 ### 提醒测试清单
@@ -662,6 +663,30 @@ this.checkIntervalMs = 30000;     // 30 秒
 - 过期提醒正确处理
 - 重复提醒正确调度下次执行
 
+
+#### 2026-03 多模型 API Key 管理
+- `main.js` - 新增：`readApiKeysFile()`、`saveProviderApiKey()`、`maskApiKey()` 工具函数；修改：`getProviderApiKeyByProvider()` 优先读 api-keys.json 降级到 .env；新增 IPC handler `save-provider-api-key`（含长度验证、deepseek 时同步更新记忆系统）、`get-all-provider-keys`（脱敏）、`test-provider-api-key`（连通性测试）；启动时从 api-keys.json 加载 deepseek key 到记忆系统
+- `preload.js` - 新增：`saveProviderAPIKey`、`getAllProviderAPIKeys`、`testProviderAPIKey` 三个桥接
+- `windows/settings-window.html` - 新增：「API Key 管理」卡片，支持 deepseek/openai/openrouter/siliconflow/glm 共 5 个 provider，含脱敏显示、显示/隐藏切换、保存、测试连接功能
+- `main-process/memory.js` - 新增：`updateApiKey(newApiKey)` 方法，内部调用 `factExtractorLLM.setApiKey()` 实现运行时动态更新
+
+**API Key 优先级：**`userData/api-keys.json` > `.env` 环境变量
+
+**存储位置：** `C:\Users\<用户名>\AppData\Roaming\ai-desktop-pet\api-keys.json`（明文，本地安全）
+
+**记忆系统集成：** 用户保存 deepseek key 后立即通知 FactExtractorLLM，无需重启应用
+
+#### 2026-03 截图窗口检测模式
+- `main.js` - 新增：`screenshot:get-windows` IPC handler，通过 PowerShell + Win32 `EnumWindows` 枚举可见非最小化窗口，返回标题/坐标（物理像素 ÷ scaleFactor 转 CSS 像素）
+- `preload.js` - 新增：`ScreenshotBridge.getWindowList()` 桥接
+- `windows/screenshot-capture.html` - 新增：`fetchWindowList()`（懒加载）、`updateWindowHighlight(x,y)`（hover 检测）；新增 `state.windowList`/`state.hoveredWindow`；修改：`onMouseMove` 窗口模式不显示放大镜而是高亮窗口，`onMouseDown` 窗口模式点击直接选中窗口区域，`resetToSelecting` 清理高亮；新增 `.window-highlight-label` 显示窗口标题；提示文字根据模式动态更新
+
+**窗口检测流程：**
+```
+切换到窗口模式 → fetchWindowList()（PowerShell 枚举，~1-2s）→ 鼠标移动 → 检测包含鼠标的最顶层窗口 → 显示霓虹青高亮框+标题标签 → 点击 → 直接进入调整阶段
+```
+
+**注意：** EnumWindows 返回顺序不保证是 Z 序，可能导致部分重叠窗口检测不准确，这是 Windows API 的限制。
 
 #### 2026-03 搜索系统升级（MMR + BM25）
 - `main-process/search.js` - 新增：`_applyMMR()`（MMR 去重算法）、`_bm25ScoreConversations()`（标准 BM25 评分）、`_tokenize()`（中文 bigram + 英文整词分词）、`_textSimilarity()`（Jaccard 文本降级）、`_cosineSimilarity()`；修改：`_vectorSearchConversations()` 附带 embedding 向量、`_keywordScoreConversations()` 恢复为降级方案、`search()` 集成 MMR 和 BM25

@@ -14,6 +14,7 @@
 
     :root {
       --bg: #020810;
+      --bg-surface: rgba(0, 15, 30, 0.98);
       --bg-card: rgba(0, 30, 55, 0.6);
       --border: rgba(0, 255, 240, 0.3);
       --border-bright: rgba(0, 255, 240, 0.7);
@@ -26,6 +27,7 @@
       --radius: 8px;
       --header-bg: rgba(0, 15, 30, 0.98);
       --input-area-bg: rgba(0, 12, 25, 0.98);
+      --input-field-bg: rgba(0, 16, 32, 0.75);
       --personality-bg: rgba(0, 15, 35, 0.5);
       --confirm-bg: rgba(0, 20, 45, 0.98);
       --close-icon: rgba(160, 220, 240, 0.6);
@@ -130,7 +132,8 @@
       margin-bottom: 14px;
     }
 
-    .pet-selector, .personality-selector {
+    .pet-selector,
+    .personality-selector {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
@@ -255,6 +258,150 @@
       color: var(--neon-cyan);
     }
 
+    /* API Key 管理样式 */
+    .apikey-row {
+      display: grid;
+      grid-template-columns: 90px 1fr auto auto auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .apikey-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .apikey-status {
+      font-size: 11px;
+    }
+
+    .apikey-status.configured {
+      color: #00ff88;
+    }
+
+    .apikey-status.not-configured {
+      color: var(--text-muted);
+    }
+
+    .apikey-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .apikey-input {
+      width: 100%;
+      padding: 7px 32px 7px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--input-field-bg);
+      color: var(--text);
+      font-size: 12px;
+      font-family: monospace;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .apikey-input:focus {
+      border-color: var(--border-bright);
+    }
+
+    .apikey-input::placeholder {
+      color: var(--text-muted);
+      font-family: inherit;
+    }
+
+    .apikey-toggle-vis {
+      position: absolute;
+      right: 6px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px;
+      line-height: 1;
+    }
+
+    .apikey-toggle-vis:hover {
+      color: var(--neon-cyan);
+    }
+
+    .apikey-save-btn {
+      padding: 6px 10px;
+      font-size: 11px;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--neon-cyan);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .apikey-save-btn:hover {
+      border-color: var(--border-bright);
+      box-shadow: var(--glow-sm);
+    }
+
+    .apikey-save-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .apikey-test-btn {
+      padding: 6px 10px;
+      font-size: 11px;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .apikey-test-btn:hover {
+      color: var(--neon-cyan);
+      border-color: var(--border-bright);
+    }
+
+    .apikey-test-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .apikey-models-hint {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: -4px;
+      margin-bottom: 6px;
+      padding-left: 90px;
+    }
+
+    .apikey-toast {
+      display: none;
+      color: #00ff88;
+      font-size: 11px;
+      padding: 6px 10px;
+      background: rgba(0, 255, 136, 0.08);
+      border: 1px solid rgba(0, 255, 136, 0.3);
+      border-radius: 6px;
+      margin-top: 6px;
+      text-align: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .apikey-toast.error {
+      color: var(--neon-magenta);
+      background: rgba(255, 45, 120, 0.08);
+      border-color: rgba(255, 45, 120, 0.3);
+    }
+
     .bubble-debug-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -276,15 +423,42 @@
     }
 
     .bubble-debug-select,
-    .bubble-debug-input {
+    .bubble-debug-input,
+    .scene-config-select,
+    .scene-config-input {
       width: 100%;
       padding: 7px 8px;
       border-radius: 6px;
       border: 1px solid var(--border);
-      background: rgba(0, 16, 32, 0.75);
+      background: var(--input-field-bg);
       color: var(--text);
       font-size: 12px;
       outline: none;
+    }
+
+    .bubble-debug-select option,
+    .scene-config-select option {
+      background: var(--bg-surface);
+      color: var(--text);
+    }
+
+    .scene-config-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .scene-config-row {
+      display: grid;
+      grid-template-columns: 90px 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .scene-label {
+      font-size: 12px;
+      color: var(--text-muted);
     }
 
     .bubble-debug-range {
@@ -458,6 +632,67 @@
     </div>
 
     <div class="setting-group">
+      <h3>LLM 场景配置</h3>
+      <div class="scene-config-grid">
+        <div class="scene-config-row">
+          <div class="scene-label">对话</div>
+          <select id="sceneChatProvider" class="scene-config-select" onchange="onSceneProviderChange('chat', this.value)">
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="siliconflow">SiliconFlow</option>
+            <option value="glm">GLM</option>
+            <option value="qwen">Qwen（通义千问）</option>
+          </select>
+          <input id="sceneChatModel" class="scene-config-input" type="text" placeholder="模型名，如 deepseek-chat" onchange="onSceneModelChange('chat', this.value)">
+        </div>
+        <div class="scene-config-row">
+          <div class="scene-label">视觉分析</div>
+          <select id="sceneVisionProvider" class="scene-config-select" onchange="onSceneProviderChange('vision', this.value)">
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="siliconflow">SiliconFlow</option>
+            <option value="glm">GLM</option>
+            <option value="qwen">Qwen（通义千问）</option>
+          </select>
+          <input id="sceneVisionModel" class="scene-config-input" type="text" placeholder="视觉模型名" onchange="onSceneModelChange('vision', this.value)">
+        </div>
+        <div class="scene-config-row">
+          <div class="scene-label">翻译</div>
+          <select id="sceneTranslateProvider" class="scene-config-select" onchange="onSceneProviderChange('translate', this.value)">
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="siliconflow">SiliconFlow</option>
+            <option value="glm">GLM</option>
+            <option value="qwen">Qwen（通义千问）</option>
+          </select>
+          <input id="sceneTranslateModel" class="scene-config-input" type="text" placeholder="翻译模型名" onchange="onSceneModelChange('translate', this.value)">
+        </div>
+        <div class="scene-config-row">
+          <div class="scene-label">OCR</div>
+          <select id="sceneOcrProvider" class="scene-config-select" onchange="onSceneProviderChange('ocr', this.value)">
+            <option value="tesseract">Tesseract(本地)</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="siliconflow">SiliconFlow</option>
+            <option value="glm">GLM</option>
+            <option value="qwen">Qwen（通义千问）</option>
+          </select>
+          <input id="sceneOcrModel" class="scene-config-input" type="text" placeholder="OCR 模型名或实现名" onchange="onSceneModelChange('ocr', this.value)">
+        </div>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <h3>API Key 管理</h3>
+      <div id="apikeyContainer"></div>
+      <div class="apikey-toast" id="apikeyToast"></div>
+    </div>
+
+    <div class="setting-group">
       <h3>提示框位置调试（测试用）</h3>
       <div class="bubble-debug-row">
         <label for="bubbleStateSelect">状态</label>
@@ -513,9 +748,17 @@
   <script src="../src/settings-window-utils.js"></script>
   <script>
     const SettingsUtils = window.SettingsWindowUtils;
+    const DEFAULT_SCENE_CONFIG = {
+      chat: { provider: 'deepseek', model: 'deepseek-chat' },
+      vision: { provider: 'deepseek', model: 'deepseek-chat' },
+      translate: { provider: 'deepseek', model: 'deepseek-chat' },
+      ocr: { provider: 'tesseract', model: 'tesseract' }
+    };
+
     let BUBBLE_DEBUG_STATES = [];
     let bubbleOffsets = { idle: { x: 0, y: 8 } };
     let currentBubbleState = 'idle';
+    let llmSceneConfig = JSON.parse(JSON.stringify(DEFAULT_SCENE_CONFIG));
 
     function getBubbleDebugStates() {
       try {
@@ -549,12 +792,48 @@
       return bubbleOffsets[stateName];
     }
 
+    function normalizeSceneConfig(config) {
+      const source = config && typeof config === 'object' ? config : {};
+      const normalized = {};
+
+      for (const [scene, fallback] of Object.entries(DEFAULT_SCENE_CONFIG)) {
+        const raw = source[scene] && typeof source[scene] === 'object' ? source[scene] : {};
+        const provider = typeof raw.provider === 'string' && raw.provider.trim()
+          ? raw.provider.trim().toLowerCase()
+          : fallback.provider;
+        const model = typeof raw.model === 'string' && raw.model.trim()
+          ? raw.model.trim()
+          : fallback.model;
+        normalized[scene] = { provider, model };
+      }
+
+      return normalized;
+    }
+
     function applyBubbleOffsetEditors() {
       const offset = ensureBubbleOffsetState(currentBubbleState);
       document.getElementById('bubbleOffsetXInput').value = offset.x;
       document.getElementById('bubbleOffsetXRange').value = offset.x;
       document.getElementById('bubbleOffsetYInput').value = offset.y;
       document.getElementById('bubbleOffsetYRange').value = offset.y;
+    }
+
+    function applySceneConfigEditors() {
+      const sceneMap = {
+        chat: { providerId: 'sceneChatProvider', modelId: 'sceneChatModel' },
+        vision: { providerId: 'sceneVisionProvider', modelId: 'sceneVisionModel' },
+        translate: { providerId: 'sceneTranslateProvider', modelId: 'sceneTranslateModel' },
+        ocr: { providerId: 'sceneOcrProvider', modelId: 'sceneOcrModel' }
+      };
+
+      Object.entries(sceneMap).forEach(([scene, ids]) => {
+        const config = llmSceneConfig[scene] || DEFAULT_SCENE_CONFIG[scene];
+        const providerEl = document.getElementById(ids.providerId);
+        const modelEl = document.getElementById(ids.modelId);
+        if (!providerEl || !modelEl) return;
+        providerEl.value = config.provider;
+        modelEl.value = config.model;
+      });
     }
 
     function persistBubbleOffsets(shouldPreview = false) {
@@ -576,30 +855,32 @@
       }
     }
 
-    // 加载当前设置
+    function persistSceneConfig() {
+      llmSceneConfig = normalizeSceneConfig(llmSceneConfig);
+      SettingsUtils.saveLLMSceneConfig(window.PetStorage, llmSceneConfig);
+      if (window.electron && window.electron.sendSettingsChange) {
+        window.electron.sendSettingsChange({
+          type: 'llm-scene-config',
+          config: llmSceneConfig
+        });
+      }
+    }
+
     function loadSettings() {
       const snapshot = SettingsUtils.getSettingsSnapshot(window.PetStorage);
 
-      // 选中当前宠物
       document.querySelectorAll('.pet-option').forEach(el => {
         el.classList.toggle('selected', el.dataset.pet === snapshot.pet);
       });
 
-      // 选中当前性格
       document.querySelectorAll('.personality-option').forEach(el => {
         el.classList.toggle('selected', el.dataset.personality === snapshot.personality);
       });
 
-      // 设置开关状态
       document.getElementById('autoSpeakCheck').checked = snapshot.autoSpeak;
-
-      // 显示心情
       updateMoodDisplay(snapshot.mood);
 
-      // 动态加载状态列表（按 lottie/cat 目录 JSON 文件）
       BUBBLE_DEBUG_STATES = getBubbleDebugStates();
-
-      // 加载提示框位置调试数据
       bubbleOffsets = snapshot.bubbleStateOffsets || { idle: { x: 0, y: 8 } };
       currentBubbleState = snapshot.bubblePreviewState || 'idle';
       if (!BUBBLE_DEBUG_STATES.includes(currentBubbleState)) {
@@ -612,6 +893,12 @@
       select.innerHTML = BUBBLE_DEBUG_STATES.map(s => `<option value="${s}">${s}</option>`).join('');
       select.value = currentBubbleState;
       applyBubbleOffsetEditors();
+
+      llmSceneConfig = normalizeSceneConfig(snapshot.llmSceneConfig || DEFAULT_SCENE_CONFIG);
+      applySceneConfigEditors();
+
+      // 加载 API Key 状态
+      loadApiKeys();
     }
 
     function selectPet(pet) {
@@ -642,6 +929,23 @@
       if (window.electron && window.electron.sendSettingsChange) {
         window.electron.sendSettingsChange({ type: 'autoSpeak', autoSpeak: checked });
       }
+    }
+
+    function onSceneProviderChange(scene, provider) {
+      if (!llmSceneConfig[scene]) {
+        llmSceneConfig[scene] = { ...DEFAULT_SCENE_CONFIG[scene] };
+      }
+      llmSceneConfig[scene].provider = (provider || '').trim().toLowerCase() || DEFAULT_SCENE_CONFIG[scene].provider;
+      persistSceneConfig();
+    }
+
+    function onSceneModelChange(scene, model) {
+      if (!llmSceneConfig[scene]) {
+        llmSceneConfig[scene] = { ...DEFAULT_SCENE_CONFIG[scene] };
+      }
+      llmSceneConfig[scene].model = (model || '').trim() || DEFAULT_SCENE_CONFIG[scene].model;
+      persistSceneConfig();
+      applySceneConfigEditors();
     }
 
     function onBubbleStateChange() {
@@ -736,13 +1040,133 @@
       }
     }
 
-    // 页面加载时加载设置
+    // ==================== API Key 管理 ====================
+    const API_KEY_PROVIDERS = [
+      { id: 'deepseek', name: 'DeepSeek', models: 'deepseek-chat, deepseek-reasoner' },
+      { id: 'openai', name: 'OpenAI', models: 'gpt-4o, gpt-4o-mini, o1-mini' },
+      { id: 'openrouter', name: 'OpenRouter', models: 'openai/gpt-4o-mini, anthropic/claude-3.5-sonnet' },
+      { id: 'siliconflow', name: 'SiliconFlow', models: 'Qwen/Qwen2.5-72B-Instruct' },
+      { id: 'glm', name: 'GLM', models: 'glm-4-flash, glm-4-plus' },
+      { id: 'qwen', name: 'Qwen（通义千问）', models: 'qwen-turbo, qwen-plus, qwen-max, qwen-long' }
+    ];
+
+    function renderApiKeyRows(keysInfo) {
+      const container = document.getElementById('apikeyContainer');
+      container.innerHTML = API_KEY_PROVIDERS.map(p => {
+        const info = keysInfo[p.id] || { masked: '', configured: false, source: 'none' };
+        const statusClass = info.configured ? 'configured' : 'not-configured';
+        const statusText = info.configured ? '✓' : '-';
+        const placeholder = info.configured ? info.masked : '粘贴 API Key...';
+        return `
+          <div class="apikey-row" data-provider="${p.id}">
+            <div class="apikey-label">
+              <span class="apikey-status ${statusClass}">${statusText}</span>
+              ${p.name}
+            </div>
+            <div class="apikey-input-wrap">
+              <input class="apikey-input" type="password" placeholder="${placeholder}"
+                     id="apikey-${p.id}" autocomplete="off" spellcheck="false">
+              <button class="apikey-toggle-vis" onclick="toggleApiKeyVis('${p.id}')" title="显示/隐藏">
+                ◉
+              </button>
+            </div>
+            <button class="apikey-save-btn" onclick="saveApiKey('${p.id}')">保存</button>
+            <button class="apikey-test-btn" id="apikey-test-${p.id}" onclick="testApiKey('${p.id}')" ${info.configured ? '' : 'disabled'}>测试</button>
+          </div>
+          <div class="apikey-models-hint">常用模型: ${p.models}</div>
+        `;
+      }).join('');
+    }
+
+    function toggleApiKeyVis(provider) {
+      const input = document.getElementById(`apikey-${provider}`);
+      if (input.type === 'password') {
+        input.type = 'text';
+      } else {
+        input.type = 'password';
+      }
+    }
+
+    async function saveApiKey(provider) {
+      const input = document.getElementById(`apikey-${provider}`);
+      const key = input.value.trim();
+      if (!key) return;
+
+      const btn = input.closest('.apikey-row').querySelector('.apikey-save-btn');
+      btn.disabled = true;
+      btn.textContent = '保存中...';
+
+      try {
+        const result = await window.electron.saveProviderAPIKey(provider, key);
+        const toast = document.getElementById('apikeyToast');
+        if (result && result.success) {
+          toast.className = 'apikey-toast';
+          toast.textContent = `✓ ${provider} API Key 已保存`;
+          toast.style.display = 'block';
+          input.value = '';
+          // 刷新状态显示
+          await loadApiKeys();
+        } else {
+          toast.className = 'apikey-toast error';
+          toast.textContent = `保存失败: ${result?.error || '未知错误'}`;
+          toast.style.display = 'block';
+        }
+        setTimeout(() => { toast.style.display = 'none'; }, 2500);
+      } catch (error) {
+        console.error('[Settings] 保存 API Key 失败:', error);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '保存';
+      }
+    }
+
+    async function testApiKey(provider) {
+      const btn = document.getElementById(`apikey-test-${provider}`);
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = '测试中...';
+
+      try {
+        const result = await window.electron.testProviderAPIKey(provider);
+        const toast = document.getElementById('apikeyToast');
+        if (result && result.success) {
+          toast.className = 'apikey-toast';
+          toast.textContent = `✓ ${provider} 连接成功`;
+        } else {
+          toast.className = 'apikey-toast error';
+          toast.textContent = `${provider} 测试失败: ${result?.error || '未知错误'}`;
+        }
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 3000);
+      } catch (error) {
+        console.error('[Settings] 测试 API Key 失败:', error);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '测试';
+      }
+    }
+
+    async function loadApiKeys() {
+      try {
+        if (window.electron && window.electron.getAllProviderAPIKeys) {
+          const keysInfo = await window.electron.getAllProviderAPIKeys();
+          renderApiKeyRows(keysInfo);
+        } else {
+          // 降级：显示空状态
+          renderApiKeyRows({});
+        }
+      } catch (error) {
+        console.error('[Settings] 加载 API Keys 失败:', error);
+        renderApiKeyRows({});
+      }
+    }
+
     window.addEventListener('DOMContentLoaded', loadSettings);
 
-    // 监听心情更新
     window.addEventListener('mood-updated', (e) => {
       updateMoodDisplay(e.detail);
     });
+
     console.log('[settings-window] 主题系统已加载');
   </script>
 </body>

@@ -513,6 +513,14 @@ class MemoryMainProcess {
     console.log('MemoryMainProcess closed');
   }
 
+  // 动态更新 API Key（用于用户通过 UI 修改 key 后同步到事实提取器）
+  updateApiKey(newApiKey) {
+    if (this.factExtractorLLM && typeof this.factExtractorLLM.setApiKey === 'function') {
+      this.factExtractorLLM.setApiKey(newApiKey);
+      console.log(`[Memory] API Key 已更新 (长度: ${newApiKey ? newApiKey.length : 0})`);
+    }
+  }
+
   // ==================== 提醒功能 ====================
 
   // 设置主窗口（用于提醒通知）

@@ -12,6 +12,90 @@ const getAPIKey = async () => {
 };
 
 const API_URL = 'https://api.deepseek.com/v1/chat/completions';
+
+const PROVIDER_ENV_HINT = {
+  deepseek: 'DEEPSEEK_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+  siliconflow: 'SILICONFLOW_API_KEY',
+  glm: 'GLM_API_KEY',
+  qwen: 'DASHSCOPE_API_KEY',
+  tesseract: 'TESSERACT (local)'
+};
+
+const OPENAI_COMPAT_PROVIDERS = {
+  deepseek: {
+    endpoint: 'https://api.deepseek.com/v1/chat/completions',
+    defaultModel: 'deepseek-chat',
+    supportsTools: true
+  },
+  openai: {
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    defaultModel: 'gpt-4o-mini',
+    supportsTools: true
+  },
+  openrouter: {
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+    defaultModel: 'openai/gpt-4o-mini',
+    supportsTools: true
+  },
+  siliconflow: {
+    endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+    defaultModel: 'Qwen/Qwen2.5-72B-Instruct',
+    supportsTools: true
+  },
+  glm: {
+    endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    defaultModel: 'glm-4-flash',
+    supportsTools: true
+  },
+  qwen: {
+    endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    defaultModel: 'qwen-turbo',
+    supportsTools: true
+  }
+};
+
+const DEFAULT_CHAT_SCENE_CONFIG = {
+  provider: 'deepseek',
+  model: 'deepseek-chat'
+};
+
+const getProviderAPIKey = async (provider) => {
+  try {
+    if (window.electron?.getProviderAPIKey) {
+      const key = await window.electron.getProviderAPIKey(provider);
+      return key || '';
+    }
+    if (provider === 'deepseek') {
+      const key = await getAPIKey();
+      return key || '';
+    }
+    return '';
+  } catch (error) {
+    console.error('Failed to get provider API key:', error);
+    return '';
+  }
+};
+
+function getChatSceneConfig() {
+  const settings = window.PetStorage?.getSettings?.() || {};
+  const raw = settings.llmSceneConfig?.chat || DEFAULT_CHAT_SCENE_CONFIG;
+  const rawProvider = typeof raw.provider === 'string' && raw.provider.trim()
+    ? raw.provider.trim().toLowerCase()
+    : DEFAULT_CHAT_SCENE_CONFIG.provider;
+  const provider = OPENAI_COMPAT_PROVIDERS[rawProvider] ? rawProvider : DEFAULT_CHAT_SCENE_CONFIG.provider;
+  const providerMeta = OPENAI_COMPAT_PROVIDERS[provider];
+  const model = typeof raw.model === 'string' && raw.model.trim()
+    ? raw.model.trim()
+    : providerMeta.defaultModel;
+  return {
+    provider,
+    model,
+    ...providerMeta
+  };
+}
+
 let isCallingAPI = false;
 
 // 记忆系统 - 通过 IPC 与主进程通信
@@ -150,10 +234,12 @@ async function callDeepSeekAPI(messages, personality, options = {}) {
   lastApiError = null;
 
   try {
+    const sceneConfig = getChatSceneConfig();
     console.log('[API DEBUG] Attempting to get API key...');
-    let apiKey = await getAPIKey();
+    let apiKey = await getProviderAPIKey(sceneConfig.provider);
     console.log('[API DEBUG] Raw API key type:', typeof apiKey);
     console.log('[API DEBUG] API key result:', apiKey ? `FOUND (${apiKey.length} chars)` : 'NOT FOUND');
+    console.log('[API DEBUG] provider/model:', sceneConfig.provider, sceneConfig.model);
     console.log('[API DEBUG] API key:', apiKey ? `present (${apiKey.length} chars)` : 'NOT SET');
 
     // 打印发送给 API 的消息内容
@@ -166,7 +252,8 @@ async function callDeepSeekAPI(messages, personality, options = {}) {
     console.log('[API] ========== REQUEST MESSAGES END ==========');
 
     if (!apiKey) {
-      const errorMsg = 'API Key 未配置，请在 .env 文件中设置 DEEPSEEK_API_KEY';
+      const envHint = PROVIDER_ENV_HINT[sceneConfig.provider] || '对应 API KEY';
+      const errorMsg = `API Key 未配置，请在 .env 文件中设置 ${envHint}`;
       console.error('[API ERROR]', errorMsg);
       lastApiError = errorMsg;
       consecutiveErrors++;
@@ -175,7 +262,7 @@ async function callDeepSeekAPI(messages, personality, options = {}) {
 
     // 构建请求体
     const requestBody = {
-      model: 'deepseek-chat',
+      model: sceneConfig.model,
       messages: messages,
       max_tokens: 500,
       temperature: 0.8,
@@ -184,19 +271,24 @@ async function callDeepSeekAPI(messages, personality, options = {}) {
     };
 
     // 如果启用了工具调用，附加 tools 参数
-    if (options.tools && options.tools.length > 0) {
+    if (sceneConfig.supportsTools && options.tools && options.tools.length > 0) {
       requestBody.tools = options.tools;
       requestBody.tool_choice = 'auto';
       console.log(`[API] 附加 ${options.tools.length} 个工具定义`);
     }
 
-    console.log('[API DEBUG] Calling DeepSeek API...');
-    const response = await fetchWithTimeout(API_URL, {
+    console.log(`[API DEBUG] Calling ${sceneConfig.provider} API...`);
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+    if (sceneConfig.provider === 'openrouter') {
+      headers['HTTP-Referer'] = 'https://ai-desktop-pet.local';
+      headers['X-Title'] = 'AI Desktop Pet';
+    }
+    const response = await fetchWithTimeout(sceneConfig.endpoint, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify(requestBody)
     });
 
@@ -679,7 +771,8 @@ function getMockResponse(personality, messages) {
 window.PetAPI = {
   chatWithAI,
   isConfigured: async () => {
-    const apiKey = await getAPIKey();
+    const sceneConfig = getChatSceneConfig();
+    const apiKey = await getProviderAPIKey(sceneConfig.provider);
     return apiKey && apiKey.length > 0;
   },
   // 查看记忆
@@ -693,8 +786,11 @@ window.PetAPI = {
   getLastError: () => lastApiError,
   // 获取 API 状态
   getApiStatus: async () => {
-    const apiKey = await getAPIKey();
+    const sceneConfig = getChatSceneConfig();
+    const apiKey = await getProviderAPIKey(sceneConfig.provider);
     return {
+      provider: sceneConfig.provider,
+      model: sceneConfig.model,
       hasKey: !!apiKey,
       keyLength: apiKey?.length || 0,
       lastError: lastApiError,

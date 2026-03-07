@@ -346,6 +346,13 @@ function syncBubbleOffsetSettingsToMain() {
     offsets: state.settings.bubbleStateOffsets || { idle: { x: 0, y: 8 } },
     state: state.settings.bubblePreviewState || 'idle'
   });
+
+  if (state.settings.llmSceneConfig) {
+    window.electron.sendSettingsChange({
+      type: 'llm-scene-config',
+      config: state.settings.llmSceneConfig
+    });
+  }
 }
 
 // 键盘快捷键

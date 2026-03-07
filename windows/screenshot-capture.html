@@ -196,7 +196,7 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      z-index: 5;
+      z-index: 520;
       pointer-events: none;
       text-align: center;
       color: var(--text);
@@ -226,7 +226,7 @@
       top: 16px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 100;
+      z-index: 530;
       display: flex;
       align-items: center;
       gap: 2px;
@@ -335,7 +335,7 @@
       display: none;
       z-index: 50;
       pointer-events: none;
-      padding: 3px 8px;
+      padding: 4px 8px;
       background: var(--screenshot-toolbar-bg);
       border: 1px solid var(--border);
       border-radius: 3px;
@@ -343,6 +343,27 @@
       color: var(--text-muted);
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mag-color-swatch {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      flex-shrink: 0;
+    }
+
+    .mag-color-code {
+      color: var(--neon-cyan);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .mag-coord {
+      color: var(--text-muted);
     }
 
     /* ===== 编辑工具栏 ===== */
@@ -775,7 +796,7 @@
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 500;
+      z-index: 9999;
       padding: 8px 20px;
       border-radius: 6px;
       font-size: 13px;
@@ -821,16 +842,15 @@
     /* ===== 加载状态 ===== */
     .screenshot-loading {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 400;
+      z-index: 9000;
       display: none;
       align-items: center;
       justify-content: center;
-      background: rgba(0, 0, 0, 0.5);
-      backdrop-filter: blur(4px);
+      /* 通过 JS 动态设置 left/top，transform 负责居中对齐 */
+      transform: translate(-50%, -50%);
+      width: auto;
+      height: auto;
+      background: transparent;
     }
 
     .screenshot-loading.show {
@@ -843,8 +863,8 @@
       align-items: center;
       gap: 14px;
       padding: 24px 36px;
-      background: var(--screenshot-toolbar-bg);
-      border: 1px solid var(--border);
+      background: rgba(2, 8, 16, 0.72);
+      border: 1px solid rgba(0, 255, 240, 0.24);
       border-radius: var(--radius);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     }
@@ -863,8 +883,10 @@
     }
 
     .loading-text {
-      font-size: 13px;
-      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--neon-cyan);
+      text-shadow: var(--glow-sm);
       animation: loadingPulse 1.5s ease-in-out infinite;
     }
 
@@ -906,7 +928,24 @@
       border: 2px solid var(--neon-cyan);
       background: rgba(0, 255, 240, 0.08);
       box-shadow: var(--glow-sm);
-      transition: top 0.1s ease, left 0.1s ease, width 0.1s ease, height 0.1s ease;
+      transition: top 0.08s ease, left 0.08s ease, width 0.08s ease, height 0.08s ease;
+    }
+
+    .window-highlight-label {
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      transform: translateY(100%);
+      padding: 2px 8px;
+      background: var(--neon-cyan);
+      color: #000;
+      font-size: 11px;
+      font-weight: 600;
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-radius: 0 0 4px 4px;
     }
 
     /* ===== AI 分析结果面板 ===== */
@@ -1089,10 +1128,7 @@
   <div id="position-info"></div>
 
   <!-- 初始提示 -->
-  <div id="hint">
-    拖拽鼠标选择截图区域<br>
-    按 <span class="hint-key">ESC</span> 取消
-  </div>
+  <div id="hint"></div>
 
   <!-- 模式切换栏 -->
   <div class="mode-bar" id="modeBar">
@@ -1175,7 +1211,13 @@
     <button class="action-btn" id="pinAction">
       <span class="action-icon">&#128204;</span> 贴图
     </button>
-    <button class="action-btn" id="aiAction">
+    <button class="action-btn" id="ocrAction">
+      <span class="action-icon">&#128196;</span> 提取文字
+    </button>
+    <button class="action-btn" id="translateAction">
+      <span class="action-icon">&#127760;</span> 翻译
+    </button>
+    <button class="action-btn" id="aiAction" style="display:none;">
       <span class="action-icon">&#129302;</span> AI分析
     </button>
     <button class="action-btn close-action" id="closeAction">
@@ -1188,7 +1230,9 @@
   <div class="magnifier-info" id="magnifierInfo"></div>
 
   <!-- 窗口高亮框 -->
-  <div class="window-highlight" id="windowHighlight" style="display:none;"></div>
+  <div class="window-highlight" id="windowHighlight" style="display:none;">
+    <div class="window-highlight-label" id="windowHighlightLabel"></div>
+  </div>
 
   <!-- 加载状态 -->
   <div class="screenshot-loading" id="screenshotLoading">
@@ -1258,9 +1302,11 @@
     const magnifierCtx = magnifierCanvas.getContext('2d');
     const magnifierInfo = $('#magnifierInfo');
     const windowHighlight = $('#windowHighlight');
+    const windowHighlightLabel = $('#windowHighlightLabel');
     const loadingOverlay = $('#screenshotLoading');
     const loadingText = $('#loadingText');
     const analysisPanel = $('#analysisPanel');
+    const analysisTitle = analysisPanel.querySelector('.analysis-title');
     const analysisContent = $('#analysisContent');
     const colorPicker = $('#colorPicker');
     const colorPreview = $('#colorPreview');
@@ -1289,6 +1335,12 @@
       screenCapture: null,
       // 全屏截图的 Image 对象
       screenImage: null,
+      // 窗口模式：系统窗口列表
+      windowList: [],
+      // 窗口模式：当前高亮的窗口
+      hoveredWindow: null,
+      // 选区阶段：当前鼠标下的颜色（十六进制）
+      hoverColor: null,
     };
 
     // ===== 标注管理器 =====
@@ -1798,6 +1850,54 @@
 
     init();
 
+    // 根据当前模式更新提示文字
+    function updateHint() {
+      if (state.mode === 'window') {
+        hint.innerHTML = '悬停到窗口上，点击选中<br>按 <span class="hint-key">ESC</span> 取消';
+      } else {
+        hint.innerHTML = '拖拽鼠标选择截图区域<br>按 <span class="hint-key">ESC</span> 取消';
+      }
+    }
+    updateHint();
+
+    // 获取窗口列表（初始化时即触发，不阻塞 UI）
+    async function fetchWindowList() {
+      try {
+        const result = await window.ScreenshotBridge.getWindowList();
+        if (result && result.success) {
+          state.windowList = result.windows || [];
+        }
+      } catch (err) {
+        console.warn('[截图] 获取窗口列表失败:', err);
+        state.windowList = [];
+      }
+    }
+    fetchWindowList(); // 启动即异步加载，通常在用户移动鼠标前完成
+
+    // 更新窗口高亮框（窗口模式 hover）
+    function updateWindowHighlight(x, y) {
+      let found = null;
+      // EnumWindows 按 Z 序返回（顶层在前），取第一个包含鼠标的窗口
+      for (const win of state.windowList) {
+        if (x >= win.x && x <= win.x + win.w && y >= win.y && y <= win.y + win.h) {
+          found = win;
+          break;
+        }
+      }
+      if (found) {
+        state.hoveredWindow = found;
+        windowHighlight.style.display = 'block';
+        windowHighlight.style.left   = found.x + 'px';
+        windowHighlight.style.top    = found.y + 'px';
+        windowHighlight.style.width  = found.w + 'px';
+        windowHighlight.style.height = found.h + 'px';
+        windowHighlightLabel.textContent = found.title;
+      } else {
+        state.hoveredWindow = null;
+        windowHighlight.style.display = 'none';
+      }
+    }
+
     // =============================================
     // 模式切换
     // =============================================
@@ -1813,9 +1913,17 @@
         btn.classList.add('active');
         state.mode = newMode;
 
+        // 切换模式时隐藏窗口高亮
+        windowHighlight.style.display = 'none';
+        state.hoveredWindow = null;
+
         if (newMode === 'fullscreen') {
           // 全屏模式：直接选中整个屏幕
           selectFullScreen();
+        } else if (newMode === 'window') {
+          updateHint();
+        } else {
+          updateHint();
         }
       });
     });
@@ -1847,7 +1955,31 @@
       const y = e.clientY;
 
       if (state.phase === 'selecting') {
-        // 开始拖拽创建选区
+        if (state.mode === 'window') {
+          // 窗口模式：点击直接选中高亮窗口
+          if (state.hoveredWindow) {
+            const win = state.hoveredWindow;
+            state.selection = { x: win.x, y: win.y, w: win.w, h: win.h };
+            hint.style.display = 'none';
+            windowHighlight.style.display = 'none';
+            showSelection();
+            enterAdjustPhase();
+          }
+          return;
+        }
+        // 区域模式：有高亮窗口时点击直接选中，否则拖拽画框
+        if (state.hoveredWindow) {
+          const win = state.hoveredWindow;
+          state.selection = { x: win.x, y: win.y, w: win.w, h: win.h };
+          hint.style.display = 'none';
+          magnifier.style.display = 'none';
+          magnifierInfo.style.display = 'none';
+          windowHighlight.style.display = 'none';
+          showSelection();
+          enterAdjustPhase();
+          return;
+        }
+        // 无高亮窗口：开始拖拽创建选区
         state.isDragging = true;
         state.dragType = 'create';
         state.dragStart = { x, y };
@@ -1855,6 +1987,7 @@
         hint.style.display = 'none';
         magnifier.style.display = 'none';
         magnifierInfo.style.display = 'none';
+        windowHighlight.style.display = 'none';
       } else if (state.phase === 'adjusting') {
         // 检查是否拖拽手柄
         const handleDir = getHandleAtPoint(x, y);
@@ -1902,8 +2035,14 @@
       const y = e.clientY;
 
       if (state.phase === 'selecting' && !state.isDragging) {
-        // 显示放大镜
+        if (state.mode === 'window') {
+          // 窗口模式：只检测窗口，不显示放大镜
+          updateWindowHighlight(x, y);
+          return;
+        }
+        // 区域模式：显示放大镜 + 同时检测窗口自动高亮
         updateMagnifier(x, y);
+        updateWindowHighlight(x, y);
         return;
       }
 
@@ -1984,6 +2123,7 @@
       selectionEl.style.top = sel.y + 'px';
       selectionEl.style.width = sel.w + 'px';
       selectionEl.style.height = sel.h + 'px';
+      updateLoadingOverlayPosition();
     }
 
     function hideSelection() {
@@ -1991,6 +2131,7 @@
       selectionEl.classList.remove('confirmed');
       sizeInfo.style.display = 'none';
       positionInfo.style.display = 'none';
+      hideLoading();
     }
 
     function updateSizeInfo() {
@@ -2080,6 +2221,14 @@
       return Math.max(min, Math.min(max, val));
     }
 
+    function updateLoadingOverlayPosition() {
+      const sel = state.selection;
+      if (!sel || sel.w <= 0 || sel.h <= 0) return;
+      // 定位到选区中心，CSS transform 负责居中对齐
+      loadingOverlay.style.left = (sel.x + sel.w / 2) + 'px';
+      loadingOverlay.style.top  = (sel.y + sel.h / 2) + 'px';
+    }
+
     function isOnUI(target) {
       // 检查是否在 UI 元素上（工具栏、操作栏、模式栏、面板等）
       return target.closest('.mode-bar') ||
@@ -2103,7 +2252,7 @@
       }
 
       magnifier.style.display = 'block';
-      magnifierInfo.style.display = 'block';
+      magnifierInfo.style.display = 'flex';
 
       // 放大镜位置：鼠标右下方偏移
       let magX = x + 20;
@@ -2117,7 +2266,6 @@
       magnifier.style.top = magY + 'px';
 
       // 放大倍率
-      const zoom = 4;
       const srcSize = 30;
       magnifierCtx.clearRect(0, 0, 120, 120);
       magnifierCtx.imageSmoothingEnabled = false;
@@ -2127,10 +2275,19 @@
         0, 0, 120, 120
       );
 
-      // 坐标信息
-      magnifierInfo.textContent = `${x}, ${y}`;
+      // 读取中心像素颜色（放大镜中心 = 鼠标所在像素）
+      const px = magnifierCtx.getImageData(60, 60, 1, 1).data;
+      const toHex = c => c.toString(16).padStart(2, '0');
+      const hex = `#${toHex(px[0])}${toHex(px[1])}${toHex(px[2])}`.toUpperCase();
+      state.hoverColor = hex;
+
+      // 更新放大镜信息：坐标 + 颜色色块 + 颜色代码
+      magnifierInfo.innerHTML =
+        `<span class="mag-coord">${x}, ${y}</span>` +
+        `<span class="mag-color-swatch" style="background:${hex}"></span>` +
+        `<span class="mag-color-code">${hex}</span>`;
       magnifierInfo.style.left = magX + 'px';
-      magnifierInfo.style.top = (magY + 124) + 'px';
+      magnifierInfo.style.top = (magY + 126) + 'px';
     }
 
     // =============================================
@@ -2143,6 +2300,7 @@
       selectionEl.classList.add('confirmed');
       magnifier.style.display = 'none';
       magnifierInfo.style.display = 'none';
+      updateLoadingOverlayPosition();
       updateSizeInfo();
       // 调整阶段仅显示操作栏，避免出现两个关闭按钮
       showActionBar();
@@ -2161,6 +2319,7 @@
       annotationCanvas.style.left = sel.x + 'px';
       annotationCanvas.style.top = sel.y + 'px';
       annotationCanvas.classList.add('active');
+      updateLoadingOverlayPosition();
 
       // 更新光标
       updateEditCursor();
@@ -2179,6 +2338,8 @@
         annotationMgr._commitText();
       }
 
+      updateLoadingOverlayPosition();
+
       // 隐藏编辑工具栏
       editToolbar.style.display = 'none';
       showActionBar();
@@ -2196,12 +2357,18 @@
       sizeInfo.style.display = 'none';
       positionInfo.style.display = 'none';
       hint.style.display = 'block';
+      hideLoading();
 
       // 重置标注
       annotationMgr.annotations = [];
       annotationMgr.redoStack = [];
       annotationMgr.nextNumber = 1;
       annotationMgr._updateUndoRedoUI();
+
+      // 重置窗口高亮
+      windowHighlight.style.display = 'none';
+      state.hoveredWindow = null;
+      updateHint();
     }
 
     // =============================================
@@ -2429,17 +2596,56 @@
       }
     });
 
+    function getCompositeDataURL() {
+      const composite = annotationMgr.composite();
+      return composite.toDataURL('image/png');
+    }
+
+    $('#ocrAction').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        showLoading('提取文字中...');
+        const result = await window.ScreenshotBridge.ocr(getCompositeDataURL());
+        hideLoading();
+        if (result && result.success) {
+          showAnalysisPanel(result.result || '未识别到文字。', '文字提取结果');
+        } else {
+          showToast(result?.error || '文字提取失败', 'error');
+        }
+      } catch (err) {
+        hideLoading();
+        console.error('[截图] 文字提取失败:', err);
+        showToast('文字提取失败', 'error');
+      }
+    });
+
+    $('#translateAction').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        showLoading('翻译中...');
+        const result = await window.ScreenshotBridge.translate(getCompositeDataURL(), 'zh-CN');
+        hideLoading();
+        if (result && result.success) {
+          showAnalysisPanel(result.result || '未生成翻译结果。', '翻译结果');
+        } else {
+          showToast(result?.error || '翻译失败', 'error');
+        }
+      } catch (err) {
+        hideLoading();
+        console.error('[截图] 翻译失败:', err);
+        showToast('翻译失败', 'error');
+      }
+    });
+
     // AI 分析
     $('#aiAction').addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
         showLoading('AI 分析中...');
-        const composite = annotationMgr.composite();
-        const dataURL = composite.toDataURL('image/png');
-        const result = await window.ScreenshotBridge.analyze(dataURL, '请分析这张截图的内容');
+        const result = await window.ScreenshotBridge.analyze(getCompositeDataURL(), '请分析这张截图的内容');
         hideLoading();
         if (result && result.success) {
-          showAnalysisPanel(result.result);
+          showAnalysisPanel(result.result, 'AI 分析结果');
         } else {
           showToast('AI 分析失败', 'error');
         }
@@ -2460,7 +2666,8 @@
     // AI 分析面板
     // =============================================
 
-    function showAnalysisPanel(text) {
+    function showAnalysisPanel(text, title = 'AI 分析结果') {
+      analysisTitle.textContent = title;
       analysisContent.textContent = text;
       analysisPanel.style.display = 'flex';
 
@@ -2485,13 +2692,15 @@
     $('#analysisCloseBtn').addEventListener('click', (e) => {
       e.stopPropagation();
       analysisPanel.style.display = 'none';
+      closeScreenshot();
     });
 
     $('#analysisCopyBtn').addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
         await navigator.clipboard.writeText(analysisContent.textContent);
-        showToast('分析结果已复制', 'success');
+        showToast('已复制，截图窗口即将关闭', 'success');
+        setTimeout(() => closeScreenshot(), 800);
       } catch (err) {
         showToast('复制失败', 'error');
       }
@@ -2521,6 +2730,7 @@
     // =============================================
     function showLoading(text) {
       loadingText.textContent = text || '处理中...';
+      updateLoadingOverlayPosition();
       loadingOverlay.classList.add('show');
     }
 
@@ -2600,8 +2810,16 @@
         return;
       }
 
-      // Ctrl+C: 复制（操作阶段）
+      // Ctrl+C: 选区阶段复制颜色代码，操作阶段复制截图
       if (e.ctrlKey && e.key === 'c') {
+        if (state.phase === 'selecting' && state.hoverColor) {
+          e.preventDefault();
+          navigator.clipboard.writeText(state.hoverColor).then(() => {
+            showToast(`已复制颜色代码 ${state.hoverColor}`, 'success');
+            setTimeout(() => closeScreenshot(), 800);
+          }).catch(() => {});
+          return;
+        }
         if (state.phase === 'action') {
           e.preventDefault();
           $('#copyAction').click();
@@ -2656,8 +2874,10 @@
     // =============================================
     // 防止默认行为
     // =============================================
+    // 右键取消截图
     document.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      closeScreenshot();
     });
 
     document.addEventListener('wheel', (e) => {

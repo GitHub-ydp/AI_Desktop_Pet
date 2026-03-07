@@ -10,6 +10,13 @@ const DEFAULT_BUBBLE_STATE_OFFSETS = {
   idle: { x: 0, y: 8 }
 };
 
+const DEFAULT_LLM_SCENE_CONFIG = {
+  chat: { provider: 'deepseek', model: 'deepseek-chat' },
+  vision: { provider: 'deepseek', model: 'deepseek-chat' },
+  translate: { provider: 'deepseek', model: 'deepseek-chat' },
+  ocr: { provider: 'tesseract', model: 'tesseract' }
+};
+
 // 默认值
 const DEFAULTS = {
   pet: {
@@ -22,7 +29,8 @@ const DEFAULTS = {
     autoSpeak: true,
     selectedPet: '🐱',
     bubbleStateOffsets: DEFAULT_BUBBLE_STATE_OFFSETS,
-    bubblePreviewState: 'idle'
+    bubblePreviewState: 'idle',
+    llmSceneConfig: DEFAULT_LLM_SCENE_CONFIG
   }
 };
 
@@ -44,6 +52,24 @@ function normalizeBubbleStateOffsets(offsets) {
 
   if (!normalized.idle) {
     normalized.idle = { ...DEFAULT_BUBBLE_STATE_OFFSETS.idle };
+  }
+
+  return normalized;
+}
+
+function normalizeLLMSceneConfig(sceneConfig) {
+  const normalized = {};
+  const source = sceneConfig && typeof sceneConfig === 'object' ? sceneConfig : {};
+
+  for (const [scene, fallback] of Object.entries(DEFAULT_LLM_SCENE_CONFIG)) {
+    const raw = source[scene] && typeof source[scene] === 'object' ? source[scene] : {};
+    const provider = typeof raw.provider === 'string' && raw.provider.trim()
+      ? raw.provider.trim().toLowerCase()
+      : fallback.provider;
+    const model = typeof raw.model === 'string' && raw.model.trim()
+      ? raw.model.trim()
+      : fallback.model;
+    normalized[scene] = { provider, model };
   }
 
   return normalized;
@@ -160,6 +186,7 @@ function getSettings() {
     if (typeof merged.bubblePreviewState !== 'string' || !merged.bubblePreviewState) {
       merged.bubblePreviewState = 'idle';
     }
+    merged.llmSceneConfig = normalizeLLMSceneConfig(parsed.llmSceneConfig);
     return merged;
   } catch (error) {
     console.error('Error reading settings:', error);
@@ -203,6 +230,16 @@ function setBubblePreviewState(state) {
   if (!state || typeof state !== 'string') return false;
   const settings = getSettings();
   settings.bubblePreviewState = state;
+  return saveSettings(settings);
+}
+
+function getLLMSceneConfig() {
+  return getSettings().llmSceneConfig || normalizeLLMSceneConfig();
+}
+
+function saveLLMSceneConfig(sceneConfig) {
+  const settings = getSettings();
+  settings.llmSceneConfig = normalizeLLMSceneConfig(sceneConfig);
   return saveSettings(settings);
 }
 
@@ -258,6 +295,8 @@ window.PetStorage = {
   saveBubbleStateOffsets,
   getBubblePreviewState,
   setBubblePreviewState,
+  getLLMSceneConfig,
+  saveLLMSceneConfig,
   resetAllData,
   checkMoodDecay
 };

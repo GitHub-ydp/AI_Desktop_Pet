@@ -159,6 +159,25 @@ class ScreenshotManager {
     }
   }
 
+  updateOcrText(id, ocrText) {
+    if (!this.db) {
+      console.error('[Screenshot] Database not available');
+      return false;
+    }
+
+    try {
+      this.db.prepare(`
+        UPDATE screenshots
+        SET ocr_text = ?, accessed_at = ?
+        WHERE id = ?
+      `).run(ocrText || null, Date.now(), id);
+      return true;
+    } catch (error) {
+      console.error('[Screenshot] Failed to update OCR text:', error);
+      throw error;
+    }
+  }
+
   // 获取截图历史记录（带白名单校验）
   getHistory(options = {}) {
     if (!this.db) {

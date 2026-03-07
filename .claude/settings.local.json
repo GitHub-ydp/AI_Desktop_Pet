@@ -48,7 +48,9 @@
       "WebFetch(domain:arxiv.org)",
       "WebFetch(domain:expertium.github.io)",
       "WebFetch(domain:borretti.me)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(/tmp/test-plan.md:*)",
+      "Read(//tmp/**)"
     ]
   }
 }

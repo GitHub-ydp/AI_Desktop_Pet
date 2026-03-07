@@ -43,6 +43,49 @@ let currentPetVisualState = null;
 let bubbleOffsetByState = {
   idle: { ...DEFAULT_BUBBLE_OFFSET }
 };
+const DEFAULT_LLM_SCENE_CONFIG = {
+  chat: { provider: 'deepseek', model: 'deepseek-chat' },
+  vision: { provider: 'deepseek', model: 'deepseek-chat' },
+  translate: { provider: 'deepseek', model: 'deepseek-chat' },
+  ocr: { provider: 'tesseract', model: 'tesseract' }
+};
+const PROVIDER_ENV_KEY_MAP = {
+  deepseek: 'DEEPSEEK_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+  siliconflow: 'SILICONFLOW_API_KEY',
+  glm: 'GLM_API_KEY',
+  qwen: 'DASHSCOPE_API_KEY',
+  tesseract: null
+};
+const OPENAI_COMPAT_PROVIDERS = {
+  deepseek: {
+    endpoint: 'https://api.deepseek.com/v1/chat/completions',
+    defaultModel: 'deepseek-chat'
+  },
+  openai: {
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    defaultModel: 'gpt-4o-mini'
+  },
+  openrouter: {
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+    defaultModel: 'openai/gpt-4o-mini'
+  },
+  siliconflow: {
+    endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+    defaultModel: 'Qwen/Qwen2.5-72B-Instruct'
+  },
+  glm: {
+    endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    defaultModel: 'glm-4-flash'
+  },
+  qwen: {
+    endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    defaultModel: 'qwen-turbo'
+  }
+};
+const SCREENSHOT_TEXT_NONE = '[NO_TEXT]';
+let llmSceneConfig = JSON.parse(JSON.stringify(DEFAULT_LLM_SCENE_CONFIG));
 
 function normalizeBubbleOffsetByState(input) {
   const fallback = { idle: { ...DEFAULT_BUBBLE_OFFSET } };
@@ -73,6 +116,457 @@ function getBubbleOffsetForState(state) {
     return bubbleOffsetByState[state];
   }
   return bubbleOffsetByState.idle || DEFAULT_BUBBLE_OFFSET;
+}
+
+function normalizeLLMSceneConfig(config) {
+  const normalized = {};
+  const source = config && typeof config === 'object' ? config : {};
+  for (const [scene, fallback] of Object.entries(DEFAULT_LLM_SCENE_CONFIG)) {
+    const raw = source[scene] && typeof source[scene] === 'object' ? source[scene] : {};
+    const provider = typeof raw.provider === 'string' && raw.provider.trim()
+      ? raw.provider.trim().toLowerCase()
+      : fallback.provider;
+    const model = typeof raw.model === 'string' && raw.model.trim()
+      ? raw.model.trim()
+      : fallback.model;
+    normalized[scene] = { provider, model };
+  }
+  return normalized;
+}
+
+function getSceneConfig(scene) {
+  const fallback = DEFAULT_LLM_SCENE_CONFIG[scene] || DEFAULT_LLM_SCENE_CONFIG.chat;
+  const raw = llmSceneConfig[scene] && typeof llmSceneConfig[scene] === 'object'
+    ? llmSceneConfig[scene]
+    : fallback;
+  const rawProvider = typeof raw.provider === 'string' && raw.provider.trim()
+    ? raw.provider.trim().toLowerCase()
+    : fallback.provider;
+  const provider = rawProvider;
+  const providerMeta = OPENAI_COMPAT_PROVIDERS[provider] || null;
+  const model = typeof raw.model === 'string' && raw.model.trim()
+    ? raw.model.trim()
+    : (providerMeta?.defaultModel || fallback.model);
+  return {
+    scene,
+    provider,
+    model,
+    providerMeta
+  };
+}
+
+function getTaskSceneConfig(scene, options = {}) {
+  const {
+    fallbackScenes = [],
+    requireImage = false
+  } = options;
+
+  const attempted = [];
+  for (const sceneName of [scene, ...fallbackScenes]) {
+    const config = getSceneConfig(sceneName);
+    if (!config.providerMeta) {
+      attempted.push(`${sceneName}:${config.provider}(unsupported)`);
+      continue;
+    }
+
+    const apiKey = getProviderApiKeyByProvider(config.provider);
+    if (!apiKey) {
+      attempted.push(`${sceneName}:${config.provider}(missing-key)`);
+      continue;
+    }
+
+    return {
+      ...config,
+      apiKey,
+      requireImage
+    };
+  }
+
+  const mode = requireImage ? '图像处理' : '文本处理';
+  throw new Error(`未找到可用的 ${mode} 模型配置。已尝试: ${attempted.join(', ') || '无'}`);
+}
+
+function getAvailableTaskSceneConfigs(sceneNames, options = {}) {
+  const { requireImage = false } = options;
+  const configs = [];
+  const attempted = [];
+
+  for (const scene of [...new Set(sceneNames.filter(Boolean))]) {
+    const config = getSceneConfig(scene);
+    if (!config.providerMeta) {
+      attempted.push(`${scene}:${config.provider}(unsupported)`);
+      continue;
+    }
+
+    const apiKey = getProviderApiKeyByProvider(config.provider);
+    if (!apiKey) {
+      attempted.push(`${scene}:${config.provider}(missing-key)`);
+      continue;
+    }
+
+    configs.push({
+      ...config,
+      apiKey,
+      requireImage
+    });
+  }
+
+  if (configs.length === 0) {
+    const mode = requireImage ? '图像处理' : '文本处理';
+    throw new Error(`未找到可用的 ${mode} 模型配置。已尝试: ${attempted.join(', ') || '无'}`);
+  }
+
+  return configs;
+}
+
+function getOpenAICompatibleHeaders(provider, apiKey) {
+  const headers = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json'
+  };
+
+  if (provider === 'openrouter') {
+    headers['HTTP-Referer'] = 'https://ai-desktop-pet.local';
+    headers['X-Title'] = 'AI Desktop Pet';
+  }
+
+  return headers;
+}
+
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 45000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+
+    const rawText = await response.text();
+    let data = null;
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch (error) {
+        data = { rawText };
+      }
+    }
+
+    if (!response.ok) {
+      const detail = data?.error?.message || data?.message || data?.rawText || response.statusText;
+      throw new Error(`${response.status} ${detail}`.trim());
+    }
+
+    return data || {};
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('请求超时');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function extractAssistantText(payload) {
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part;
+        if (part && typeof part.text === 'string') return part.text;
+        return '';
+      })
+      .join('\n')
+      .trim();
+  }
+
+  return '';
+}
+
+async function requestOpenAICompatibleCompletion(config, messages, options = {}) {
+  const payload = await fetchJsonWithTimeout(config.providerMeta.endpoint, {
+    method: 'POST',
+    headers: getOpenAICompatibleHeaders(config.provider, config.apiKey),
+    body: JSON.stringify({
+      model: config.model,
+      messages,
+      temperature: options.temperature ?? 0.1,
+      max_tokens: options.maxTokens ?? 1200,
+      // 关闭思考模式（qwen3 等模型支持，其他模型忽略此参数）
+      enable_thinking: false
+    })
+  }, options.timeoutMs ?? 45000);
+
+  const text = extractAssistantText(payload);
+  if (!text) {
+    throw new Error('模型返回为空');
+  }
+  return text;
+}
+
+async function runScreenshotOCR(dataURL) {
+  if (typeof dataURL !== 'string' || !dataURL.startsWith('data:image/')) {
+    throw new Error('无效的截图数据');
+  }
+
+  // 压缩图片，避免大图超时
+  const compressedDataURL = compressDataURL(dataURL, 1280, 0.85);
+
+  const configs = getAvailableTaskSceneConfigs(['ocr', 'vision'], {
+    requireImage: true
+  });
+  const errors = [];
+
+  for (const config of configs) {
+    try {
+      const text = await requestOpenAICompatibleCompletion(config, [
+        {
+          role: 'system',
+          content: 'You are a precise OCR engine. Extract all visible text from the image, preserve line breaks, and do not add explanations. If there is no readable text, return exactly [NO_TEXT].'
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: compressedDataURL }
+            },
+            {
+              type: 'text',
+              text: 'Extract all text from this screenshot exactly as it appears.'
+            }
+          ]
+        }
+      ], {
+        temperature: 0,
+        maxTokens: 1800,
+        timeoutMs: 60000
+      });
+
+      const normalizedText = text.trim() === SCREENSHOT_TEXT_NONE ? '' : text.trim();
+      return {
+        text: normalizedText,
+        model: `${config.provider}:${config.model}`,
+        scene: config.scene
+      };
+    } catch (error) {
+      errors.push(`${config.scene}:${config.provider}:${config.model} -> ${error.message}`);
+    }
+  }
+
+  throw new Error(`截图文字提取失败。请确认 OCR 或 Vision 场景已配置支持图片输入的模型。详细信息: ${errors.join(' | ')}`);
+}
+
+function getTargetLanguageLabel(targetLang) {
+  const normalized = typeof targetLang === 'string' ? targetLang.trim().toLowerCase() : '';
+  if (!normalized || normalized === 'zh' || normalized === 'zh-cn' || normalized === 'zh-hans') {
+    return '简体中文';
+  }
+  if (normalized === 'en' || normalized === 'en-us') {
+    return '英语';
+  }
+  if (normalized === 'ja' || normalized === 'ja-jp') {
+    return '日语';
+  }
+  if (normalized === 'ko' || normalized === 'ko-kr') {
+    return '韩语';
+  }
+  return targetLang || '目标语言';
+}
+
+async function runScreenshotTranslation(sourceText, targetLang = 'zh-CN') {
+  const trimmedText = typeof sourceText === 'string' ? sourceText.trim() : '';
+  if (!trimmedText) {
+    return {
+      translatedText: '未识别到可翻译的文字。',
+      model: null,
+      scene: null
+    };
+  }
+
+  const config = getTaskSceneConfig('translate', {
+    fallbackScenes: ['chat']
+  });
+  const targetLabel = getTargetLanguageLabel(targetLang);
+  const translatedText = await requestOpenAICompatibleCompletion(config, [
+    {
+      role: 'system',
+      content: 'You are a precise translation engine. Translate the input faithfully, preserve line breaks and list structure, and do not add commentary.'
+    },
+    {
+      role: 'user',
+      content: `请将下面的截图文字翻译为${targetLabel}。只返回译文，保留原有换行和结构。\n\n${trimmedText}`
+    }
+  ], {
+    temperature: 0.2,
+    maxTokens: 1800,
+    timeoutMs: 45000
+  });
+
+  return {
+    translatedText: translatedText.trim(),
+    model: `${config.provider}:${config.model}`,
+    scene: config.scene
+  };
+}
+
+// AI 图像分析：将截图发给视觉模型，返回分析文字
+async function runScreenshotAnalysis(dataURL, prompt) {
+  if (typeof dataURL !== 'string' || !dataURL.startsWith('data:image/')) {
+    throw new Error('无效的截图数据');
+  }
+
+  const userPrompt = typeof prompt === 'string' && prompt.trim()
+    ? prompt.trim()
+    : '请详细描述这张截图的内容，包括文字、图像和界面元素。';
+
+  // 压缩图片，避免大图超时
+  const compressedDataURL = compressDataURL(dataURL, 1280, 0.85);
+
+  const config = getTaskSceneConfig('vision', {
+    fallbackScenes: ['chat'],
+    requireImage: true
+  });
+
+  const result = await requestOpenAICompatibleCompletion(config, [
+    {
+      role: 'system',
+      content: '你是一个专业的图像分析助手，请根据用户的问题对截图进行详细分析。'
+    },
+    {
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: compressedDataURL } },
+        { type: 'text', text: userPrompt }
+      ]
+    }
+  ], {
+    temperature: 0.3,
+    maxTokens: 1500,
+    timeoutMs: 60000
+  });
+
+  return {
+    result: result.trim(),
+    model: `${config.provider}:${config.model}`,
+    scene: config.scene
+  };
+}
+
+function formatScreenshotTranslationResult(sourceText, translatedText, targetLang) {
+  return translatedText || '未生成译文。';
+}
+
+// 将截图压缩到适合 API 发送的尺寸（最大宽度 1280px，JPEG 85%）
+// 避免发送 3-5MB 的大图导致超时
+function compressDataURL(dataURL, maxWidth = 1280, quality = 0.85) {
+  try {
+    const { nativeImage } = require('electron');
+    const image = nativeImage.createFromDataURL(dataURL);
+    if (image.isEmpty()) return dataURL;
+
+    const size = image.getSize();
+    if (size.width <= maxWidth) {
+      // 尺寸已够小，只转换格式到 JPEG 节省体积
+      return image.toJPEG(Math.round(quality * 100)).toString('base64')
+        ? `data:image/jpeg;base64,${image.toJPEG(Math.round(quality * 100)).toString('base64')}`
+        : dataURL;
+    }
+
+    const scale = maxWidth / size.width;
+    const resized = image.resize({
+      width: Math.round(size.width * scale),
+      height: Math.round(size.height * scale),
+      quality: 'good'
+    });
+    const jpeg = resized.toJPEG(Math.round(quality * 100));
+    return `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+  } catch (e) {
+    console.warn('[Screenshot] 图片压缩失败，使用原图:', e.message);
+    return dataURL;
+  }
+}
+
+function imageFromDataURL(dataURL) {
+  const { nativeImage } = require('electron');
+  const image = nativeImage.createFromDataURL(dataURL);
+  if (image.isEmpty()) {
+    throw new Error('截图数据为空');
+  }
+  return image;
+}
+
+function getScreenshotDataURLFromRecord(record) {
+  const { nativeImage } = require('electron');
+  if (!record?.file_path) {
+    throw new Error('截图文件不存在');
+  }
+
+  const image = nativeImage.createFromPath(record.file_path);
+  if (image.isEmpty()) {
+    throw new Error('截图文件读取失败');
+  }
+  return image.toDataURL();
+}
+
+// api-keys.json 文件路径（延迟初始化，app ready 后才可用）
+let apiKeysFilePath = null;
+
+function getApiKeysFilePath() {
+  if (!apiKeysFilePath) {
+    apiKeysFilePath = path.join(app.getPath('userData'), 'api-keys.json');
+  }
+  return apiKeysFilePath;
+}
+
+// 从 api-keys.json 读取所有已保存的 key
+function readApiKeysFile() {
+  try {
+    const filePath = getApiKeysFilePath();
+    const fsSync = require('fs');
+    if (fsSync.existsSync(filePath)) {
+      const data = fsSync.readFileSync(filePath, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('[API Keys] 读取 api-keys.json 失败:', error.message);
+  }
+  return {};
+}
+
+// 保存单个 provider 的 key 到 api-keys.json
+function saveProviderApiKey(provider, key) {
+  const keys = readApiKeysFile();
+  keys[provider] = key;
+  const filePath = getApiKeysFilePath();
+  const fsSync = require('fs');
+  fsSync.writeFileSync(filePath, JSON.stringify(keys, null, 2), 'utf-8');
+  console.log(`[API Keys] 已保存 ${provider} key (长度: ${key.length})`);
+}
+
+// 脱敏显示 key：前4+后4，中间用 **** 替换
+function maskApiKey(key) {
+  if (!key || key.length <= 8) return key ? '****' : '';
+  return key.substring(0, 4) + '****' + key.substring(key.length - 4);
+}
+
+function getProviderApiKeyByProvider(provider) {
+  const normalizedProvider = typeof provider === 'string' ? provider.trim().toLowerCase() : '';
+  const envKey = PROVIDER_ENV_KEY_MAP[normalizedProvider];
+  if (!envKey) return '';
+  // 优先从 api-keys.json 读取
+  const savedKeys = readApiKeysFile();
+  if (savedKeys[normalizedProvider]) {
+    return savedKeys[normalizedProvider];
+  }
+  // 降级到环境变量
+  return process.env[envKey] || '';
 }
 
 // 创建主窗口（只显示宠物本体）
@@ -396,6 +890,12 @@ app.whenReady().then(async () => {
   try {
     await memorySystem.initialize();
     console.log('Memory system initialized successfully');
+    // 启动后从 api-keys.json 读取已保存的 deepseek key，覆盖环境变量的值
+    const savedDeepseekKey = readApiKeysFile()['deepseek'] || '';
+    if (savedDeepseekKey && memorySystem) {
+      memorySystem.updateApiKey(savedDeepseekKey);
+      console.log('[API Keys] 启动时从 api-keys.json 加载 deepseek key');
+    }
     recordDisplayProfiles('startup');
   } catch (error) {
     console.error('Failed to initialize memory system:', error);
@@ -825,6 +1325,8 @@ ipcMain.on('settings:change', (event, payload) => {
         bubbleWindow.setBounds(getBubbleWindowBounds(), false);
       }
     }
+  } else if (payload && payload.type === 'llm-scene-config') {
+    llmSceneConfig = normalizeLLMSceneConfig(payload.config);
   }
 
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -920,6 +1422,124 @@ ipcMain.handle('get-api-key', () => {
   const apiKey = process.env.DEEPSEEK_API_KEY || '';
   console.log('[Main Process] get-api-key called:', apiKey ? `API Key found (${apiKey.length} chars)` : 'NO API KEY FOUND');
   return apiKey;
+});
+
+ipcMain.handle('get-provider-api-key', (event, provider) => {
+  const apiKey = getProviderApiKeyByProvider(provider);
+  console.log(`[API Keys] get-provider-api-key called for: ${provider}, found: ${apiKey ? apiKey.length + ' chars' : 'NO KEY'}`);
+  return apiKey;
+});
+
+// 保存 provider API key 到本地文件
+ipcMain.handle('save-provider-api-key', (event, provider, key) => {
+  const normalizedProvider = typeof provider === 'string' ? provider.trim().toLowerCase() : '';
+  if (!normalizedProvider || !PROVIDER_ENV_KEY_MAP[normalizedProvider]) {
+    return { success: false, error: '不支持的 provider' };
+  }
+  if (typeof key !== 'string') {
+    return { success: false, error: 'key 必须是字符串' };
+  }
+  const trimmedKey = key.trim();
+  // 格式验证：长度至少 20 字符
+  if (trimmedKey.length > 0 && trimmedKey.length < 20) {
+    return { success: false, error: 'API Key 长度不足（至少 20 位）' };
+  }
+  try {
+    saveProviderApiKey(normalizedProvider, trimmedKey);
+    // 如果修改的是 deepseek key，同步更新记忆系统的事实提取器
+    if (normalizedProvider === 'deepseek' && memorySystem) {
+      memorySystem.updateApiKey(trimmedKey);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('[API Keys] 保存失败:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+
+// 获取所有 provider 的 key（脱敏显示）
+ipcMain.handle('get-all-provider-keys', () => {
+  const savedKeys = readApiKeysFile();
+  const result = {};
+  for (const provider of Object.keys(PROVIDER_ENV_KEY_MAP)) {
+    const savedKey = savedKeys[provider] || '';
+    const envKey = process.env[PROVIDER_ENV_KEY_MAP[provider]] || '';
+    const actualKey = savedKey || envKey;
+    result[provider] = {
+      masked: maskApiKey(actualKey),
+      configured: actualKey.length > 0,
+      source: savedKey ? 'file' : (envKey ? 'env' : 'none')
+    };
+  }
+  return result;
+});
+
+// 测试 provider API key 连通性（发送最小请求）
+const PROVIDER_TEST_ENDPOINTS = {
+  deepseek: 'https://api.deepseek.com/v1/models',
+  openai: 'https://api.openai.com/v1/models',
+  openrouter: 'https://openrouter.ai/api/v1/models',
+  siliconflow: 'https://api.siliconflow.cn/v1/models',
+  glm: 'https://open.bigmodel.cn/api/paas/v4/models',
+  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1/models'
+};
+
+ipcMain.handle('test-provider-api-key', async (event, provider) => {
+  const normalizedProvider = typeof provider === 'string' ? provider.trim().toLowerCase() : '';
+  const endpoint = PROVIDER_TEST_ENDPOINTS[normalizedProvider];
+  if (!endpoint) {
+    return { success: false, error: '不支持的 provider' };
+  }
+  const apiKey = getProviderApiKeyByProvider(normalizedProvider);
+  if (!apiKey) {
+    return { success: false, error: 'API Key 未配置' };
+  }
+  try {
+    const { net } = require('electron');
+    const result = await new Promise((resolve, reject) => {
+      const request = net.request({
+        method: 'GET',
+        url: endpoint
+      });
+      request.setHeader('Authorization', `Bearer ${apiKey}`);
+      request.setHeader('Content-Type', 'application/json');
+
+      let responseData = '';
+      let statusCode = 0;
+
+      request.on('response', (response) => {
+        statusCode = response.statusCode;
+        response.on('data', (chunk) => {
+          responseData += chunk.toString();
+        });
+        response.on('end', () => {
+          resolve({ statusCode, data: responseData });
+        });
+      });
+
+      request.on('error', (error) => {
+        reject(error);
+      });
+
+      // 超时 10 秒
+      setTimeout(() => {
+        request.abort();
+        reject(new Error('请求超时'));
+      }, 10000);
+
+      request.end();
+    });
+
+    if (result.statusCode >= 200 && result.statusCode < 300) {
+      return { success: true, message: '连接成功' };
+    } else if (result.statusCode === 401 || result.statusCode === 403) {
+      return { success: false, error: 'API Key 无效或已过期' };
+    } else {
+      return { success: false, error: `HTTP ${result.statusCode}` };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 // 打开开发者工具
@@ -1208,6 +1828,96 @@ function registerScreenshotIPCHandlers(ipc) {
 
   // ---- 新版截图流程 IPC（ScreenshotBridge 使用） ----
 
+  // 获取系统窗口列表（窗口模式截图使用）
+  ipc.handle('screenshot:get-windows', async () => {
+    try {
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const os = require('os');
+      const fsSync = require('fs');
+      const execAsync = promisify(exec);
+
+      const scaleFactor = screen.getPrimaryDisplay().scaleFactor || 1;
+
+      // C# 代码：通过 Win32 API 枚举可见窗口
+      const csCode = [
+        'using System;',
+        'using System.Runtime.InteropServices;',
+        'using System.Text;',
+        'using System.Collections.Generic;',
+        'public class WinEnum {',
+        '    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc f, IntPtr p);',
+        '    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);',
+        '    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);',
+        '    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);',
+        '    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);',
+        '    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L,T,R,B; }',
+        '    public delegate bool EnumWindowsProc(IntPtr h, IntPtr p);',
+        '    static List<string> _list = new List<string>();',
+        '    static bool CB(IntPtr h, IntPtr p) {',
+        '        if (!IsWindowVisible(h)||IsIconic(h)) return true;',
+        '        var sb = new StringBuilder(256);',
+        '        GetWindowText(h, sb, 256);',
+        '        string t = sb.ToString();',
+        '        if (string.IsNullOrWhiteSpace(t)) return true;',
+        '        RECT r; if (!GetWindowRect(h, out r)) return true;',
+        '        int w=r.R-r.L, ht=r.B-r.T;',
+        '        if (w<=10||ht<=10) return true;',
+        '        _list.Add(r.L+"|"+r.T+"|"+w+"|"+ht+"|"+t);',
+        '        return true;',
+        '    }',
+        '    public static string[] GetAll() { _list.Clear(); EnumWindows(CB, IntPtr.Zero); return _list.ToArray(); }',
+        '}',
+      ].join('\r\n');
+
+      const psCode = `Add-Type -TypeDefinition @'\r\n${csCode}\r\n'@\r\n[WinEnum]::GetAll()`;
+      const tmpPs = path.join(os.tmpdir(), `winenum_${Date.now()}.ps1`);
+      fsSync.writeFileSync(tmpPs, psCode, 'utf8');
+
+      let stdout = '';
+      try {
+        const result = await execAsync(
+          `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmpPs}"`,
+          { timeout: 8000, windowsHide: true }
+        );
+        stdout = result.stdout;
+      } finally {
+        try { fsSync.unlinkSync(tmpPs); } catch {}
+      }
+
+      const windows = stdout.trim().split('\n')
+        .filter(l => l.trim() && l.includes('|'))
+        .map(l => {
+          const line = l.trim().replace(/\r$/, '');
+          // 格式: left|top|width|height|title（title 可能含 |）
+          const idx1 = line.indexOf('|');
+          const idx2 = line.indexOf('|', idx1 + 1);
+          const idx3 = line.indexOf('|', idx2 + 1);
+          const idx4 = line.indexOf('|', idx3 + 1);
+          if (idx4 === -1) return null;
+          const left   = parseInt(line.substring(0, idx1));
+          const top    = parseInt(line.substring(idx1 + 1, idx2));
+          const width  = parseInt(line.substring(idx2 + 1, idx3));
+          const height = parseInt(line.substring(idx3 + 1, idx4));
+          const title  = line.substring(idx4 + 1);
+          if (isNaN(left) || isNaN(top) || isNaN(width) || isNaN(height)) return null;
+          return {
+            title,
+            x: Math.round(left   / scaleFactor),
+            y: Math.round(top    / scaleFactor),
+            w: Math.round(width  / scaleFactor),
+            h: Math.round(height / scaleFactor),
+          };
+        })
+        .filter(w => w !== null);
+
+      return { success: true, windows };
+    } catch (err) {
+      console.error('[截图] 获取窗口列表失败:', err);
+      return { success: false, error: err.message, windows: [] };
+    }
+  });
+
   // 获取全屏截图 dataURL + 显示器信息（覆盖窗口加载后调用）
   ipc.handle('screenshot:get-screen-capture', async () => {
     try {
@@ -1334,35 +2044,50 @@ function registerScreenshotIPCHandlers(ipc) {
     }
   });
 
-  // AI 分析截图（暂用 DeepSeek API 文字分析）
-  // TODO: 接入视觉模型后替换为真正的图像分析
+  // AI 分析截图（新接口 - 直接传 dataURL）
   ipc.handle('screenshot:analyze-image', async (event, dataURL, prompt) => {
     try {
-      const apiKey = process.env.DEEPSEEK_API_KEY;
-      if (!apiKey) {
-        return { success: false, error: 'API 密钥未配置' };
-      }
-
-      // TODO: 当 DeepSeek 支持视觉输入时，直接发送 base64 图片
-      // 目前仅返回提示信息
-      const result = '暂不支持图像分析。请等待视觉模型接入后使用此功能。';
-      return { success: true, result };
+      const analysis = await runScreenshotAnalysis(dataURL, prompt);
+      return { success: true, result: analysis.result, model: analysis.model };
     } catch (error) {
       console.error('[Screenshot] Failed to analyze image:', error);
       return { success: false, error: error.message };
     }
   });
 
-  // OCR 文字识别（预留接口）
-  // TODO: 接入 tesseract.js 后实现
   ipc.handle('screenshot:ocr-image', async (event, dataURL) => {
     try {
+      imageFromDataURL(dataURL);
+      const ocrResult = await runScreenshotOCR(dataURL);
       return {
-        success: false,
-        error: 'OCR 功能需要安装 tesseract.js。请运行 npm install tesseract.js 后使用。'
+        success: true,
+        text: ocrResult.text,
+        result: ocrResult.text || '未识别到文字。',
+        model: ocrResult.model,
+        scene: ocrResult.scene
       };
     } catch (error) {
       console.error('[Screenshot] Failed to perform OCR:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipc.handle('screenshot:translate-image', async (event, dataURL, targetLang = 'zh-CN') => {
+    try {
+      imageFromDataURL(dataURL);
+      const ocrResult = await runScreenshotOCR(dataURL);
+      const translation = await runScreenshotTranslation(ocrResult.text, targetLang);
+      return {
+        success: true,
+        text: ocrResult.text,
+        translatedText: translation.translatedText,
+        result: formatScreenshotTranslationResult(ocrResult.text, translation.translatedText, targetLang),
+        model: translation.model,
+        ocrModel: ocrResult.model,
+        scene: translation.scene
+      };
+    } catch (error) {
+      console.error('[Screenshot] Failed to translate image:', error);
       return { success: false, error: error.message };
     }
   });
@@ -1514,13 +2239,17 @@ function registerScreenshotIPCHandlers(ipc) {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
       }
-      // TODO: 接入实际 AI 分析
-      const result = '暂不支持图像分析，请等待视觉模型接入。';
-      const analysisId = screenshotSystem.saveAnalysis(id, 'analyze', result, {
-        model: 'deepseek',
+      const screenshot = screenshotSystem.getScreenshotById(id);
+      if (!screenshot) {
+        throw new Error('截图不存在');
+      }
+      const dataURL = getScreenshotDataURLFromRecord(screenshot);
+      const analysis = await runScreenshotAnalysis(dataURL, prompt);
+      const analysisId = screenshotSystem.saveAnalysis(id, 'analyze', analysis.result, {
+        model: analysis.model,
         prompt
       });
-      return { success: true, analysisId, result };
+      return { success: true, analysisId, result: analysis.result };
     } catch (error) {
       console.error('Failed to analyze screenshot:', error);
       return { success: false, error: error.message };
@@ -1533,12 +2262,19 @@ function registerScreenshotIPCHandlers(ipc) {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
       }
-      // TODO: 接入 tesseract.js
-      const result = 'OCR 功能待安装 tesseract.js 后可用';
+      const screenshot = screenshotSystem.getScreenshotById(id);
+      if (!screenshot) {
+        throw new Error('截图不存在');
+      }
+
+      const dataURL = getScreenshotDataURLFromRecord(screenshot);
+      const ocrResult = await runScreenshotOCR(dataURL);
+      const result = ocrResult.text || '未识别到文字。';
       const analysisId = screenshotSystem.saveAnalysis(id, 'ocr', result, {
-        model: 'tesseract',
+        model: ocrResult.model,
         lang
       });
+      screenshotSystem.updateOcrText(id, ocrResult.text);
       return { success: true, analysisId, result };
     } catch (error) {
       console.error('Failed to perform OCR:', error);
@@ -1552,13 +2288,36 @@ function registerScreenshotIPCHandlers(ipc) {
       if (!screenshotSystem) {
         throw new Error('Screenshot system not initialized');
       }
-      // TODO: 接入实际翻译 API
-      const result = '翻译功能待接入';
+      const screenshot = screenshotSystem.getScreenshotById(id);
+      if (!screenshot) {
+        throw new Error('截图不存在');
+      }
+
+      let sourceText = typeof screenshot.ocr_text === 'string' ? screenshot.ocr_text.trim() : '';
+      let ocrModel = null;
+      if (!sourceText) {
+        const dataURL = getScreenshotDataURLFromRecord(screenshot);
+        const ocrResult = await runScreenshotOCR(dataURL);
+        sourceText = ocrResult.text;
+        ocrModel = ocrResult.model;
+        screenshotSystem.updateOcrText(id, sourceText);
+      }
+
+      const translation = await runScreenshotTranslation(sourceText, targetLang);
+      const result = formatScreenshotTranslationResult(sourceText, translation.translatedText, targetLang);
       const analysisId = screenshotSystem.saveAnalysis(id, 'translate', result, {
-        model: 'deepseek',
+        model: translation.model,
+        prompt: sourceText ? undefined : '未识别到可翻译的文字',
         targetLang
       });
-      return { success: true, analysisId, result };
+      return {
+        success: true,
+        analysisId,
+        result,
+        translatedText: translation.translatedText,
+        sourceText,
+        ocrModel
+      };
     } catch (error) {
       console.error('Failed to translate screenshot:', error);
       return { success: false, error: error.message };

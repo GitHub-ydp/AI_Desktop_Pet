@@ -1,13 +1,20 @@
 function getSettingsSnapshot(storage) {
   const petData = storage.getPetData ? storage.getPetData() : {};
   const settings = storage.getSettings ? storage.getSettings() : {};
+  const llmSceneConfig = settings.llmSceneConfig || {
+    chat: { provider: 'deepseek', model: 'deepseek-chat' },
+    vision: { provider: 'deepseek', model: 'deepseek-chat' },
+    translate: { provider: 'deepseek', model: 'deepseek-chat' },
+    ocr: { provider: 'tesseract', model: 'tesseract' }
+  };
   return {
     pet: petData.emoji || '🐱',
     personality: petData.personality || 'healing',
     mood: Number.isFinite(petData.mood) ? petData.mood : 80,
     autoSpeak: settings.autoSpeak !== false,
     bubbleStateOffsets: settings.bubbleStateOffsets || { idle: { x: 0, y: 8 } },
-    bubblePreviewState: settings.bubblePreviewState || 'idle'
+    bubblePreviewState: settings.bubblePreviewState || 'idle',
+    llmSceneConfig
   };
 }
 
@@ -62,13 +69,26 @@ function setBubblePreviewState(storage, state) {
   }
 }
 
+function saveLLMSceneConfig(storage, sceneConfig) {
+  if (storage.saveLLMSceneConfig) {
+    storage.saveLLMSceneConfig(sceneConfig);
+    return;
+  }
+  const settings = storage.getSettings ? storage.getSettings() : {};
+  settings.llmSceneConfig = sceneConfig;
+  if (storage.saveSettings) {
+    storage.saveSettings(settings);
+  }
+}
+
 const api = {
   getSettingsSnapshot,
   setPetSelection,
   setPersonalitySelection,
   setAutoSpeakEnabled,
   saveBubbleStateOffsets,
-  setBubblePreviewState
+  setBubblePreviewState,
+  saveLLMSceneConfig
 };
 
 if (typeof module !== 'undefined' && module.exports) {

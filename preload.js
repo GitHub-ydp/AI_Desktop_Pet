@@ -7,6 +7,10 @@ contextBridge.exposeInMainWorld('electron', {
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAPIKey: () => ipcRenderer.invoke('get-api-key'),
+  getProviderAPIKey: (provider) => ipcRenderer.invoke('get-provider-api-key', provider),
+  saveProviderAPIKey: (provider, key) => ipcRenderer.invoke('save-provider-api-key', provider, key),
+  getAllProviderAPIKeys: () => ipcRenderer.invoke('get-all-provider-keys'),
+  testProviderAPIKey: (provider) => ipcRenderer.invoke('test-provider-api-key', provider),
   openDevTools: () => ipcRenderer.invoke('open-devtools'),
   listLottieJsonFiles: (folder) => ipcRenderer.sendSync('lottie:list-json-files-sync', folder),
   onWindowMove: (callback) => {
@@ -258,6 +262,9 @@ contextBridge.exposeInMainWorld('ScreenshotBridge', {
   // OCR 文字识别
   ocr: (dataURL) => ipcRenderer.invoke('screenshot:ocr-image', dataURL),
 
+  // 翻译截图文字
+  translate: (dataURL, targetLang) => ipcRenderer.invoke('screenshot:translate-image', dataURL, targetLang),
+
   // 监听贴图窗口加载事件（解包 event 对象，只传 dataURL）
   onPinLoad: (callback) => {
     ipcRenderer.on('pin:load', (e, dataURL) => callback(dataURL));
@@ -265,6 +272,9 @@ contextBridge.exposeInMainWorld('ScreenshotBridge', {
 
   // 设置贴图窗口透明度（由贴图窗口自身调用）
   setPinOpacity: (opacity) => ipcRenderer.invoke('pin:set-opacity', opacity),
+
+  // 获取系统窗口列表（窗口模式截图）
+  getWindowList: () => ipcRenderer.invoke('screenshot:get-windows'),
 
   // 关闭贴图窗口（由贴图窗口自身调用）
   closePinWindow: () => ipcRenderer.invoke('pin:close')
