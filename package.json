@@ -47,6 +47,7 @@
       "Happy Cat.json",
       "main-process/**/*",
       "src/**/*",
+      "skills/**/*",
       "assets/**/*",
       "node_modules/**/*"
     ],

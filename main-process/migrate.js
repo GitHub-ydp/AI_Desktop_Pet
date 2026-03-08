@@ -433,6 +433,12 @@ class DatabaseMigrator {
     if (currentVersion < 7) {
       await this.migrateToV7();
     }
+    if (currentVersion < 8) {
+      await this.migrateToV8();
+    }
+    if (currentVersion < 9) {
+      await this.migrateToV9();
+    }
   }
 
   // 迁移到 v7：FSRS 动态记忆强化系统
@@ -614,9 +620,105 @@ class DatabaseMigrator {
     batch(chunks);
     console.log(`[Migrate] ✓ Initialized strength for ${chunks.length} chunks`);
   }
+
+  async migrateToV8() {
+    console.log('[Migrate] Migrating to v8: agent runtime tables...');
+
+    try {
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS agent_sessions (
+          id TEXT PRIMARY KEY,
+          channel TEXT NOT NULL,
+          metadata_json TEXT,
+          state TEXT NOT NULL DEFAULT 'active' CHECK(state IN ('active', 'archived')),
+          last_active_at INTEGER NOT NULL,
+          archived_at INTEGER,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_sessions_state ON agent_sessions(state);
+        CREATE INDEX IF NOT EXISTS idx_agent_sessions_last_active_at ON agent_sessions(last_active_at DESC);
+
+        CREATE TABLE IF NOT EXISTS agent_runs (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'awaiting_approval', 'completed', 'failed', 'cancelled')),
+          source_text TEXT,
+          source TEXT,
+          attachments_json TEXT,
+          final_text TEXT,
+          conversation_summary TEXT,
+          error_code TEXT,
+          queue_position INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          started_at INTEGER,
+          ended_at INTEGER,
+          FOREIGN KEY (session_id) REFERENCES agent_sessions(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_session_id ON agent_runs(session_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_created_at ON agent_runs(created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS agent_events (
+          event_id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          run_id TEXT NOT NULL,
+          seq INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          payload_json TEXT,
+          created_at INTEGER NOT NULL,
+          UNIQUE(run_id, seq),
+          FOREIGN KEY (session_id) REFERENCES agent_sessions(id) ON DELETE CASCADE,
+          FOREIGN KEY (run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_events_session_id ON agent_events(session_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_events_run_id_seq ON agent_events(run_id, seq);
+        CREATE INDEX IF NOT EXISTS idx_agent_events_created_at ON agent_events(created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS agent_approvals (
+          id TEXT PRIMARY KEY,
+          run_id TEXT NOT NULL,
+          tool_name TEXT NOT NULL,
+          summary TEXT,
+          args_json TEXT,
+          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'denied', 'timed_out', 'cancelled')),
+          expires_at INTEGER,
+          resolved_at INTEGER,
+          decision TEXT,
+          FOREIGN KEY (run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_approvals_run_id ON agent_approvals(run_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_approvals_status ON agent_approvals(status);
+        CREATE INDEX IF NOT EXISTS idx_agent_approvals_expires_at ON agent_approvals(expires_at);
+      `);
+
+      console.log('[Migrate] Migration to v8 complete');
+    } catch (error) {
+      console.error('[Migrate] Migration to v8 failed:', error);
+      throw error;
+    }
+  }
+
+  async migrateToV9() {
+    console.log('[Migrate] Migrating to v9: agent conversation summaries...');
+
+    try {
+      const runCols = this.storage.db.pragma('table_info(agent_runs)');
+      const runColNames = runCols.map((col) => col.name);
+
+      if (!runColNames.includes('conversation_summary')) {
+        this.storage.db.exec('ALTER TABLE agent_runs ADD COLUMN conversation_summary TEXT');
+        console.log('[Migrate] Added column: agent_runs.conversation_summary');
+      }
+
+      console.log('[Migrate] ✓ Migration to v9 complete');
+    } catch (error) {
+      console.error('[Migrate] ✗ Migration to v9 failed:', error);
+      throw error;
+    }
+  }
 }
 
 // 定义最新版本号
-const LATEST_VERSION = 7;
+const LATEST_VERSION = 9;
 
 module.exports = { DatabaseMigrator, LATEST_VERSION };

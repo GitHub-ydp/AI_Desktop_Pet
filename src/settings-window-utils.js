@@ -2,10 +2,11 @@ function getSettingsSnapshot(storage) {
   const petData = storage.getPetData ? storage.getPetData() : {};
   const settings = storage.getSettings ? storage.getSettings() : {};
   const llmSceneConfig = settings.llmSceneConfig || {
-    chat: { provider: 'deepseek', model: 'deepseek-chat' },
-    vision: { provider: 'deepseek', model: 'deepseek-chat' },
-    translate: { provider: 'deepseek', model: 'deepseek-chat' },
-    ocr: { provider: 'tesseract', model: 'tesseract' }
+    chat: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
+    agent: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
+    vision: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
+    translate: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
+    ocr: { provider: 'tesseract', model: 'tesseract', apiKeyMode: 'provider-fallback' }
   };
   return {
     pet: petData.emoji || '🐱',

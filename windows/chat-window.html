@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>和宠物说话</title>
   <script src="../src/theme-manager.js"></script>
+  <script src="../src/plan-manager.js"></script>
   <style>
     * {
   margin: 0;
@@ -234,6 +235,166 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+
+/* 执行计划卡片 */
+.plan-card {
+  background: rgba(0, 255, 240, 0.05);
+  border: 1px solid rgba(0, 255, 240, 0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 6px 0;
+  font-size: 12px;
+}
+.plan-card-header {
+  color: var(--neon-cyan, #00fff0);
+  font-weight: bold;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.plan-card-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.plan-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  transition: color 0.3s;
+}
+.plan-step--pending { color: rgba(255,255,255,0.5); }
+.plan-step--running { color: var(--neon-cyan, #00fff0); }
+.plan-step--done { color: #4cff91; text-decoration: line-through; opacity: 0.7; }
+.plan-step--error { color: var(--neon-magenta, #ff2d78); }
+.plan-step-icon { font-size: 14px; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.plan-step--running .plan-step-icon { display: inline-block; animation: spin 1s linear infinite; }
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 8, 16, 0.78);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+
+.confirm-overlay.show {
+  display: flex;
+}
+
+.confirm-dialog {
+  width: min(760px, 100%);
+  background: rgba(2, 10, 20, 0.98);
+  border: 1px solid var(--border-bright);
+  border-radius: 10px;
+  box-shadow: var(--glow-md);
+  padding: 16px;
+}
+
+.confirm-title {
+  color: var(--neon-cyan);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.confirm-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.confirm-diff {
+  margin-top: 12px;
+  display: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 10, 20, 0.72);
+  overflow: hidden;
+}
+
+.confirm-diff.show {
+  display: block;
+}
+
+.confirm-diff-meta {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.confirm-diff-lines {
+  max-height: 280px;
+  overflow: auto;
+  font-family: Consolas, "SFMono-Regular", Monaco, monospace;
+  font-size: 12px;
+}
+
+.confirm-diff-line {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 10px;
+  padding: 4px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.confirm-diff-line--remove {
+  background: rgba(255, 45, 120, 0.14);
+  color: #ff9abc;
+}
+
+.confirm-diff-line--add {
+  background: rgba(76, 255, 145, 0.12);
+  color: #98ffc0;
+}
+
+.confirm-diff-line-number {
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.confirm-diff-line-text {
+  overflow-wrap: anywhere;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.confirm-btn {
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.confirm-btn.primary {
+  color: var(--neon-cyan);
+  border-color: var(--border-bright);
+}
+
+.confirm-btn.danger {
+  color: var(--neon-magenta);
+  border-color: rgba(255, 45, 120, 0.45);
+}
   </style>
 </head>
 <body>
@@ -263,8 +424,27 @@ body {
     <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
   </div>
 
+  <div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-dialog">
+      <div class="confirm-title">确认执行高风险操作</div>
+      <div class="confirm-message" id="confirmMessage"></div>
+      <div class="confirm-diff" id="confirmDiffPanel">
+        <div class="confirm-diff-meta" id="confirmDiffMeta"></div>
+        <div class="confirm-diff-lines" id="confirmDiffLines"></div>
+      </div>
+      <div class="confirm-actions">
+        <button class="confirm-btn" onclick="rejectSkillConfirm()">取消</button>
+        <button class="confirm-btn danger" onclick="approveSkillConfirm()">确认执行</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let isProcessing = false;
+    let pendingApprovalDialog = null;
+    let agentSessionId = sessionStorage.getItem('chatAgentSessionId') || null;
+    let activeAgentStream = null;
+    let streamingAssistantMessage = null;
 
     function closeWindow() {
       if (window.electron && window.electron.closeChildWindow) {
@@ -279,9 +459,28 @@ body {
       if (emptyState) emptyState.style.display = 'none';
       const message = document.createElement('div');
       message.className = `chat-message ${role}-message`;
+
+      // 如果是 assistant 消息，检查是否包含执行计划
+      if (role === 'assistant' && window.PlanManager) {
+        const plan = window.PlanManager.parsePlan(content);
+        if (plan) {
+          message.textContent = content;
+          container.appendChild(message);
+          window.PlanManager.injectPlanCard(message, plan);
+          const doneStep = window.PlanManager.parseStepDone(content);
+          if (doneStep) window.PlanManager.updateStep(doneStep, 'done');
+          container.scrollTop = container.scrollHeight;
+          return;
+        }
+        // 检查步骤完成标记（更新现有计划卡片）
+        const doneStep = window.PlanManager.parseStepDone(content);
+        if (doneStep) window.PlanManager.updateStep(doneStep, 'done');
+      }
+
       message.textContent = content;
       container.appendChild(message);
       container.scrollTop = container.scrollHeight;
+      return message;
     }
 
     function showTyping() {
@@ -292,6 +491,49 @@ body {
 
     function hideTyping() {
       document.getElementById('typingIndicator').style.display = 'none';
+    }
+
+    function persistAgentSession() {
+      if (agentSessionId) {
+        sessionStorage.setItem('chatAgentSessionId', agentSessionId);
+      }
+    }
+
+    async function ensureAgentSession() {
+      if (agentSessionId) return agentSessionId;
+      if (!window.PetAgent || !window.PetAgent.startSession) {
+        throw new Error('PetAgent unavailable');
+      }
+      const started = await window.PetAgent.startSession({
+        channel: 'chat-window',
+        metadata: {
+          personality: 'healing'
+        }
+      });
+      agentSessionId = started.sessionId;
+      persistAgentSession();
+      return agentSessionId;
+    }
+
+    function appendAssistantDelta(delta) {
+      hideTyping();
+      if (!streamingAssistantMessage) {
+        streamingAssistantMessage = addMessage('assistant', '');
+      }
+      streamingAssistantMessage.textContent += delta || '';
+      const container = document.getElementById('chatContainer');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function finishAgentRun() {
+      if (activeAgentStream && typeof activeAgentStream.close === 'function') {
+        activeAgentStream.close();
+      }
+      activeAgentStream = null;
+      streamingAssistantMessage = null;
+      isProcessing = false;
+      document.getElementById('sendBtn').disabled = false;
+      hideTyping();
     }
 
     async function sendMessage() {
@@ -312,6 +554,62 @@ body {
 
       // 通过 IPC 发送消息到主窗口
       try {
+        if (window.PetAgent) {
+          const sessionId = await ensureAgentSession();
+          const result = await window.PetAgent.send({
+            sessionId,
+            text: message,
+            source: 'chat-window'
+          });
+
+          if (result && result.status === 'failed') {
+            throw new Error(result.reason || 'agent_send_failed');
+          }
+
+          if (activeAgentStream && typeof activeAgentStream.close === 'function') {
+            activeAgentStream.close();
+          }
+          streamingAssistantMessage = null;
+          activeAgentStream = await window.PetAgent.openStream({
+            sessionId,
+            runId: result.runId,
+            afterSeq: 0
+          }, (agentEvent) => {
+            if (!agentEvent) return;
+
+            if (agentEvent.type === 'message.delta') {
+              appendAssistantDelta(agentEvent.payload && agentEvent.payload.delta);
+            }
+
+            if (agentEvent.type === 'approval.requested') {
+              hideTyping();
+              showAgentApproval(agentEvent.payload || {}, agentEvent.runId);
+            }
+
+            if (agentEvent.type === 'run.completed') {
+              if (!streamingAssistantMessage) {
+                addMessage('assistant', (agentEvent.payload && agentEvent.payload.summary) || '濂界殑~');
+              }
+              finishAgentRun();
+            }
+
+            if (agentEvent.type === 'run.failed') {
+              if (!streamingAssistantMessage) {
+                addMessage('assistant', (agentEvent.payload && (agentEvent.payload.message || agentEvent.payload.reason)) || '鎶辨瓑锛屼换鍔″け璐ヤ簡...');
+              }
+              finishAgentRun();
+            }
+
+            if (agentEvent.type === 'run.cancelled') {
+              if (!streamingAssistantMessage) {
+                addMessage('assistant', '已取消');
+              }
+              finishAgentRun();
+            }
+          });
+          return;
+        }
+
         if (!window.electron || !window.electron.sendChatMessage) {
           throw new Error('聊天通道不可用');
         }
@@ -323,12 +621,143 @@ body {
           addMessage('assistant', (result && result.error) ? result.error : '抱歉，出了点小问题...');
         }
       } catch (error) {
+        if (window.PetAgent) {
+          finishAgentRun();
+        }
         hideTyping();
         addMessage('assistant', '抱歉，聊天失败了...');
       } finally {
-        isProcessing = false;
-        document.getElementById('sendBtn').disabled = false;
+        if (!window.PetAgent) {
+          isProcessing = false;
+          document.getElementById('sendBtn').disabled = false;
+        }
       }
+    }
+
+    function renderApprovalDiff(preview) {
+      const panel = document.getElementById('confirmDiffPanel');
+      const metaEl = document.getElementById('confirmDiffMeta');
+      const linesEl = document.getElementById('confirmDiffLines');
+      if (!panel || !metaEl || !linesEl) return;
+
+      const diff = Array.isArray(preview?.diff) ? preview.diff : [];
+      if (!preview || diff.length === 0) {
+        panel.classList.remove('show');
+        metaEl.textContent = '';
+        linesEl.innerHTML = '';
+        return;
+      }
+
+      const stats = preview.stats || {};
+      metaEl.textContent = `${preview.path || ''}  ${preview.action || ''}  +${stats.added || 0} / -${stats.removed || 0}`;
+      linesEl.innerHTML = diff.map((line) => {
+        const type = line.type === 'remove' ? 'remove' : 'add';
+        const symbol = type === 'remove' ? '-' : '+';
+        const lineNumber = line.lineNumber || '';
+        const text = String(line.text == null ? '' : line.text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        return `
+          <div class="confirm-diff-line confirm-diff-line--${type}">
+            <div class="confirm-diff-line-number">${symbol}${lineNumber}</div>
+            <div class="confirm-diff-line-text">${text || '&nbsp;'}</div>
+          </div>
+        `;
+      }).join('');
+      panel.classList.add('show');
+    }
+
+    function showApprovalDialog({ title, message, kind, approvalId = null, runId = null, requestId = null, preview = null }) {
+      pendingApprovalDialog = { title, message, kind, approvalId, runId, requestId, preview };
+      const overlay = document.getElementById('confirmOverlay');
+      const titleEl = overlay ? overlay.querySelector('.confirm-title') : null;
+      const messageEl = document.getElementById('confirmMessage');
+      if (titleEl) {
+        titleEl.textContent = title || '确认执行高风险操作';
+      }
+      if (messageEl) {
+        messageEl.textContent = message || '是否继续执行该操作？';
+      }
+      renderApprovalDiff(preview);
+      if (overlay) {
+        overlay.classList.add('show');
+      }
+    }
+
+    async function resolveApprovalDialog(approved) {
+      if (!pendingApprovalDialog) return;
+      const current = pendingApprovalDialog;
+      pendingApprovalDialog = null;
+      const overlay = document.getElementById('confirmOverlay');
+      if (overlay) {
+        overlay.classList.remove('show');
+      }
+      renderApprovalDiff(null);
+
+      if (current.kind === 'agent' && window.PetAgent?.approve) {
+        try {
+          await window.PetAgent.approve({
+            runId: current.runId,
+            approvalId: current.approvalId,
+            approved
+          });
+        } catch (error) {
+          addMessage('assistant', '审批提交失败，请重试。');
+        }
+        return;
+      }
+
+      if (current.kind === 'skill' && window.PetSkills?.respondConfirm) {
+        window.PetSkills.respondConfirm(current.requestId, approved);
+      }
+    }
+
+    function approveSkillConfirm() {
+      void resolveApprovalDialog(true);
+    }
+
+    function rejectSkillConfirm() {
+      void resolveApprovalDialog(false);
+    }
+
+    function showAgentApproval(payload, runId) {
+      const summary = payload?.summary || `批准执行工具 ${payload?.toolName || ''}`.trim();
+      const argsText = payload?.args ? `\n\n参数:\n${JSON.stringify(payload.args, null, 2)}` : '';
+      showApprovalDialog({
+        kind: 'agent',
+        approvalId: payload?.approvalId || null,
+        runId: runId || null,
+        title: '确认执行 Agent 操作',
+        message: `${summary}${argsText}`,
+        preview: payload?.preview || null
+      });
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (!pendingApprovalDialog) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        rejectSkillConfirm();
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (pendingApprovalDialog) {
+        void resolveApprovalDialog(false);
+      }
+    });
+
+    if (window.PetSkills && typeof window.PetSkills.onConfirmRequest === 'function') {
+      window.PetSkills.onConfirmRequest((data) => {
+        if (!data || !data.requestId) return;
+        showApprovalDialog({
+          kind: 'skill',
+          requestId: data.requestId,
+          title: '确认执行高风险操作',
+          message: data.message
+        });
+      });
     }
   </script>
 </body>

@@ -1,5 +1,21 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const taskEventListenerMap = new WeakMap();
+const pendingAgentStreams = new Map();
+
+ipcRenderer.on('agent:stream-port', (event, data) => {
+  if (!data || !data.streamId) return;
+  const pending = pendingAgentStreams.get(data.streamId);
+  if (!pending) return;
+  pendingAgentStreams.delete(data.streamId);
+
+  const port = event.ports && event.ports[0];
+  if (!port) {
+    pending.reject(new Error('Agent stream port was not transferred'));
+    return;
+  }
+
+  pending.resolve(port);
+});
 
 // 暴露Electron API到渲染进程
 contextBridge.exposeInMainWorld('electron', {
@@ -8,9 +24,19 @@ contextBridge.exposeInMainWorld('electron', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAPIKey: () => ipcRenderer.invoke('get-api-key'),
   getProviderAPIKey: (provider) => ipcRenderer.invoke('get-provider-api-key', provider),
+  getSceneAPIKey: (scene, sceneConfig) => ipcRenderer.invoke('get-scene-api-key', scene, sceneConfig),
   saveProviderAPIKey: (provider, key) => ipcRenderer.invoke('save-provider-api-key', provider, key),
+  saveSceneAPIKey: (scene, key) => ipcRenderer.invoke('save-scene-api-key', scene, key),
   getAllProviderAPIKeys: () => ipcRenderer.invoke('get-all-provider-keys'),
+  getAllSceneKeyStatuses: (sceneConfig) => ipcRenderer.invoke('get-all-scene-key-statuses', sceneConfig),
   testProviderAPIKey: (provider) => ipcRenderer.invoke('test-provider-api-key', provider),
+  testSceneAPIKey: (scene, sceneConfig) => ipcRenderer.invoke('test-scene-api-key', scene, sceneConfig),
+  getPythonConfig: () => ipcRenderer.invoke('workflow:get-python-config'),
+  choosePythonInterpreter: () => ipcRenderer.invoke('workflow:choose-python-interpreter'),
+  savePythonInterpreter: (pythonPath) => ipcRenderer.invoke('workflow:set-python-interpreter', pythonPath),
+  resetPythonInterpreter: () => ipcRenderer.invoke('workflow:reset-python-interpreter'),
+  getWeatherDefaultCity: () => ipcRenderer.invoke('weather:get-default-city'),
+  saveWeatherDefaultCity: (city) => ipcRenderer.invoke('weather:set-default-city', city),
   openDevTools: () => ipcRenderer.invoke('open-devtools'),
   listLottieJsonFiles: (folder) => ipcRenderer.sendSync('lottie:list-json-files-sync', folder),
   onWindowMove: (callback) => {
@@ -40,7 +66,6 @@ contextBridge.exposeInMainWorld('electron', {
   onChatSend: (callback) => {
     ipcRenderer.on('chat:send', callback);
   },
-  sendChatResponse: (requestId, payload) => ipcRenderer.send('chat:response', requestId, payload),
   // 设置窗口通信
   sendSettingsChange: (payload) => ipcRenderer.send('settings:change', payload),
   onSettingsChange: (callback) => {
@@ -53,7 +78,12 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('pet:state', callback);
   },
   // 气泡窗口通信
-  showBubble: (message, duration) => ipcRenderer.invoke('bubble:show', message, duration),
+  showBubble: (message, duration, options) => ipcRenderer.invoke(
+    'bubble:show',
+    (message && typeof message === 'object')
+      ? message
+      : { message, duration, ...(options || {}) }
+  ),
   hideBubble: () => ipcRenderer.invoke('bubble:hide'),
   onBubbleShow: (callback) => {
     ipcRenderer.on('bubble:show', callback);
@@ -61,6 +91,73 @@ contextBridge.exposeInMainWorld('electron', {
 });
 
 // 暴露记忆系统 API 到渲染进程
+contextBridge.exposeInMainWorld('PetAgent', {
+  startSession: (payload) => ipcRenderer.invoke('agent:start-session', payload),
+  send: (payload) => ipcRenderer.invoke('agent:send', payload),
+  getState: (payload) => ipcRenderer.invoke('agent:get-state', payload),
+  approve: (payload) => ipcRenderer.invoke('agent:approve', payload),
+  cancel: (payload) => ipcRenderer.invoke('agent:cancel', payload),
+  wait: (payload) => ipcRenderer.invoke('agent:wait', payload),
+  openStream: async (payload, onEvent) => {
+    const clientStreamId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const portPromise = new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        pendingAgentStreams.delete(clientStreamId);
+        reject(new Error('agent_stream_timeout'));
+      }, 5000);
+
+      pendingAgentStreams.set(clientStreamId, {
+        resolve: (streamPort) => {
+          clearTimeout(timeoutId);
+          resolve(streamPort);
+        },
+        reject: (error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        }
+      });
+    });
+
+    let meta;
+    try {
+      meta = await ipcRenderer.invoke('agent:open-stream', {
+        ...(payload || {}),
+        streamId: clientStreamId
+      });
+    } catch (error) {
+      pendingAgentStreams.delete(clientStreamId);
+      throw error;
+    }
+
+    if (!meta || meta.error || !meta.streamId) {
+      pendingAgentStreams.delete(clientStreamId);
+      throw new Error(meta?.error || 'agent_open_stream_failed');
+    }
+
+    const port = await portPromise;
+
+    port.onmessage = (streamEvent) => {
+      if (typeof onEvent === 'function') {
+        onEvent(streamEvent.data);
+      }
+    };
+    if (typeof port.start === 'function') {
+      port.start();
+    }
+
+    return {
+      ...meta,
+      close: () => {
+        try {
+          port.close();
+        } catch {
+          // Ignore close errors from already-closed ports.
+        }
+      }
+    };
+  }
+});
+
 contextBridge.exposeInMainWorld('PetMemory', {
   // 初始化
   initialize: () => ipcRenderer.invoke('memory:init'),
@@ -404,6 +501,41 @@ contextBridge.exposeInMainWorld('PetWidget', {
   getConfig: () => ipcRenderer.invoke('widget:get-config'),
   updateConfig: (config) => ipcRenderer.invoke('widget:update-config', config),
   toggle: (widgetId, enabled) => ipcRenderer.invoke('widget:toggle', widgetId, enabled)
+});
+
+// 模型路由器 API（意图 → provider+model 路由）
+contextBridge.exposeInMainWorld('PetModelRouter', {
+  // 根据意图获取路由配置
+  getRoute: (intent, sceneConfig) =>
+    ipcRenderer.invoke('modelRouter:getRoute', intent, sceneConfig),
+
+  // 获取可用 providers 列表
+  getAvailable: () =>
+    ipcRenderer.invoke('modelRouter:getAvailable'),
+
+  // 获取降级链
+  getFallbackChain: (intent) =>
+    ipcRenderer.invoke('modelRouter:getFallbackChain', intent)
+});
+
+// Skills 系统 API（声明式技能注册 + 执行）
+contextBridge.exposeInMainWorld('PetSkills', {
+  // 获取可用技能列表
+  list: () => ipcRenderer.invoke('skill:list'),
+
+  // 获取 function calling tools 数组
+  getToolsArray: () => ipcRenderer.invoke('skill:get-tools-array'),
+
+  // 获取系统提示词片段
+  getPromptSnippet: () => ipcRenderer.invoke('skill:get-prompt-snippet'),
+
+  // 执行技能
+  execute: (name, args) => ipcRenderer.invoke('skill:execute', name, args),
+
+  // 响应确认
+  respondConfirm: (requestId, approved) => {
+    ipcRenderer.send('skill:confirm-response', { requestId, approved });
+  }
 });
 
 // 工作流系统 API（Python 工具调用）

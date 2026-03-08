@@ -4,7 +4,16 @@ const fsSync = require('fs');
 const MemoryMainProcess = require('./main-process/memory');
 const { ScreenshotManager } = require('./main-process/screenshot');
 const WorkflowManager = require('./main-process/workflow-manager');
-const { createChatRequestId, withTimeout } = require('./src/chat-ipc-utils');
+const ModelRouter = require('./main-process/model-router');
+const SkillRegistry = require('./main-process/skill-registry');
+const SkillExecutor = require('./main-process/skill-executor');
+const AgentSessionStore = require('./main-process/agent-session-store');
+const AgentEventBus = require('./main-process/agent-event-bus');
+const CapabilityRegistry = require('./main-process/capability-registry');
+const ChannelRegistry = require('./main-process/channel-registry');
+const AgentRuntime = require('./main-process/agent-runtime');
+const AgentHttpServer = require('./main-process/agent-http-server');
+const { createChatRequestId } = require('./src/chat-ipc-utils');
 const { getBubbleWindowBoundsFromMain } = require('./src/bubble-window-utils');
 
 // 忽略 stdout/stderr 管道断开错误（npm start 关闭终端后常见，无需弹窗提示）
@@ -22,13 +31,22 @@ let memorySystem = null;
 let toolSystem = null;
 let screenshotSystem = null;
 let workflowManager = null;
+let modelRouter = null;
+let skillRegistry = null;
+let skillExecutor = null;
+let agentSessionStore = null;
+let agentEventBus = null;
+let capabilityRegistry = null;
+let channelRegistry = null;
+let agentRuntime = null;
+let agentHttpServer = null;
 let childWindows = new Map(); // 管理所有子窗口
 let lastSmallBounds = null; // 记录小窗口位置，避免缩放漂移
 let menuWindow = null;
 let bubbleWindow = null;
 let bubbleWindowReady = false;
 let pendingBubblePayload = null;
-const pendingChatRequests = new Map();
+let legacyChatSessionId = null;
 
 // 窗口尺寸常量
 const WINDOW_SIZES = {
@@ -43,12 +61,48 @@ let currentPetVisualState = null;
 let bubbleOffsetByState = {
   idle: { ...DEFAULT_BUBBLE_OFFSET }
 };
-const DEFAULT_LLM_SCENE_CONFIG = {
-  chat: { provider: 'deepseek', model: 'deepseek-chat' },
-  vision: { provider: 'deepseek', model: 'deepseek-chat' },
-  translate: { provider: 'deepseek', model: 'deepseek-chat' },
-  ocr: { provider: 'tesseract', model: 'tesseract' }
+const SCENE_METADATA = {
+  chat: {
+    label: '聊天',
+    description: '普通对话、陪伴聊天、默认问答',
+    defaultProvider: 'deepseek',
+    defaultModel: 'deepseek-chat'
+  },
+  agent: {
+    label: 'Agent',
+    description: '任务规划、工具调用、执行型请求',
+    defaultProvider: 'deepseek',
+    defaultModel: 'deepseek-chat'
+  },
+  vision: {
+    label: '视觉',
+    description: '看图、截图理解、图片分析',
+    defaultProvider: 'deepseek',
+    defaultModel: 'deepseek-chat'
+  },
+  translate: {
+    label: '翻译',
+    description: '文本翻译、截图翻译',
+    defaultProvider: 'deepseek',
+    defaultModel: 'deepseek-chat'
+  },
+  ocr: {
+    label: 'OCR',
+    description: '文字识别',
+    defaultProvider: 'tesseract',
+    defaultModel: 'tesseract'
+  }
 };
+const DEFAULT_LLM_SCENE_CONFIG = Object.fromEntries(
+  Object.entries(SCENE_METADATA).map(([scene, meta]) => [
+    scene,
+    {
+      provider: meta.defaultProvider,
+      model: meta.defaultModel,
+      apiKeyMode: 'provider-fallback'
+    }
+  ])
+);
 const PROVIDER_ENV_KEY_MAP = {
   deepseek: 'DEEPSEEK_API_KEY',
   openai: 'OPENAI_API_KEY',
@@ -61,27 +115,33 @@ const PROVIDER_ENV_KEY_MAP = {
 const OPENAI_COMPAT_PROVIDERS = {
   deepseek: {
     endpoint: 'https://api.deepseek.com/v1/chat/completions',
-    defaultModel: 'deepseek-chat'
+    defaultModel: 'deepseek-chat',
+    supportsTools: true
   },
   openai: {
     endpoint: 'https://api.openai.com/v1/chat/completions',
-    defaultModel: 'gpt-4o-mini'
+    defaultModel: 'gpt-4o-mini',
+    supportsTools: true
   },
   openrouter: {
     endpoint: 'https://openrouter.ai/api/v1/chat/completions',
-    defaultModel: 'openai/gpt-4o-mini'
+    defaultModel: 'openai/gpt-4o-mini',
+    supportsTools: true
   },
   siliconflow: {
     endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
-    defaultModel: 'Qwen/Qwen2.5-72B-Instruct'
+    defaultModel: 'Qwen/Qwen2.5-72B-Instruct',
+    supportsTools: true
   },
   glm: {
     endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-    defaultModel: 'glm-4-flash'
+    defaultModel: 'glm-4-flash',
+    supportsTools: true
   },
   qwen: {
     endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-    defaultModel: 'qwen-turbo'
+    defaultModel: 'qwen-turbo',
+    supportsTools: true
   }
 };
 const SCREENSHOT_TEXT_NONE = '[NO_TEXT]';
@@ -129,13 +189,15 @@ function normalizeLLMSceneConfig(config) {
     const model = typeof raw.model === 'string' && raw.model.trim()
       ? raw.model.trim()
       : fallback.model;
-    normalized[scene] = { provider, model };
+    const apiKeyMode = raw.apiKeyMode === 'scene' ? 'scene' : 'provider-fallback';
+    normalized[scene] = { provider, model, apiKeyMode };
   }
   return normalized;
 }
 
 function getSceneConfig(scene) {
-  const fallback = DEFAULT_LLM_SCENE_CONFIG[scene] || DEFAULT_LLM_SCENE_CONFIG.chat;
+  const normalizedScene = SCENE_METADATA[scene] ? scene : 'chat';
+  const fallback = DEFAULT_LLM_SCENE_CONFIG[normalizedScene] || DEFAULT_LLM_SCENE_CONFIG.chat;
   const raw = llmSceneConfig[scene] && typeof llmSceneConfig[scene] === 'object'
     ? llmSceneConfig[scene]
     : fallback;
@@ -147,11 +209,14 @@ function getSceneConfig(scene) {
   const model = typeof raw.model === 'string' && raw.model.trim()
     ? raw.model.trim()
     : (providerMeta?.defaultModel || fallback.model);
+  const apiKeyMode = raw.apiKeyMode === 'scene' ? 'scene' : 'provider-fallback';
   return {
-    scene,
+    scene: normalizedScene,
     provider,
     model,
-    providerMeta
+    providerMeta,
+    apiKeyMode,
+    supportsTools: !!providerMeta?.supportsTools
   };
 }
 
@@ -169,7 +234,8 @@ function getTaskSceneConfig(scene, options = {}) {
       continue;
     }
 
-    const apiKey = getProviderApiKeyByProvider(config.provider);
+    const credential = getSceneCredential(config.scene);
+    const apiKey = credential.apiKey;
     if (!apiKey) {
       attempted.push(`${sceneName}:${config.provider}(missing-key)`);
       continue;
@@ -178,6 +244,7 @@ function getTaskSceneConfig(scene, options = {}) {
     return {
       ...config,
       apiKey,
+      credentialSource: credential.source,
       requireImage
     };
   }
@@ -198,7 +265,8 @@ function getAvailableTaskSceneConfigs(sceneNames, options = {}) {
       continue;
     }
 
-    const apiKey = getProviderApiKeyByProvider(config.provider);
+    const credential = getSceneCredential(config.scene);
+    const apiKey = credential.apiKey;
     if (!apiKey) {
       attempted.push(`${scene}:${config.provider}(missing-key)`);
       continue;
@@ -207,6 +275,7 @@ function getAvailableTaskSceneConfigs(sceneNames, options = {}) {
     configs.push({
       ...config,
       apiKey,
+      credentialSource: credential.source,
       requireImage
     });
   }
@@ -517,12 +586,101 @@ function getScreenshotDataURLFromRecord(record) {
 
 // api-keys.json 文件路径（延迟初始化，app ready 后才可用）
 let apiKeysFilePath = null;
+let appConfigFilePath = null;
 
 function getApiKeysFilePath() {
   if (!apiKeysFilePath) {
     apiKeysFilePath = path.join(app.getPath('userData'), 'api-keys.json');
   }
   return apiKeysFilePath;
+}
+
+function getAppConfigFilePath() {
+  if (!appConfigFilePath) {
+    appConfigFilePath = path.join(app.getPath('userData'), 'config.json');
+  }
+  return appConfigFilePath;
+}
+
+function normalizeAppConfig(data = {}) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return {};
+  }
+
+  const normalized = {};
+  if (typeof data.pythonPath === 'string' && data.pythonPath.trim()) {
+    normalized.pythonPath = data.pythonPath.trim();
+  }
+  if (typeof data.weatherDefaultCity === 'string' && data.weatherDefaultCity.trim()) {
+    normalized.weatherDefaultCity = data.weatherDefaultCity.trim();
+  }
+
+  return normalized;
+}
+
+function readAppConfig() {
+  try {
+    const filePath = getAppConfigFilePath();
+    if (fsSync.existsSync(filePath)) {
+      return normalizeAppConfig(JSON.parse(fsSync.readFileSync(filePath, 'utf-8')));
+    }
+  } catch (error) {
+    console.error('[App Config] 读取 config.json 失败:', error.message);
+  }
+  return {};
+}
+
+function writeAppConfig(config) {
+  const filePath = getAppConfigFilePath();
+  fsSync.writeFileSync(filePath, JSON.stringify(normalizeAppConfig(config), null, 2), 'utf-8');
+}
+
+function updateAppConfig(patch = {}) {
+  const nextConfig = normalizeAppConfig({
+    ...readAppConfig(),
+    ...patch
+  });
+  writeAppConfig(nextConfig);
+  return nextConfig;
+}
+
+function getWorkflowPythonPath() {
+  const raw = workflowManager?._bridge?._pythonPath;
+  if (raw && typeof raw === 'object') {
+    return String(raw.command || '').trim();
+  }
+  return String(raw || '').trim();
+}
+
+function getPythonConfigSnapshot() {
+  const config = readAppConfig();
+  const configuredPath = config.pythonPath || '';
+  const effectivePath = getWorkflowPythonPath();
+  return {
+    configuredPath,
+    effectivePath,
+    source: configuredPath ? 'config' : (effectivePath ? 'auto' : 'none')
+  };
+}
+
+function reloadWorkflowManager() {
+  if (typeof WorkflowManager.resetPythonDetectionCache === 'function') {
+    WorkflowManager.resetPythonDetectionCache();
+  }
+
+  if (!workflowManager) {
+    workflowManager = new WorkflowManager();
+  } else if (typeof workflowManager.shutdown === 'function') {
+    workflowManager.shutdown();
+  }
+
+  workflowManager.initialize();
+
+  if (capabilityRegistry && typeof capabilityRegistry.refresh === 'function') {
+    capabilityRegistry.refresh();
+  }
+
+  return getWorkflowPythonPath();
 }
 
 // 从 api-keys.json 读取所有已保存的 key
@@ -532,21 +690,144 @@ function readApiKeysFile() {
     const fsSync = require('fs');
     if (fsSync.existsSync(filePath)) {
       const data = fsSync.readFileSync(filePath, 'utf-8');
-      return JSON.parse(data);
+      return normalizeApiKeysStore(JSON.parse(data));
     }
   } catch (error) {
     console.error('[API Keys] 读取 api-keys.json 失败:', error.message);
   }
-  return {};
+  return normalizeApiKeysStore();
+}
+
+function normalizeApiKeysStore(data = {}) {
+  const emptyStore = { providers: {}, scenes: {} };
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return emptyStore;
+  }
+
+  // 兼容旧版平铺 provider key 结构
+  const looksLikeLegacy = Object.keys(data).some(key => Object.prototype.hasOwnProperty.call(PROVIDER_ENV_KEY_MAP, key));
+  if (looksLikeLegacy && !data.providers && !data.scenes) {
+    const providers = {};
+    for (const provider of Object.keys(PROVIDER_ENV_KEY_MAP)) {
+      if (typeof data[provider] === 'string') {
+        providers[provider] = data[provider];
+      }
+    }
+    return { providers, scenes: {} };
+  }
+
+  const providers = {};
+  for (const provider of Object.keys(PROVIDER_ENV_KEY_MAP)) {
+    if (typeof data.providers?.[provider] === 'string') {
+      providers[provider] = data.providers[provider];
+    }
+  }
+
+  const scenes = {};
+  for (const scene of Object.keys(SCENE_METADATA)) {
+    if (typeof data.scenes?.[scene] === 'string') {
+      scenes[scene] = data.scenes[scene];
+    }
+  }
+
+  return { providers, scenes };
+}
+
+function writeApiKeysFile(store) {
+  const filePath = getApiKeysFilePath();
+  const fsSync = require('fs');
+  fsSync.writeFileSync(filePath, JSON.stringify(normalizeApiKeysStore(store), null, 2), 'utf-8');
+}
+
+function saveSceneApiKey(scene, key) {
+  const normalizedScene = SCENE_METADATA[scene] ? scene : '';
+  if (!normalizedScene) {
+    throw new Error('unsupported scene');
+  }
+  const store = readApiKeysFile();
+  store.scenes[normalizedScene] = key;
+  writeApiKeysFile(store);
+  console.log(`[API Keys] 已保存 scene ${normalizedScene} key (长度: ${key.length})`);
+}
+
+function getProviderApiKeyRecord(provider) {
+  const normalizedProvider = typeof provider === 'string' ? provider.trim().toLowerCase() : '';
+  const envKey = PROVIDER_ENV_KEY_MAP[normalizedProvider];
+  if (!envKey) return { apiKey: '', source: 'none' };
+
+  const savedKeys = readApiKeysFile();
+  if (savedKeys.providers[normalizedProvider]) {
+    return { apiKey: savedKeys.providers[normalizedProvider], source: 'provider' };
+  }
+
+  const envValue = process.env[envKey] || '';
+  if (envValue) {
+    return { apiKey: envValue, source: 'env' };
+  }
+
+  return { apiKey: '', source: 'none' };
+}
+
+function getSceneCredential(scene, sceneConfigOverride = null) {
+  const normalizedConfig = normalizeLLMSceneConfig(sceneConfigOverride || llmSceneConfig);
+  const normalizedScene = SCENE_METADATA[scene] ? scene : 'chat';
+  const config = normalizedConfig[normalizedScene] || DEFAULT_LLM_SCENE_CONFIG[normalizedScene];
+  const store = readApiKeysFile();
+
+  if (config.apiKeyMode === 'scene') {
+    const sceneKey = store.scenes[normalizedScene] || '';
+    if (sceneKey) {
+      return { apiKey: sceneKey, source: 'scene' };
+    }
+  }
+
+  return getProviderApiKeyRecord(config.provider);
+}
+
+function getSceneKeyStatusMap(sceneConfigOverride = null) {
+  const normalizedConfig = normalizeLLMSceneConfig(sceneConfigOverride || llmSceneConfig);
+  const store = readApiKeysFile();
+  const result = {};
+
+  for (const scene of Object.keys(SCENE_METADATA)) {
+    const config = normalizedConfig[scene] || DEFAULT_LLM_SCENE_CONFIG[scene];
+    const sceneKey = store.scenes[scene] || '';
+    const resolved = getSceneCredential(scene, normalizedConfig);
+    result[scene] = {
+      scene,
+      provider: config.provider,
+      model: config.model,
+      apiKeyMode: config.apiKeyMode,
+      sceneMasked: maskApiKey(sceneKey),
+      sceneConfigured: sceneKey.length > 0,
+      sceneSource: sceneKey ? 'scene' : 'none',
+      activeMasked: maskApiKey(resolved.apiKey),
+      activeConfigured: resolved.apiKey.length > 0,
+      activeSource: resolved.source
+    };
+  }
+
+  return result;
+}
+
+function syncMemoryApiKey() {
+  if (!memorySystem) return;
+  const chatConfig = getSceneConfig('chat');
+  let deepseekKey = '';
+  if (chatConfig.provider === 'deepseek') {
+    deepseekKey = getSceneCredential('chat').apiKey;
+  }
+  if (!deepseekKey) {
+    deepseekKey = getProviderApiKeyRecord('deepseek').apiKey;
+  }
+  memorySystem.updateApiKey(deepseekKey);
 }
 
 // 保存单个 provider 的 key 到 api-keys.json
 function saveProviderApiKey(provider, key) {
   const keys = readApiKeysFile();
-  keys[provider] = key;
-  const filePath = getApiKeysFilePath();
-  const fsSync = require('fs');
-  fsSync.writeFileSync(filePath, JSON.stringify(keys, null, 2), 'utf-8');
+  keys.providers[provider] = key;
+  writeApiKeysFile(keys);
   console.log(`[API Keys] 已保存 ${provider} key (长度: ${key.length})`);
 }
 
@@ -557,16 +838,7 @@ function maskApiKey(key) {
 }
 
 function getProviderApiKeyByProvider(provider) {
-  const normalizedProvider = typeof provider === 'string' ? provider.trim().toLowerCase() : '';
-  const envKey = PROVIDER_ENV_KEY_MAP[normalizedProvider];
-  if (!envKey) return '';
-  // 优先从 api-keys.json 读取
-  const savedKeys = readApiKeysFile();
-  if (savedKeys[normalizedProvider]) {
-    return savedKeys[normalizedProvider];
-  }
-  // 降级到环境变量
-  return process.env[envKey] || '';
+  return getProviderApiKeyRecord(provider).apiKey;
 }
 
 // 创建主窗口（只显示宠物本体）
@@ -731,18 +1003,37 @@ function createBubbleWindow() {
   });
 }
 
-function showBubbleWindow(message, duration) {
+function normalizeBubblePayload(payloadOrMessage, duration) {
+  if (payloadOrMessage && typeof payloadOrMessage === 'object') {
+    return {
+      message: String(payloadOrMessage.message || ''),
+      duration: Number.isFinite(Number(payloadOrMessage.duration))
+        ? Number(payloadOrMessage.duration)
+        : 5000,
+      sticky: !!payloadOrMessage.sticky
+    };
+  }
+
+  return {
+    message: String(payloadOrMessage || ''),
+    duration: Number.isFinite(Number(duration)) ? Number(duration) : 5000,
+    sticky: false
+  };
+}
+
+function showBubbleWindow(payloadOrMessage, duration) {
   if (!bubbleWindow || bubbleWindow.isDestroyed()) {
     createBubbleWindow();
   }
+  const payload = normalizeBubblePayload(payloadOrMessage, duration);
   const bounds = getBubbleWindowBounds();
   bubbleWindow.setBounds(bounds, false);
   bubbleWindow.showInactive();
   if (!bubbleWindowReady || bubbleWindow.webContents.isLoading()) {
-    pendingBubblePayload = { message, duration };
+    pendingBubblePayload = payload;
     return;
   }
-  bubbleWindow.webContents.send('bubble:show', { message, duration });
+  bubbleWindow.webContents.send('bubble:show', payload);
 }
 
 function hideBubbleWindow() {
@@ -885,17 +1176,15 @@ app.whenReady().then(async () => {
   });
   // 先注册 IPC handlers，确保渲染进程的调用不会因初始化失败而无 handler
   memorySystem.registerIPCHandlers(ipcMain);
+  // 初始化模型路由器
+  modelRouter = new ModelRouter();
+  modelRouter.registerIPCHandlers(ipcMain);
   // 设置主窗口引用（提醒通知需要）
   memorySystem.setMainWindow(mainWindow);
   try {
     await memorySystem.initialize();
     console.log('Memory system initialized successfully');
-    // 启动后从 api-keys.json 读取已保存的 deepseek key，覆盖环境变量的值
-    const savedDeepseekKey = readApiKeysFile()['deepseek'] || '';
-    if (savedDeepseekKey && memorySystem) {
-      memorySystem.updateApiKey(savedDeepseekKey);
-      console.log('[API Keys] 启动时从 api-keys.json 加载 deepseek key');
-    }
+    syncMemoryApiKey();
     recordDisplayProfiles('startup');
   } catch (error) {
     console.error('Failed to initialize memory system:', error);
@@ -938,6 +1227,120 @@ app.whenReady().then(async () => {
     console.error('Failed to initialize workflow manager:', error);
   }
 
+  // 初始化 Skills 系统（声明式技能注册 + 执行器）
+  console.log('Initializing skills system...');
+  try {
+    skillRegistry = new SkillRegistry(app);
+    skillRegistry.loadSkills();
+
+    skillExecutor = new SkillExecutor({
+      registry: skillRegistry,
+      memorySystem: memorySystem,
+      workflowManager: workflowManager,
+      screenshotOCR: async ({ imageId, dataURL }) => {
+        let resolvedDataURL = dataURL;
+
+        if (!resolvedDataURL) {
+          if (!screenshotSystem) {
+            throw new Error('Screenshot system not initialized');
+          }
+          if (!imageId) {
+            throw new Error('缺少 imageId 或 dataURL 参数');
+          }
+          const screenshot = screenshotSystem.getScreenshotById(imageId);
+          if (!screenshot) {
+            throw new Error('截图不存在');
+          }
+          resolvedDataURL = getScreenshotDataURLFromRecord(screenshot);
+        }
+
+        const ocrResult = await runScreenshotOCR(resolvedDataURL);
+
+        if (imageId && screenshotSystem) {
+          screenshotSystem.saveAnalysis(imageId, 'ocr', ocrResult.text || '未识别到文字。', {
+            model: ocrResult.model
+          });
+          screenshotSystem.updateOcrText(imageId, ocrResult.text);
+        }
+
+        return {
+          text: ocrResult.text || '',
+          result: ocrResult.text || '未识别到文字。',
+          model: ocrResult.model,
+          scene: ocrResult.scene,
+          imageId: imageId || null
+        };
+      },
+      weatherDefaultCity: readAppConfig().weatherDefaultCity || ''
+    });
+    skillExecutor.setMainWindow(mainWindow);
+    console.log('Skills system initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize skills system:', error);
+  }
+
+  // 注册 Skills IPC handlers
+  console.log('Initializing agent runtime...');
+  try {
+    agentSessionStore = new AgentSessionStore(memorySystem?.storage?.db);
+    agentEventBus = new AgentEventBus(agentSessionStore, { maxEventsPerRun: 100 });
+    capabilityRegistry = new CapabilityRegistry({
+      skillRegistry,
+      skillExecutor,
+      workflowManager,
+      toolSystem
+    });
+    channelRegistry = new ChannelRegistry(agentEventBus, { keepAliveMs: 15000 });
+    agentRuntime = new AgentRuntime({
+      sessionStore: agentSessionStore,
+      eventBus: agentEventBus,
+      capabilityRegistry,
+      memorySystem,
+      modelRouter,
+      getSceneConfig: () => llmSceneConfig,
+      getDesktopPath: () => app.getPath('desktop'),
+      onSummaryEvent: (event) => {
+        if (channelRegistry) {
+          channelRegistry.emitSummary(event);
+        }
+      }
+    });
+    agentRuntime.initialize();
+    agentHttpServer = new AgentHttpServer({
+      runtime: agentRuntime,
+      channelRegistry,
+      host: '127.0.0.1',
+      port: 47831,
+      tokenFilePath: path.join(app.getPath('userData'), 'http-token.txt')
+    });
+    agentHttpServer.start();
+    console.log('Agent runtime initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize agent runtime:', error);
+  }
+
+  ipcMain.handle('skill:list', () => {
+    if (!skillRegistry) return [];
+    return skillRegistry.getEligibleSkills();
+  });
+
+  ipcMain.handle('skill:get-tools-array', () => {
+    if (!skillRegistry) return [];
+    return skillRegistry.buildToolsArray();
+  });
+
+  ipcMain.handle('skill:get-prompt-snippet', () => {
+    if (!skillRegistry) return '';
+    return skillRegistry.formatForPrompt();
+  });
+
+  ipcMain.handle('skill:execute', async (event, name, args) => {
+    if (!skillExecutor) {
+      return { success: false, error: 'Skills 系统未初始化' };
+    }
+    return await skillExecutor.execute(name, args);
+  });
+
   // 注册工作流 IPC handlers
   ipcMain.handle('workflow:execute', async (event, toolName, args) => {
     if (!workflowManager) {
@@ -961,6 +1364,38 @@ app.whenReady().then(async () => {
   });
 
   // 注册开发者工具快捷键
+  if (channelRegistry) {
+    channelRegistry.onSummary((event) => {
+      if (!event || !event.payload) return;
+
+      if (event.type === 'approval.requested') {
+        showBubbleWindow({
+          message: `等待批准: ${event.payload.toolName}`,
+          duration: 4000
+        });
+      }
+
+      if (event.type === 'run.completed') {
+        showBubbleWindow({
+          message: event.payload.summary || '任务已完成',
+          duration: 5000
+        });
+      }
+    });
+  }
+
+  ipcMain.on('skill:confirm-response', async (event, result) => {
+    if (!result || !result.requestId || !agentRuntime) return;
+    try {
+      await agentRuntime.approve({
+        approvalId: result.requestId,
+        approved: !!result.approved
+      });
+    } catch (error) {
+      console.error('[AgentRuntime] approval bridge failed:', error);
+    }
+  });
+
   console.log('Registering developer tools shortcuts...');
   try {
     // Ctrl+Shift+I: 打开/关闭开发者工具
@@ -1033,9 +1468,15 @@ app.on('before-quit', () => {
   if (memorySystem) {
     memorySystem.close();
   }
+  if (agentHttpServer) {
+    agentHttpServer.stop();
+  }
   // 关闭工作流 Python 进程
   if (workflowManager) {
     workflowManager.shutdown();
+  }
+  if (toolSystem && typeof toolSystem.shutdown === 'function') {
+    toolSystem.shutdown();
   }
 });
 
@@ -1275,8 +1716,8 @@ ipcMain.on('lottie:list-json-files-sync', (event, folder = 'cat') => {
 });
 
 // 气泡窗口控制
-ipcMain.handle('bubble:show', (event, message, duration) => {
-  showBubbleWindow(message, duration);
+ipcMain.handle('bubble:show', (event, payloadOrMessage, duration) => {
+  showBubbleWindow(payloadOrMessage, duration);
   return { success: true };
 });
 
@@ -1285,27 +1726,105 @@ ipcMain.handle('bubble:hide', () => {
   return { success: true };
 });
 
-// 聊天 IPC
-ipcMain.handle('chat:send', async (event, message) => {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return { success: false, error: '主窗口不可用' };
+ipcMain.handle('agent:start-session', async (event, payload = {}) => {
+  if (!agentRuntime) {
+    return { error: 'agent_runtime_unavailable' };
   }
-  const requestId = createChatRequestId();
-  const responsePromise = new Promise((resolve) => {
-    pendingChatRequests.set(requestId, resolve);
+  const session = agentRuntime.startSession(payload);
+  return { sessionId: session.id };
+});
+
+ipcMain.handle('agent:send', async (event, payload = {}) => {
+  if (!agentRuntime) {
+    return { status: 'failed', reason: 'agent_runtime_unavailable' };
+  }
+  return await agentRuntime.send(payload);
+});
+
+ipcMain.handle('agent:get-state', async (event, payload = {}) => {
+  if (!agentRuntime) {
+    return null;
+  }
+  return agentRuntime.getState(payload);
+});
+
+ipcMain.handle('agent:open-stream', async (event, payload = {}) => {
+  if (!agentRuntime || !channelRegistry) {
+    return { error: 'agent_runtime_unavailable' };
+  }
+  const streamId = payload.streamId || `stream_${createChatRequestId()}`;
+  const state = agentRuntime.getState({
+    sessionId: payload.sessionId,
+    runId: payload.runId || null
   });
-  mainWindow.webContents.send('chat:send', { requestId, message });
-  return withTimeout(responsePromise, 30000, () => {
-    pendingChatRequests.delete(requestId);
-    return { success: false, error: '聊天超时' };
+  const resolvedRunId = payload.runId || state?.activeRun?.id || null;
+  return channelRegistry.createRendererStream(event.sender, {
+    streamId,
+    sessionId: payload.sessionId,
+    runId: resolvedRunId,
+    afterSeq: payload.afterSeq || 0
   });
 });
 
-ipcMain.on('chat:response', (event, requestId, payload) => {
-  if (!pendingChatRequests.has(requestId)) return;
-  const resolve = pendingChatRequests.get(requestId);
-  pendingChatRequests.delete(requestId);
-  resolve(payload);
+ipcMain.handle('agent:approve', async (event, payload = {}) => {
+  if (!agentRuntime) {
+    return { ok: false };
+  }
+  return await agentRuntime.approve(payload);
+});
+
+ipcMain.handle('agent:cancel', async (event, payload = {}) => {
+  if (!agentRuntime) {
+    return { ok: false };
+  }
+  return await agentRuntime.cancel(payload);
+});
+
+ipcMain.handle('agent:wait', async (event, payload = {}) => {
+  if (!agentRuntime) {
+    return { ok: false, error: 'agent_runtime_unavailable' };
+  }
+  return await agentRuntime.wait(payload);
+});
+
+// 聊天 IPC
+ipcMain.handle('chat:send', async (event, message) => {
+  if (!agentRuntime) {
+    return { success: false, error: '主窗口不可用' };
+  }
+  try {
+    if (!legacyChatSessionId) {
+      legacyChatSessionId = agentRuntime.startSession({
+        channel: 'legacy-chat-window',
+        metadata: {
+          personality: 'healing'
+        }
+      }).id;
+    }
+
+    const sendResult = await agentRuntime.send({
+      sessionId: legacyChatSessionId,
+      text: String(message || ''),
+      source: 'legacy-chat-ipc'
+    });
+
+    if (sendResult.status === 'failed') {
+      return { success: false, error: sendResult.reason || 'chat_failed' };
+    }
+
+    const waited = await agentRuntime.wait({
+      runId: sendResult.runId,
+      timeoutMs: 90000
+    });
+
+    if (!waited.ok) {
+      return { success: false, error: waited.error || 'chat_failed' };
+    }
+
+    return { success: true, reply: waited.finalText || '' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 // 设置窗口通知 -> 主窗口
@@ -1327,6 +1846,7 @@ ipcMain.on('settings:change', (event, payload) => {
     }
   } else if (payload && payload.type === 'llm-scene-config') {
     llmSceneConfig = normalizeLLMSceneConfig(payload.config);
+    syncMemoryApiKey();
   }
 
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -1424,10 +1944,98 @@ ipcMain.handle('get-api-key', () => {
   return apiKey;
 });
 
+ipcMain.handle('workflow:get-python-config', () => {
+  return getPythonConfigSnapshot();
+});
+
+ipcMain.handle('weather:get-default-city', () => {
+  const config = readAppConfig();
+  return {
+    weatherDefaultCity: config.weatherDefaultCity || ''
+  };
+});
+
+ipcMain.handle('weather:set-default-city', async (event, city) => {
+  const weatherDefaultCity = typeof city === 'string' ? city.trim() : '';
+  try {
+    const config = updateAppConfig({ weatherDefaultCity });
+    if (skillExecutor && typeof skillExecutor.setWeatherDefaultCity === 'function') {
+      skillExecutor.setWeatherDefaultCity(config.weatherDefaultCity || '');
+    }
+    return { success: true, config };
+  } catch (error) {
+    console.error('[Weather] 保存默认城市失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('workflow:choose-python-interpreter', async (event) => {
+  try {
+    const { dialog } = require('electron');
+    const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow || null;
+    const result = await dialog.showOpenDialog(owner, {
+      title: '选择 Python 解释器',
+      properties: ['openFile'],
+      filters: process.platform === 'win32'
+        ? [
+            { name: 'Python', extensions: ['exe'] },
+            { name: '所有文件', extensions: ['*'] }
+          ]
+        : [
+            { name: '所有文件', extensions: ['*'] }
+          ]
+    });
+
+    return {
+      success: true,
+      canceled: !!result.canceled,
+      path: result.canceled ? '' : (result.filePaths[0] || '')
+    };
+  } catch (error) {
+    console.error('[WorkflowManager] 选择 Python 解释器失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('workflow:set-python-interpreter', async (event, pythonPath) => {
+  const trimmedPath = typeof pythonPath === 'string' ? pythonPath.trim() : '';
+  if (!trimmedPath) {
+    return { success: false, error: 'Python 解释器路径不能为空' };
+  }
+
+  if (!WorkflowManager.isUsablePythonInterpreter(trimmedPath)) {
+    return { success: false, error: `Python 解释器不可用: ${trimmedPath}` };
+  }
+
+  try {
+    updateAppConfig({ pythonPath: trimmedPath });
+    reloadWorkflowManager();
+    return { success: true, config: getPythonConfigSnapshot() };
+  } catch (error) {
+    console.error('[WorkflowManager] 保存 Python 解释器失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('workflow:reset-python-interpreter', async () => {
+  try {
+    writeAppConfig({});
+    reloadWorkflowManager();
+    return { success: true, config: getPythonConfigSnapshot() };
+  } catch (error) {
+    console.error('[WorkflowManager] 重置 Python 解释器失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('get-provider-api-key', (event, provider) => {
   const apiKey = getProviderApiKeyByProvider(provider);
   console.log(`[API Keys] get-provider-api-key called for: ${provider}, found: ${apiKey ? apiKey.length + ' chars' : 'NO KEY'}`);
   return apiKey;
+});
+
+ipcMain.handle('get-scene-api-key', (event, scene, sceneConfigOverride) => {
+  return getSceneCredential(scene, sceneConfigOverride).apiKey;
 });
 
 // 保存 provider API key 到本地文件
@@ -1446,13 +2054,32 @@ ipcMain.handle('save-provider-api-key', (event, provider, key) => {
   }
   try {
     saveProviderApiKey(normalizedProvider, trimmedKey);
-    // 如果修改的是 deepseek key，同步更新记忆系统的事实提取器
-    if (normalizedProvider === 'deepseek' && memorySystem) {
-      memorySystem.updateApiKey(trimmedKey);
-    }
+    syncMemoryApiKey();
     return { success: true };
   } catch (error) {
     console.error('[API Keys] 保存失败:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('save-scene-api-key', (event, scene, key) => {
+  const normalizedScene = SCENE_METADATA[scene] ? scene : '';
+  if (!normalizedScene) {
+    return { success: false, error: '不支持的场景' };
+  }
+  if (typeof key !== 'string') {
+    return { success: false, error: 'key 必须是字符串' };
+  }
+  const trimmedKey = key.trim();
+  if (trimmedKey.length > 0 && trimmedKey.length < 20) {
+    return { success: false, error: 'API Key 长度不足（至少 20 位）' };
+  }
+  try {
+    saveSceneApiKey(normalizedScene, trimmedKey);
+    syncMemoryApiKey();
+    return { success: true };
+  } catch (error) {
+    console.error('[API Keys] 保存 scene key 失败:', error.message);
     return { success: false, error: error.message };
   }
 });
@@ -1462,16 +2089,20 @@ ipcMain.handle('get-all-provider-keys', () => {
   const savedKeys = readApiKeysFile();
   const result = {};
   for (const provider of Object.keys(PROVIDER_ENV_KEY_MAP)) {
-    const savedKey = savedKeys[provider] || '';
+    const savedKey = savedKeys.providers[provider] || '';
     const envKey = process.env[PROVIDER_ENV_KEY_MAP[provider]] || '';
     const actualKey = savedKey || envKey;
     result[provider] = {
       masked: maskApiKey(actualKey),
       configured: actualKey.length > 0,
-      source: savedKey ? 'file' : (envKey ? 'env' : 'none')
+      source: savedKey ? 'provider' : (envKey ? 'env' : 'none')
     };
   }
   return result;
+});
+
+ipcMain.handle('get-all-scene-key-statuses', (event, sceneConfigOverride) => {
+  return getSceneKeyStatusMap(sceneConfigOverride);
 });
 
 // 测试 provider API key 连通性（发送最小请求）
@@ -1537,6 +2168,71 @@ ipcMain.handle('test-provider-api-key', async (event, provider) => {
     } else {
       return { success: false, error: `HTTP ${result.statusCode}` };
     }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('test-scene-api-key', async (event, scene, sceneConfigOverride) => {
+  const normalizedScene = SCENE_METADATA[scene] ? scene : '';
+  if (!normalizedScene) {
+    return { success: false, error: '不支持的场景' };
+  }
+
+  const sceneSettings = normalizeLLMSceneConfig(sceneConfigOverride || llmSceneConfig);
+  const config = sceneSettings[normalizedScene] || DEFAULT_LLM_SCENE_CONFIG[normalizedScene];
+  const provider = config.provider;
+
+  if (provider === 'tesseract') {
+    return { success: true, message: '本地 OCR 无需 API Key' };
+  }
+
+  const endpoint = PROVIDER_TEST_ENDPOINTS[provider];
+  if (!endpoint) {
+    return { success: false, error: '不支持的 provider' };
+  }
+
+  const credential = getSceneCredential(normalizedScene, sceneSettings);
+  if (!credential.apiKey) {
+    return { success: false, error: '当前场景没有可用的 API Key' };
+  }
+
+  try {
+    const { net } = require('electron');
+    const result = await new Promise((resolve, reject) => {
+      const request = net.request({
+        method: 'GET',
+        url: endpoint
+      });
+      request.setHeader('Authorization', `Bearer ${credential.apiKey}`);
+      request.setHeader('Content-Type', 'application/json');
+
+      let statusCode = 0;
+      request.on('response', (response) => {
+        statusCode = response.statusCode;
+        response.on('data', () => {});
+        response.on('end', () => resolve({ statusCode }));
+      });
+      request.on('error', reject);
+      setTimeout(() => {
+        request.abort();
+        reject(new Error('请求超时'));
+      }, 10000);
+      request.end();
+    });
+
+    if (result.statusCode >= 200 && result.statusCode < 300) {
+      return {
+        success: true,
+        message: '连接成功',
+        source: credential.source,
+        provider
+      };
+    }
+    if (result.statusCode === 401 || result.statusCode === 403) {
+      return { success: false, error: 'API Key 无效或已过期' };
+    }
+    return { success: false, error: `HTTP ${result.statusCode}` };
   } catch (error) {
     return { success: false, error: error.message };
   }

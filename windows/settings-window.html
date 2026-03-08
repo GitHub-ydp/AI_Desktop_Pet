@@ -461,6 +461,110 @@
       color: var(--text-muted);
     }
 
+    .scene-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .scene-tab {
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-muted);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .scene-tab.active {
+      color: var(--neon-cyan);
+      border-color: var(--border-bright);
+      box-shadow: var(--glow-sm);
+      background: rgba(0, 255, 240, 0.08);
+    }
+
+    .scene-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .scene-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .scene-panel-title {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .scene-panel-desc {
+      margin-top: 4px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    .scene-source-tag {
+      white-space: nowrap;
+      font-size: 11px;
+      color: var(--neon-cyan);
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 255, 240, 0.25);
+      background: rgba(0, 255, 240, 0.08);
+    }
+
+    .scene-panel-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .scene-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .scene-field.full {
+      grid-column: 1 / -1;
+    }
+
+    .scene-field label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .scene-hint {
+      margin-top: 10px;
+      font-size: 11px;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+
+    .scene-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .provider-fallback-note {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
     .bubble-debug-range {
       width: 100%;
       accent-color: var(--neon-cyan);
@@ -633,63 +737,79 @@
 
     <div class="setting-group">
       <h3>LLM 场景配置</h3>
-      <div class="scene-config-grid">
-        <div class="scene-config-row">
-          <div class="scene-label">对话</div>
-          <select id="sceneChatProvider" class="scene-config-select" onchange="onSceneProviderChange('chat', this.value)">
-            <option value="deepseek">DeepSeek</option>
-            <option value="openai">OpenAI</option>
-            <option value="openrouter">OpenRouter</option>
-            <option value="siliconflow">SiliconFlow</option>
-            <option value="glm">GLM</option>
-            <option value="qwen">Qwen（通义千问）</option>
-          </select>
-          <input id="sceneChatModel" class="scene-config-input" type="text" placeholder="模型名，如 deepseek-chat" onchange="onSceneModelChange('chat', this.value)">
+      <div class="scene-tabs" id="sceneTabs"></div>
+      <div id="sceneConfigPanel"></div>
+      <div class="apikey-toast" id="apikeyToast"></div>
+    </div>
+
+    <div class="setting-group">
+      <h3>Provider 默认 API Key</h3>
+      <div id="providerKeyContainer"></div>
+      <div class="provider-fallback-note">
+        当场景未启用专属 API Key 时，会回退到这里配置的 Provider 默认 Key。
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <h3>Python 解释器</h3>
+      <div class="scene-panel">
+        <div class="scene-panel-header">
+          <div>
+            <div class="scene-panel-title">工作流执行环境</div>
+            <div class="scene-panel-desc">用于文件工具和本地 Python 工作流。支持自动探测，也可以手动指定解释器。</div>
+          </div>
+          <div class="scene-source-tag" id="pythonConfigSource">未加载</div>
         </div>
-        <div class="scene-config-row">
-          <div class="scene-label">视觉分析</div>
-          <select id="sceneVisionProvider" class="scene-config-select" onchange="onSceneProviderChange('vision', this.value)">
-            <option value="deepseek">DeepSeek</option>
-            <option value="openai">OpenAI</option>
-            <option value="openrouter">OpenRouter</option>
-            <option value="siliconflow">SiliconFlow</option>
-            <option value="glm">GLM</option>
-            <option value="qwen">Qwen（通义千问）</option>
-          </select>
-          <input id="sceneVisionModel" class="scene-config-input" type="text" placeholder="视觉模型名" onchange="onSceneModelChange('vision', this.value)">
+        <div class="scene-panel-grid">
+          <div class="scene-field full">
+            <label for="pythonInterpreterInput">解释器路径</label>
+            <input
+              id="pythonInterpreterInput"
+              class="scene-config-input"
+              type="text"
+              placeholder="留空表示自动探测"
+              autocomplete="off"
+              spellcheck="false"
+            >
+            <div class="scene-hint" id="pythonInterpreterHint">当前生效：未加载</div>
+          </div>
         </div>
-        <div class="scene-config-row">
-          <div class="scene-label">翻译</div>
-          <select id="sceneTranslateProvider" class="scene-config-select" onchange="onSceneProviderChange('translate', this.value)">
-            <option value="deepseek">DeepSeek</option>
-            <option value="openai">OpenAI</option>
-            <option value="openrouter">OpenRouter</option>
-            <option value="siliconflow">SiliconFlow</option>
-            <option value="glm">GLM</option>
-            <option value="qwen">Qwen（通义千问）</option>
-          </select>
-          <input id="sceneTranslateModel" class="scene-config-input" type="text" placeholder="翻译模型名" onchange="onSceneModelChange('translate', this.value)">
-        </div>
-        <div class="scene-config-row">
-          <div class="scene-label">OCR</div>
-          <select id="sceneOcrProvider" class="scene-config-select" onchange="onSceneProviderChange('ocr', this.value)">
-            <option value="tesseract">Tesseract(本地)</option>
-            <option value="deepseek">DeepSeek</option>
-            <option value="openai">OpenAI</option>
-            <option value="openrouter">OpenRouter</option>
-            <option value="siliconflow">SiliconFlow</option>
-            <option value="glm">GLM</option>
-            <option value="qwen">Qwen（通义千问）</option>
-          </select>
-          <input id="sceneOcrModel" class="scene-config-input" type="text" placeholder="OCR 模型名或实现名" onchange="onSceneModelChange('ocr', this.value)">
+        <div class="scene-actions">
+          <button class="apikey-save-btn" onclick="savePythonInterpreter()">保存路径</button>
+          <button class="apikey-test-btn" onclick="choosePythonInterpreter()">浏览...</button>
+          <button class="btn btn-primary btn-small" onclick="resetPythonInterpreter()">恢复自动探测</button>
         </div>
       </div>
     </div>
 
     <div class="setting-group">
-      <h3>API Key 管理</h3>
-      <div id="apikeyContainer"></div>
-      <div class="apikey-toast" id="apikeyToast"></div>
+      <h3>天气默认城市</h3>
+      <div class="scene-panel">
+        <div class="scene-panel-header">
+          <div>
+            <div class="scene-panel-title">天气技能默认位置</div>
+            <div class="scene-panel-desc">当你没有显式提供城市名时，天气技能会优先查询这里配置的城市。</div>
+          </div>
+          <div class="scene-source-tag">config.json</div>
+        </div>
+        <div class="scene-panel-grid">
+          <div class="scene-field full">
+            <label for="weatherDefaultCityInput">默认城市</label>
+            <input
+              id="weatherDefaultCityInput"
+              class="scene-config-input"
+              type="text"
+              placeholder="例如：上海、北京、杭州"
+              autocomplete="off"
+              spellcheck="false"
+            >
+            <div class="scene-hint">留空则由天气服务自动定位。</div>
+          </div>
+        </div>
+        <div class="scene-actions">
+          <button class="apikey-save-btn" onclick="saveWeatherDefaultCity()">保存城市</button>
+        </div>
+      </div>
     </div>
 
     <div class="setting-group">
@@ -748,17 +868,45 @@
   <script src="../src/settings-window-utils.js"></script>
   <script>
     const SettingsUtils = window.SettingsWindowUtils;
-    const DEFAULT_SCENE_CONFIG = {
-      chat: { provider: 'deepseek', model: 'deepseek-chat' },
-      vision: { provider: 'deepseek', model: 'deepseek-chat' },
-      translate: { provider: 'deepseek', model: 'deepseek-chat' },
-      ocr: { provider: 'tesseract', model: 'tesseract' }
-    };
+    const PROVIDER_OPTIONS = [
+      { id: 'deepseek', name: 'DeepSeek', models: 'deepseek-chat, deepseek-reasoner' },
+      { id: 'openai', name: 'OpenAI', models: 'gpt-4o, gpt-4o-mini, o1-mini' },
+      { id: 'openrouter', name: 'OpenRouter', models: 'openai/gpt-4o-mini, anthropic/claude-3.5-sonnet' },
+      { id: 'siliconflow', name: 'SiliconFlow', models: 'Qwen/Qwen2.5-72B-Instruct' },
+      { id: 'glm', name: 'GLM', models: 'glm-4-flash, glm-4-plus' },
+      { id: 'qwen', name: 'Qwen（通义千问）', models: 'qwen-turbo, qwen-plus, qwen-max, qwen-long' },
+      { id: 'tesseract', name: 'Tesseract（本地）', models: 'tesseract' }
+    ];
+
+    const SCENE_DEFINITIONS = [
+      { id: 'chat', label: '聊天', description: '普通对话、陪伴聊天、默认问答', defaultProvider: 'deepseek', defaultModel: 'deepseek-chat' },
+      { id: 'agent', label: 'Agent', description: '任务规划、工具调用、执行型请求', defaultProvider: 'deepseek', defaultModel: 'deepseek-chat' },
+      { id: 'vision', label: '视觉', description: '看图、截图理解、图片分析', defaultProvider: 'deepseek', defaultModel: 'deepseek-chat' },
+      { id: 'translate', label: '翻译', description: '文本翻译、截图翻译', defaultProvider: 'deepseek', defaultModel: 'deepseek-chat' },
+      { id: 'ocr', label: 'OCR', description: '文字识别', defaultProvider: 'tesseract', defaultModel: 'tesseract' }
+    ];
+
+    const DEFAULT_SCENE_CONFIG = Object.fromEntries(
+      SCENE_DEFINITIONS.map(scene => [
+        scene.id,
+        {
+          provider: scene.defaultProvider,
+          model: scene.defaultModel,
+          apiKeyMode: 'provider-fallback'
+        }
+      ])
+    );
 
     let BUBBLE_DEBUG_STATES = [];
     let bubbleOffsets = { idle: { x: 0, y: 8 } };
     let currentBubbleState = 'idle';
     let llmSceneConfig = JSON.parse(JSON.stringify(DEFAULT_SCENE_CONFIG));
+    let bubblePreviewHideTimer = null;
+    let activeSceneTab = 'chat';
+    let providerKeyInfo = {};
+    let sceneKeyStatusMap = {};
+    let pythonConfig = { configuredPath: '', effectivePath: '', source: 'none' };
+    let weatherDefaultCity = '';
 
     function getBubbleDebugStates() {
       try {
@@ -804,7 +952,8 @@
         const model = typeof raw.model === 'string' && raw.model.trim()
           ? raw.model.trim()
           : fallback.model;
-        normalized[scene] = { provider, model };
+        const apiKeyMode = raw.apiKeyMode === 'scene' ? 'scene' : 'provider-fallback';
+        normalized[scene] = { provider, model, apiKeyMode };
       }
 
       return normalized;
@@ -853,6 +1002,37 @@
           });
         }
       }
+    }
+
+    function getBubblePreviewText() {
+      const offset = ensureBubbleOffsetState(currentBubbleState);
+      return `预览状态: ${currentBubbleState} (x:${offset.x}, y:${offset.y})`;
+    }
+
+    function clearBubblePreviewHideTimer() {
+      if (bubblePreviewHideTimer) {
+        clearTimeout(bubblePreviewHideTimer);
+        bubblePreviewHideTimer = null;
+      }
+    }
+
+    function scheduleBubblePreviewHide() {
+      clearBubblePreviewHideTimer();
+      bubblePreviewHideTimer = setTimeout(() => {
+        if (window.electron && window.electron.hideBubble) {
+          window.electron.hideBubble();
+        }
+      }, 3000);
+    }
+
+    function showStickyBubblePreview() {
+      if (window.electron && window.electron.sendPetState) {
+        window.electron.sendPetState({ state: currentBubbleState });
+      }
+      if (window.electron && window.electron.showBubble) {
+        window.electron.showBubble(getBubblePreviewText(), 3000, { sticky: true });
+      }
+      scheduleBubblePreviewHide();
     }
 
     function persistSceneConfig() {
@@ -995,6 +1175,44 @@
       persistBubbleOffsets(true);
     }
 
+    function onBubbleStateChange() {
+      currentBubbleState = document.getElementById('bubbleStateSelect').value;
+      applyBubbleOffsetEditors();
+      SettingsUtils.setBubblePreviewState(window.PetStorage, currentBubbleState);
+      persistBubbleOffsets(false);
+      showStickyBubblePreview();
+    }
+
+    function onBubbleOffsetInput(axis, value) {
+      const v = clampOffset(value);
+      const offset = ensureBubbleOffsetState(currentBubbleState);
+      offset[axis] = v;
+      applyBubbleOffsetEditors();
+      persistBubbleOffsets(false);
+      showStickyBubblePreview();
+    }
+
+    function onBubbleOffsetRange(axis, value) {
+      const v = clampOffset(value);
+      const offset = ensureBubbleOffsetState(currentBubbleState);
+      offset[axis] = v;
+      applyBubbleOffsetEditors();
+      persistBubbleOffsets(false);
+      showStickyBubblePreview();
+    }
+
+    function previewBubbleState() {
+      persistBubbleOffsets(true);
+      showStickyBubblePreview();
+    }
+
+    function resetCurrentBubbleOffset() {
+      bubbleOffsets[currentBubbleState] = { x: 0, y: 8 };
+      applyBubbleOffsetEditors();
+      persistBubbleOffsets(true);
+      showStickyBubblePreview();
+    }
+
     function updateMoodDisplay(mood) {
       const display = document.getElementById('moodDisplay');
       if (mood >= 80) {
@@ -1035,8 +1253,142 @@
     }
 
     function closeWindow() {
+      clearBubblePreviewHideTimer();
+      if (window.electron && window.electron.hideBubble) {
+        window.electron.hideBubble();
+      }
       if (window.electron && window.electron.closeChildWindow) {
         window.electron.closeChildWindow('settings');
+      }
+    }
+
+    function getPythonSourceText(source) {
+      if (source === 'config') return '手动指定';
+      if (source === 'auto') return '自动探测';
+      return '未配置';
+    }
+
+    function renderPythonConfig() {
+      const input = document.getElementById('pythonInterpreterInput');
+      const hint = document.getElementById('pythonInterpreterHint');
+      const source = document.getElementById('pythonConfigSource');
+      if (!input || !hint || !source) return;
+
+      input.value = pythonConfig.configuredPath || pythonConfig.effectivePath || '';
+      source.textContent = getPythonSourceText(pythonConfig.source);
+
+      if (pythonConfig.effectivePath) {
+        hint.textContent = `当前生效：${pythonConfig.effectivePath}`;
+      } else {
+        hint.textContent = '当前生效：未找到可用 Python 解释器';
+      }
+    }
+
+    function renderWeatherDefaultCity() {
+      const input = document.getElementById('weatherDefaultCityInput');
+      if (!input) return;
+      input.value = weatherDefaultCity || '';
+    }
+
+    async function loadPythonConfig() {
+      try {
+        if (!window.electron?.getPythonConfig) return;
+        const result = await window.electron.getPythonConfig();
+        pythonConfig = result || { configuredPath: '', effectivePath: '', source: 'none' };
+        renderPythonConfig();
+      } catch (error) {
+        console.error('[Settings] load python config failed:', error);
+      }
+    }
+
+    async function loadWeatherDefaultCity() {
+      try {
+        if (!window.electron?.getWeatherDefaultCity) return;
+        const result = await window.electron.getWeatherDefaultCity();
+        weatherDefaultCity = result?.weatherDefaultCity || '';
+        renderWeatherDefaultCity();
+      } catch (error) {
+        console.error('[Settings] load weather default city failed:', error);
+      }
+    }
+
+    async function savePythonInterpreter() {
+      const input = document.getElementById('pythonInterpreterInput');
+      const pythonPath = input ? input.value.trim() : '';
+      if (!pythonPath) {
+        showApiToast('请输入 Python 解释器路径', true);
+        return;
+      }
+
+      try {
+        const result = await window.electron.savePythonInterpreter(pythonPath);
+        if (result?.success) {
+          pythonConfig = result.config || pythonConfig;
+          renderPythonConfig();
+          showApiToast('Python 解释器已保存');
+        } else {
+          showApiToast(result?.error || '保存 Python 解释器失败', true);
+        }
+      } catch (error) {
+        console.error('[Settings] save python interpreter failed:', error);
+        showApiToast('保存 Python 解释器失败', true);
+      }
+    }
+
+    async function choosePythonInterpreter() {
+      try {
+        const result = await window.electron.choosePythonInterpreter();
+        if (!result?.success || result.canceled || !result.path) {
+          return;
+        }
+
+        const input = document.getElementById('pythonInterpreterInput');
+        if (input) {
+          input.value = result.path;
+        }
+        await savePythonInterpreter();
+      } catch (error) {
+        console.error('[Settings] choose python interpreter failed:', error);
+        showApiToast('选择 Python 解释器失败', true);
+      }
+    }
+
+    async function resetPythonInterpreter() {
+      try {
+        const result = await window.electron.resetPythonInterpreter();
+        if (result?.success) {
+          pythonConfig = result.config || { configuredPath: '', effectivePath: '', source: 'none' };
+          renderPythonConfig();
+          showApiToast('已恢复自动探测 Python 解释器');
+        } else {
+          showApiToast(result?.error || '恢复自动探测失败', true);
+        }
+      } catch (error) {
+        console.error('[Settings] reset python interpreter failed:', error);
+        showApiToast('恢复自动探测失败', true);
+      }
+    }
+
+    async function saveWeatherDefaultCity() {
+      const input = document.getElementById('weatherDefaultCityInput');
+      const city = input ? input.value.trim() : '';
+
+      try {
+        if (!window.electron?.saveWeatherDefaultCity) {
+          showApiToast('当前版本不支持天气默认城市', true);
+          return;
+        }
+        const result = await window.electron.saveWeatherDefaultCity(city);
+        if (result?.success) {
+          weatherDefaultCity = result.config?.weatherDefaultCity || '';
+          renderWeatherDefaultCity();
+          showApiToast(weatherDefaultCity ? '天气默认城市已保存' : '已清空天气默认城市');
+        } else {
+          showApiToast(result?.error || '保存天气默认城市失败', true);
+        }
+      } catch (error) {
+        console.error('[Settings] save weather default city failed:', error);
+        showApiToast('保存天气默认城市失败', true);
       }
     }
 
@@ -1159,6 +1511,367 @@
         console.error('[Settings] 加载 API Keys 失败:', error);
         renderApiKeyRows({});
       }
+    }
+
+    function getSceneDefinition(sceneId) {
+      return SCENE_DEFINITIONS.find(scene => scene.id === sceneId) || SCENE_DEFINITIONS[0];
+    }
+
+    function getProviderOptionsForScene(sceneId) {
+      if (sceneId === 'ocr') {
+        return PROVIDER_OPTIONS;
+      }
+      return PROVIDER_OPTIONS.filter(provider => provider.id !== 'tesseract');
+    }
+
+    function getSceneStatus(sceneId) {
+      return sceneKeyStatusMap[sceneId] || {
+        provider: llmSceneConfig[sceneId]?.provider || DEFAULT_SCENE_CONFIG[sceneId]?.provider,
+        model: llmSceneConfig[sceneId]?.model || DEFAULT_SCENE_CONFIG[sceneId]?.model,
+        apiKeyMode: llmSceneConfig[sceneId]?.apiKeyMode || 'provider-fallback',
+        sceneMasked: '',
+        sceneConfigured: false,
+        activeMasked: '',
+        activeConfigured: false,
+        activeSource: 'none'
+      };
+    }
+
+    function getCredentialSourceText(source) {
+      if (source === 'scene') return '当前生效：场景专属 Key';
+      if (source === 'provider') return '当前生效：Provider 默认 Key';
+      if (source === 'env') return '当前生效：环境变量 Key';
+      return '当前生效：未配置';
+    }
+
+    function showApiToast(message, isError = false) {
+      const toast = document.getElementById('apikeyToast');
+      if (!toast) return;
+      toast.className = isError ? 'apikey-toast error' : 'apikey-toast';
+      toast.textContent = message;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 2800);
+    }
+
+    function renderSceneTabs() {
+      const container = document.getElementById('sceneTabs');
+      if (!container) return;
+      container.innerHTML = SCENE_DEFINITIONS.map(scene => `
+        <button
+          type="button"
+          class="scene-tab ${scene.id === activeSceneTab ? 'active' : ''}"
+          onclick="switchSceneTab('${scene.id}')"
+        >
+          ${scene.label}
+        </button>
+      `).join('');
+    }
+
+    function renderScenePanel() {
+      const panel = document.getElementById('sceneConfigPanel');
+      if (!panel) return;
+
+      const scene = getSceneDefinition(activeSceneTab);
+      const config = llmSceneConfig[scene.id] || DEFAULT_SCENE_CONFIG[scene.id];
+      const status = getSceneStatus(scene.id);
+      const providerOptions = getProviderOptionsForScene(scene.id).map(provider => `
+        <option value="${provider.id}" ${provider.id === config.provider ? 'selected' : ''}>${provider.name}</option>
+      `).join('');
+      const providerMeta = PROVIDER_OPTIONS.find(provider => provider.id === config.provider);
+
+      panel.innerHTML = `
+        <div class="scene-panel">
+          <div class="scene-panel-header">
+            <div>
+              <div class="scene-panel-title">${scene.label}</div>
+              <div class="scene-panel-desc">${scene.description}</div>
+            </div>
+            <div class="scene-source-tag">${getCredentialSourceText(status.activeSource)}</div>
+          </div>
+
+          <div class="scene-panel-grid">
+            <div class="scene-field">
+              <label>Provider</label>
+              <select class="scene-config-select" onchange="onSceneProviderChange('${scene.id}', this.value)">
+                ${providerOptions}
+              </select>
+            </div>
+            <div class="scene-field">
+              <label>Model</label>
+              <input
+                class="scene-config-input"
+                type="text"
+                value="${config.model || ''}"
+                placeholder="输入模型名"
+                onchange="onSceneModelChange('${scene.id}', this.value)"
+              >
+            </div>
+            <div class="scene-field full">
+              <label>
+                <input
+                  type="checkbox"
+                  ${config.apiKeyMode === 'scene' ? 'checked' : ''}
+                  onchange="onSceneApiKeyModeChange('${scene.id}', this.checked)"
+                >
+                使用场景专属 API Key
+              </label>
+              <div class="scene-hint">
+                ${config.apiKeyMode === 'scene'
+                  ? `已启用场景专属 Key。${status.sceneConfigured ? `已保存：${status.sceneMasked || '已配置'}` : '当前还没有保存专属 Key。'}`
+                  : '当前关闭场景专属 Key，将回退到 Provider 默认 Key 或环境变量。'}
+              </div>
+            </div>
+            <div class="scene-field full">
+              <label>场景专属 API Key</label>
+              <div class="apikey-input-wrap">
+                <input
+                  id="scene-key-input"
+                  class="apikey-input"
+                  type="password"
+                  placeholder="${status.sceneConfigured ? status.sceneMasked : '粘贴该场景专属 API Key...'}"
+                  autocomplete="off"
+                  spellcheck="false"
+                >
+                <button class="apikey-toggle-vis" onclick="toggleSceneApiKeyVis()" title="显示/隐藏">◉</button>
+              </div>
+              <div class="scene-hint">
+                推荐模型：${providerMeta ? providerMeta.models : config.model}
+              </div>
+            </div>
+          </div>
+
+          <div class="scene-actions">
+            <button class="apikey-save-btn" onclick="saveSceneApiKey('${scene.id}')">保存场景 Key</button>
+            <button class="apikey-test-btn" onclick="testSceneApiKey('${scene.id}')">测试当前场景</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProviderKeyRows(keysInfo) {
+      const container = document.getElementById('providerKeyContainer');
+      if (!container) return;
+      container.innerHTML = PROVIDER_OPTIONS
+        .filter(provider => provider.id !== 'tesseract')
+        .map(provider => {
+          const info = keysInfo[provider.id] || { masked: '', configured: false, source: 'none' };
+          const statusClass = info.configured ? 'configured' : 'not-configured';
+          const statusText = info.configured ? '✓' : '-';
+          const placeholder = info.configured ? info.masked : '粘贴 Provider 默认 API Key...';
+          return `
+            <div class="apikey-row" data-provider="${provider.id}">
+              <div class="apikey-label">
+                <span class="apikey-status ${statusClass}">${statusText}</span>
+                ${provider.name}
+              </div>
+              <div class="apikey-input-wrap">
+                <input class="apikey-input" type="password" placeholder="${placeholder}"
+                       id="apikey-${provider.id}" autocomplete="off" spellcheck="false">
+                <button class="apikey-toggle-vis" onclick="toggleApiKeyVis('${provider.id}')" title="显示/隐藏">
+                  ◉
+                </button>
+              </div>
+              <button class="apikey-save-btn" onclick="saveApiKey('${provider.id}')">保存</button>
+              <button class="apikey-test-btn" id="apikey-test-${provider.id}" onclick="testApiKey('${provider.id}')" ${info.configured ? '' : 'disabled'}>测试</button>
+            </div>
+            <div class="apikey-models-hint">来源：${info.source || 'none'}；常用模型：${provider.models}</div>
+          `;
+        }).join('');
+    }
+
+    function switchSceneTab(sceneId) {
+      activeSceneTab = sceneId;
+      renderSceneTabs();
+      renderScenePanel();
+    }
+
+    function toggleSceneApiKeyVis() {
+      const input = document.getElementById('scene-key-input');
+      if (!input) return;
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    async function refreshCredentialSettings() {
+      if (window.electron?.getAllProviderAPIKeys) {
+        providerKeyInfo = await window.electron.getAllProviderAPIKeys();
+      } else {
+        providerKeyInfo = {};
+      }
+      if (window.electron?.getAllSceneKeyStatuses) {
+        sceneKeyStatusMap = await window.electron.getAllSceneKeyStatuses(llmSceneConfig);
+      } else {
+        sceneKeyStatusMap = {};
+      }
+      renderSceneTabs();
+      renderScenePanel();
+      renderProviderKeyRows(providerKeyInfo);
+    }
+
+    function persistSceneConfig() {
+      llmSceneConfig = normalizeSceneConfig(llmSceneConfig);
+      SettingsUtils.saveLLMSceneConfig(window.PetStorage, llmSceneConfig);
+      if (window.electron && window.electron.sendSettingsChange) {
+        window.electron.sendSettingsChange({
+          type: 'llm-scene-config',
+          config: llmSceneConfig
+        });
+      }
+      refreshCredentialSettings().catch((error) => {
+        console.error('[Settings] refreshCredentialSettings failed:', error);
+      });
+    }
+
+    function loadSettings() {
+      const snapshot = SettingsUtils.getSettingsSnapshot(window.PetStorage);
+
+      document.querySelectorAll('.pet-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.pet === snapshot.pet);
+      });
+
+      document.querySelectorAll('.personality-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.personality === snapshot.personality);
+      });
+
+      document.getElementById('autoSpeakCheck').checked = snapshot.autoSpeak;
+      updateMoodDisplay(snapshot.mood);
+
+      BUBBLE_DEBUG_STATES = getBubbleDebugStates();
+      bubbleOffsets = snapshot.bubbleStateOffsets || { idle: { x: 0, y: 8 } };
+      currentBubbleState = snapshot.bubblePreviewState || 'idle';
+      if (!BUBBLE_DEBUG_STATES.includes(currentBubbleState)) {
+        currentBubbleState = BUBBLE_DEBUG_STATES[0];
+      }
+
+      const select = document.getElementById('bubbleStateSelect');
+      select.innerHTML = BUBBLE_DEBUG_STATES.map(s => `<option value="${s}">${s}</option>`).join('');
+      select.value = currentBubbleState;
+      applyBubbleOffsetEditors();
+
+      llmSceneConfig = normalizeSceneConfig(snapshot.llmSceneConfig || DEFAULT_SCENE_CONFIG);
+      if (!llmSceneConfig.agent) {
+        llmSceneConfig.agent = { ...llmSceneConfig.chat };
+      }
+      if (!SCENE_DEFINITIONS.some(scene => scene.id === activeSceneTab)) {
+        activeSceneTab = 'chat';
+      }
+
+      refreshCredentialSettings().catch((error) => {
+        console.error('[Settings] load credential settings failed:', error);
+      });
+      loadPythonConfig();
+      loadWeatherDefaultCity();
+    }
+
+    function onSceneProviderChange(scene, provider) {
+      if (!llmSceneConfig[scene]) {
+        llmSceneConfig[scene] = { ...DEFAULT_SCENE_CONFIG[scene] };
+      }
+      llmSceneConfig[scene].provider = (provider || '').trim().toLowerCase() || DEFAULT_SCENE_CONFIG[scene].provider;
+      persistSceneConfig();
+    }
+
+    function onSceneModelChange(scene, model) {
+      if (!llmSceneConfig[scene]) {
+        llmSceneConfig[scene] = { ...DEFAULT_SCENE_CONFIG[scene] };
+      }
+      llmSceneConfig[scene].model = (model || '').trim() || DEFAULT_SCENE_CONFIG[scene].model;
+      persistSceneConfig();
+    }
+
+    function onSceneApiKeyModeChange(scene, enabled) {
+      if (!llmSceneConfig[scene]) {
+        llmSceneConfig[scene] = { ...DEFAULT_SCENE_CONFIG[scene] };
+      }
+      llmSceneConfig[scene].apiKeyMode = enabled ? 'scene' : 'provider-fallback';
+      persistSceneConfig();
+    }
+
+    async function saveSceneApiKey(scene) {
+      const input = document.getElementById('scene-key-input');
+      const key = input ? input.value.trim() : '';
+      if (!key) return;
+
+      try {
+        const result = await window.electron.saveSceneAPIKey(scene, key);
+        if (result?.success) {
+          if (input) input.value = '';
+          showApiToast(`已保存 ${getSceneDefinition(scene).label} 场景专属 API Key`);
+          await refreshCredentialSettings();
+        } else {
+          showApiToast(`保存失败: ${result?.error || '未知错误'}`, true);
+        }
+      } catch (error) {
+        console.error('[Settings] save scene api key failed:', error);
+        showApiToast('保存场景 API Key 失败', true);
+      }
+    }
+
+    async function testSceneApiKey(scene) {
+      try {
+        const result = await window.electron.testSceneAPIKey(scene, llmSceneConfig);
+        if (result?.success) {
+          const suffix = result?.source ? `（来源: ${result.source}）` : '';
+          showApiToast(`${getSceneDefinition(scene).label} 连接成功${suffix}`);
+        } else {
+          showApiToast(`${getSceneDefinition(scene).label} 测试失败: ${result?.error || '未知错误'}`, true);
+        }
+      } catch (error) {
+        console.error('[Settings] test scene api key failed:', error);
+        showApiToast('场景连通性测试失败', true);
+      }
+    }
+
+    async function saveApiKey(provider) {
+      const input = document.getElementById(`apikey-${provider}`);
+      const key = input.value.trim();
+      if (!key) return;
+
+      const btn = input.closest('.apikey-row').querySelector('.apikey-save-btn');
+      btn.disabled = true;
+      btn.textContent = '保存中...';
+
+      try {
+        const result = await window.electron.saveProviderAPIKey(provider, key);
+        if (result?.success) {
+          input.value = '';
+          showApiToast(`已保存 ${provider} 默认 API Key`);
+          await refreshCredentialSettings();
+        } else {
+          showApiToast(`保存失败: ${result?.error || '未知错误'}`, true);
+        }
+      } catch (error) {
+        console.error('[Settings] save provider api key failed:', error);
+        showApiToast('保存 Provider API Key 失败', true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '保存';
+      }
+    }
+
+    async function testApiKey(provider) {
+      const btn = document.getElementById(`apikey-test-${provider}`);
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = '测试中...';
+
+      try {
+        const result = await window.electron.testProviderAPIKey(provider);
+        if (result?.success) {
+          showApiToast(`${provider} 连接成功`);
+        } else {
+          showApiToast(`${provider} 测试失败: ${result?.error || '未知错误'}`, true);
+        }
+      } catch (error) {
+        console.error('[Settings] test provider api key failed:', error);
+        showApiToast('Provider 连通性测试失败', true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '测试';
+      }
+    }
+
+    async function loadApiKeys() {
+      await refreshCredentialSettings();
     }
 
     window.addEventListener('DOMContentLoaded', loadSettings);

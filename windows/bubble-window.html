@@ -69,22 +69,32 @@
     let hideTimer = null;
     const bubble = document.getElementById('bubbleText');
 
-    function showBubble(message, duration) {
-      bubble.textContent = message;
+    function showBubble(payloadOrMessage, duration) {
+      const payload = (payloadOrMessage && typeof payloadOrMessage === 'object')
+        ? payloadOrMessage
+        : { message: payloadOrMessage, duration };
+
+      bubble.textContent = payload.message || '';
       bubble.classList.add('show');
       if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = null;
+
+      if (payload.sticky) {
+        return;
+      }
+
       hideTimer = setTimeout(() => {
         bubble.classList.remove('show');
         if (window.electron && window.electron.hideBubble) {
           window.electron.hideBubble();
         }
-      }, duration || 5000);
+      }, payload.duration || 5000);
     }
 
     if (window.electron && window.electron.onBubbleShow) {
       window.electron.onBubbleShow((event, data) => {
         if (!data) return;
-        showBubble(data.message || '', data.duration);
+        showBubble(data);
       });
     }
   </script>

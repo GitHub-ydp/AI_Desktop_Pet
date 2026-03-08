@@ -714,6 +714,55 @@ this.checkIntervalMs = 30000;     // 30 秒
 - `src/menu-window-utils.js` - 恢复：类名 `.rotary-dial`、`.dial-item`
 - `windows/menu-window.js` - 恢复：类名 `.rotary-dial`、`.dial-item`
 
+#### 2026-03 Agent Skills 系统
+- `skills/` - 新增：内置技能目录，12 个 SKILL.md 文件（bash-run、file-ops、file-write、file-list、file-search、web-search、memory-search、reminder、open-app、open-url、clipboard-set、screenshot-ocr）
+- `main-process/skill-registry.js` - 新增：技能注册中心（扫描 bundled+user 目录、解析 YAML frontmatter、环境过滤、生成 XML 提示词和 function calling tools 数组）
+- `main-process/skill-executor.js` - 新增：技能执行器（路由：Node.js 内置 → Python WorkflowManager → 外部 HTTP；安全确认机制；命令黑名单；路径校验）
+- `src/intent-classifier.js` - 新增：轻量意图分类器（关键词匹配，6 种意图：chat/task/search/creative/code/vision，< 5ms 同步）
+- `main-process/model-router.js` - 新增：多模型路由器（意图→场景→provider+model，支持降级链，api-keys.json 缓存读取）
+- `main.js` - 更新：require SkillRegistry/SkillExecutor；app.whenReady 中初始化 Skills 系统；新增 skill:list/skill:get-tools-array/skill:get-prompt-snippet/skill:execute IPC handlers；确认弹窗机制
+- `preload.js` - 更新：新增 PetSkills 桥接 API（list/getToolsArray/getPromptSnippet/execute/onConfirmRequest/respondConfirm）；新增 PetModelRouter 桥接 API
+- `src/api.js` - 更新：chatWithAI 注入技能提示词到 system prompt；工具定义优先从 PetSkills 获取（降级 PetWorkflow）；handleToolCallsLoop 通过 PetSkills.execute 路由（降级 PetWorkflow）
+- `docs/skills-architecture.md` - 新增：Skills 系统架构文档
+- `docs/intent-routing-design.md` - 新增：意图识别与路由设计文档
+
+**Skills 系统架构：**
+```
+SKILL.md 文件（声明式） → SkillRegistry（扫描/注册/过滤）
+                            ↓
+                    buildToolsArray() → DeepSeek function calling
+                    formatForPrompt() → system prompt 注入
+                            ↓
+LLM tool_call → SkillExecutor（路由）
+                  ├── Node.js 内置（bash_run/memory_search/reminder_create/web_search）
+                  ├── Python 层（file_read/write/list/search/open_app/open_url/clipboard_set）
+                  └── 外部 HTTP（web_search DuckDuckGo API）
+```
+
+**意图分类 + 模型路由：**
+```
+用户消息 → IntentClassifier.classify()（关键词匹配，< 5ms）
+         → ModelRouter.route(intent)（场景→provider→降级链）
+         → callDeepSeekAPI（使用路由结果的 endpoint/model）
+```
+
+**技能安全分级：**
+| 级别 | 行为 | 技能 |
+|------|------|------|
+| 安全 | 静默执行 | file_read/list/search, memory_search, web_search, open_url, clipboard_set, reminder_create, screenshot_ocr |
+| 危险 | 需用户确认 | file_write, open_app |
+| 高危 | 需确认+命令审查 | bash_run |
+
+#### 2026-03 OpenCode 功能借鉴
+- `skills/file-edit/SKILL.md` - 新增：精确编辑技能（str_replace 模式）
+- `main-process/skill-executor.js` - 新增：_fileEdit 处理器 + _bashRun 改为 spawn 流式输出
+- `main.js` - 更新：skill:execute 传入 streamCallback，推送到所有窗口
+- `preload.js` - 更新：PetSkills 新增 onStream/offStream
+- `src/plan-manager.js` - 新增：Plan/Todo 管理器，解析和渲染执行计划卡片
+- `windows/chat-window.html` - 更新：addMessage 集成计划卡片渲染 + 步骤状态更新
+- `src/api.js` - 更新：task 意图时注入 Plan 系统提示
+- `index.html` - 更新：加载 plan-manager.js
+
 ### 重要提醒
 - 必须回复我中文
 - 每次重大改动，都要更新CLAUDE.md文件，保证后续开发顺利

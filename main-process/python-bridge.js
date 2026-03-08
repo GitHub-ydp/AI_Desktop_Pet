@@ -1,7 +1,7 @@
 // Python 子进程管理器
 // 管理 Python 子进程的生命周期，通过 stdin/stdout JSON 协议通信
 
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -125,7 +125,7 @@ class PythonBridge {
     // 等待 2 秒后强制 kill
     const proc = this._process;
     setTimeout(() => {
-      if (proc && !proc.killed) {
+      if (proc && proc.exitCode == null && !proc.killed) {
         console.log('[PythonBridge] 强制终止 Python 进程');
         proc.kill('SIGKILL');
       }
@@ -149,13 +149,13 @@ class PythonBridge {
     return new Promise((resolve, reject) => {
       this._status = 'starting';
       this._buffer = '';
+      const spawnSpec = this._getSpawnSpec();
 
-      console.log(`[PythonBridge] 启动 Python: ${this._pythonPath} ${this._scriptPath}`);
+      console.log(`[PythonBridge] 启动 Python: ${[spawnSpec.command, ...spawnSpec.args, this._scriptPath].join(' ')}`);
 
-      // 检查 Python 路径是否存在
-      if (!fs.existsSync(this._pythonPath)) {
+      if (!this._isInterpreterAvailable(spawnSpec.command, spawnSpec.args)) {
         this._status = 'error';
-        reject(new Error(`Python 解释器不存在: ${this._pythonPath}`));
+        reject(new Error(`Python 解释器不存在或不可用: ${spawnSpec.command}`));
         return;
       }
 
@@ -166,9 +166,10 @@ class PythonBridge {
         return;
       }
 
-      const proc = spawn(this._pythonPath, [this._scriptPath], {
+      const proc = spawn(spawnSpec.command, [...spawnSpec.args, this._scriptPath], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+        env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+        windowsHide: true
       });
 
       this._process = proc;
@@ -248,6 +249,62 @@ class PythonBridge {
     });
   }
 
+  _getSpawnSpec() {
+    if (this._pythonPath && typeof this._pythonPath === 'object') {
+      return {
+        command: String(this._pythonPath.command || '').trim(),
+        args: Array.isArray(this._pythonPath.args)
+          ? this._pythonPath.args.map((arg) => String(arg))
+          : []
+      };
+    }
+
+    return {
+      command: String(this._pythonPath || '').trim(),
+      args: []
+    };
+  }
+
+  _isInterpreterAvailable(command, args = []) {
+    if (!command) {
+      return false;
+    }
+
+    if (this._looksLikePath(command) && !fs.existsSync(command)) {
+      return false;
+    }
+
+    try {
+      const probe = spawnSync(command, [...args, '-c', 'import sys; print(sys.executable)'], {
+        encoding: 'utf-8',
+        timeout: this._startupTimeout,
+        windowsHide: true
+      });
+
+      if (probe.status !== 0) {
+        return false;
+      }
+
+      const resolvedExecutable = String(probe.stdout || '').trim();
+      if (!resolvedExecutable) {
+        return false;
+      }
+
+      if (process.platform === 'win32' && resolvedExecutable.includes('WindowsApps')) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.warn(`[PythonBridge] Python 可用性探测失败 (${command}): ${error.message}`);
+      return false;
+    }
+  }
+
+  _looksLikePath(command) {
+    return /[\\/]/.test(command) || /^[A-Za-z]:/.test(command) || command.startsWith('.');
+  }
+
   // 处理 stdout 缓冲区（按行分割 JSON）
   _processBuffer() {
     const lines = this._buffer.split('\n');
@@ -277,6 +334,10 @@ class PythonBridge {
 
     // 心跳响应
     if (requestId === 'heartbeat') {
+      return;
+    }
+
+    if (requestId === 'shutdown') {
       return;
     }
 

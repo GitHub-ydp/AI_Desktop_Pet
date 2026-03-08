@@ -303,3 +303,73 @@ CREATE TABLE IF NOT EXISTS screenshot_analyses (
 CREATE INDEX IF NOT EXISTS idx_screenshot_analyses_screenshot_id ON screenshot_analyses(screenshot_id);
 CREATE INDEX IF NOT EXISTS idx_screenshot_analyses_type ON screenshot_analyses(analysis_type);
 CREATE INDEX IF NOT EXISTS idx_screenshot_analyses_created_at ON screenshot_analyses(created_at DESC);
+
+-- ==================== Agent Runtime ====================
+
+CREATE TABLE IF NOT EXISTS agent_sessions (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL,
+  metadata_json TEXT,
+  state TEXT NOT NULL DEFAULT 'active' CHECK(state IN ('active', 'archived')),
+  last_active_at INTEGER NOT NULL,
+  archived_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_sessions_state ON agent_sessions(state);
+CREATE INDEX IF NOT EXISTS idx_agent_sessions_last_active_at ON agent_sessions(last_active_at DESC);
+
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'awaiting_approval', 'completed', 'failed', 'cancelled')),
+  source_text TEXT,
+  source TEXT,
+  attachments_json TEXT,
+  final_text TEXT,
+  conversation_summary TEXT,
+  error_code TEXT,
+  queue_position INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  started_at INTEGER,
+  ended_at INTEGER,
+  FOREIGN KEY (session_id) REFERENCES agent_sessions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_runs_session_id ON agent_runs(session_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_created_at ON agent_runs(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS agent_events (
+  event_id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  payload_json TEXT,
+  created_at INTEGER NOT NULL,
+  UNIQUE(run_id, seq),
+  FOREIGN KEY (session_id) REFERENCES agent_sessions(id) ON DELETE CASCADE,
+  FOREIGN KEY (run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_events_session_id ON agent_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_agent_events_run_id_seq ON agent_events(run_id, seq);
+CREATE INDEX IF NOT EXISTS idx_agent_events_created_at ON agent_events(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS agent_approvals (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  summary TEXT,
+  args_json TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'denied', 'timed_out', 'cancelled')),
+  expires_at INTEGER,
+  resolved_at INTEGER,
+  decision TEXT,
+  FOREIGN KEY (run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_approvals_run_id ON agent_approvals(run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_approvals_status ON agent_approvals(status);
+CREATE INDEX IF NOT EXISTS idx_agent_approvals_expires_at ON agent_approvals(expires_at);

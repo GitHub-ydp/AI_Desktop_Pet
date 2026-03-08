@@ -11,10 +11,11 @@ const DEFAULT_BUBBLE_STATE_OFFSETS = {
 };
 
 const DEFAULT_LLM_SCENE_CONFIG = {
-  chat: { provider: 'deepseek', model: 'deepseek-chat' },
-  vision: { provider: 'deepseek', model: 'deepseek-chat' },
-  translate: { provider: 'deepseek', model: 'deepseek-chat' },
-  ocr: { provider: 'tesseract', model: 'tesseract' }
+  chat: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
+  agent: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
+  vision: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
+  translate: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
+  ocr: { provider: 'tesseract', model: 'tesseract', apiKeyMode: 'provider-fallback' }
 };
 
 // 默认值
@@ -69,7 +70,8 @@ function normalizeLLMSceneConfig(sceneConfig) {
     const model = typeof raw.model === 'string' && raw.model.trim()
       ? raw.model.trim()
       : fallback.model;
-    normalized[scene] = { provider, model };
+    const apiKeyMode = raw.apiKeyMode === 'scene' ? 'scene' : 'provider-fallback';
+    normalized[scene] = { provider, model, apiKeyMode };
   }
 
   return normalized;
