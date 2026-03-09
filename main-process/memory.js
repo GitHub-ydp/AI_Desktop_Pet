@@ -62,8 +62,12 @@ class MemoryMainProcess {
     // 第一阶段：核心存储（必须成功）
     try {
       console.log('[Memory] Step 1: Initializing storage...');
-      await this.storage.initialize();
-      console.log('[Memory] Step 1: Storage initialized OK');
+      if (this.storage && this.storage.db) {
+        console.log('[Memory] Step 1: Storage already initialized, reusing connection');
+      } else {
+        await this.storage.initialize();
+        console.log('[Memory] Step 1: Storage initialized OK');
+      }
 
       console.log('[Memory] Step 2: Running migrations...');
       const migrator = new DatabaseMigrator(this.storage);

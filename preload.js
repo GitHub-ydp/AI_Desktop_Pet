@@ -50,9 +50,15 @@ contextBridge.exposeInMainWorld('electron', {
   createChildWindow: (options) => ipcRenderer.invoke('create-child-window', options),
   closeChildWindow: (id) => ipcRenderer.invoke('close-child-window', id),
   sendToChildWindow: (id, channel, data) => ipcRenderer.invoke('send-to-child-window', id, channel, data),
+  onChildWindowState: (callback) => ipcRenderer.on('child-window-state', callback),
+  hideToPetTray: () => ipcRenderer.send('hide-to-pet-tray'),
+  showFromTray: () => ipcRenderer.send('show-from-tray'),
   onChildWindowMessage: (callback) => {
     ipcRenderer.on('child-window-message', callback);
   },
+  getPetProfile: () => ipcRenderer.invoke('memory:get-user-profile'),
+  searchConversations: (keyword, options) =>
+    ipcRenderer.invoke('memory:search', keyword, options || {}),
   // 菜单窗口管理
   openMenuWindow: () => ipcRenderer.invoke('menu:open'),
   closeMenuWindow: () => ipcRenderer.invoke('menu:close'),
@@ -66,6 +72,8 @@ contextBridge.exposeInMainWorld('electron', {
   onChatSend: (callback) => {
     ipcRenderer.on('chat:send', callback);
   },
+  // 主窗口处理完聊天后回传结果给主进程
+  sendChatResponse: (requestId, data) => ipcRenderer.send(`chat:response:${requestId}`, data),
   // 设置窗口通信
   sendSettingsChange: (payload) => ipcRenderer.send('settings:change', payload),
   onSettingsChange: (callback) => {
@@ -92,6 +100,7 @@ contextBridge.exposeInMainWorld('electron', {
 
 // 暴露记忆系统 API 到渲染进程
 contextBridge.exposeInMainWorld('PetAgent', {
+  isReady: () => ipcRenderer.invoke('agent:is-ready'),
   startSession: (payload) => ipcRenderer.invoke('agent:start-session', payload),
   send: (payload) => ipcRenderer.invoke('agent:send', payload),
   getState: (payload) => ipcRenderer.invoke('agent:get-state', payload),
@@ -294,8 +303,8 @@ contextBridge.exposeInMainWorld('PetScreenshot', {
   // 区域截图（实际捕获在渲染进程中完成）
   captureRegion: (bounds) => ipcRenderer.invoke('screenshot:capture-region', bounds),
 
-  // 全屏截图
-  captureFullScreen: () => ipcRenderer.invoke('screenshot:capture-fullscreen'),
+  // 全屏截图（触发完整截图流程）
+  captureFullScreen: () => ipcRenderer.send('start-screenshot'),
 
   // 复制到剪贴板
   copyToClipboard: (filePath) => ipcRenderer.invoke('screenshot:copy-to-clipboard', filePath),

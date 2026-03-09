@@ -3,522 +3,227 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>历史与记忆</title>
+  <title>对话历史</title>
   <script src="../src/theme-manager.js"></script>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
-      --bg: #020810;
-      --bg-card: rgba(0, 30, 55, 0.6);
-      --border: rgba(0, 255, 240, 0.3);
-      --border-bright: rgba(0, 255, 240, 0.7);
-      --neon-cyan: #00fff0;
-      --neon-magenta: #ff2d78;
-      --text: #cff0ff;
-      --text-muted: rgba(160, 220, 240, 0.55);
-      --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
-      --radius: 8px;
-      --header-bg: rgba(0, 15, 30, 0.98);
-      --input-area-bg: rgba(0, 12, 25, 0.98);
-      --confirm-bg: rgba(0, 20, 45, 0.98);
-      --close-icon: rgba(160, 220, 240, 0.6);
-      --accent-hover-bg: rgba(0, 255, 240, 0.1);
-      --accent-bg-dim: rgba(0, 255, 240, 0.08);
-      --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
-      --danger-hover-bg: rgba(255, 45, 120, 0.08);
-      --danger-border: rgba(255, 45, 120, 0.5);
-      --scrollbar: rgba(0, 255, 240, 0.35);
-      --scrollbar-hover: rgba(0, 255, 240, 0.6);
+      --bg: #020810; --bg-surface: rgba(0,15,30,0.98); --bg-card: rgba(0,30,55,0.6);
+      --border: rgba(0,255,240,0.3); --border-bright: rgba(0,255,240,0.7);
+      --neon-cyan: #00fff0; --neon-magenta: #ff2d78;
+      --text: #cff0ff; --text-muted: rgba(160,220,240,0.75);
+      --header-bg: rgba(0,15,30,0.98); --input-field-bg: rgba(0,16,32,0.75);
+      --accent-bg-dim: rgba(0,255,240,0.08); --accent-bg-faint: rgba(0,255,240,0.05);
+      --glow-sm: 0 0 8px rgba(0,255,240,0.4); --radius: 10px;
     }
-
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: var(--bg);
+      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+      background: var(--bg, #020810);
       color: var(--text);
-      display: flex;
-      flex-direction: column;
       height: 100vh;
       overflow: hidden;
-    }
-
-    .window-header {
-      background: var(--header-bg);
-      padding: 12px 16px;
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
+    }
+    .window-header {
+      height: 46px;
+      display: flex;
       align-items: center;
+      justify-content: space-between;
+      padding: 0 12px 0 16px;
       border-bottom: 1px solid var(--border);
-      -webkit-app-region: drag;
-      flex-shrink: 0;
-    }
-
-    .window-title {
-      font-size: 14px;
-      font-weight: 600;
+      background: var(--header-bg, rgba(0,15,30,0.98));
       color: var(--neon-cyan);
-      letter-spacing: 0.5px;
-      text-shadow: var(--glow-sm);
+      font-size: 14px;
+      font-weight: 700;
+      -webkit-app-region: drag;
     }
-
     .close-btn {
-      background: transparent;
-      border: 1px solid var(--border);
       width: 26px;
       height: 26px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted, rgba(160,220,240,0.6));
       border-radius: 6px;
       cursor: pointer;
       -webkit-app-region: no-drag;
-      transition: border-color 0.2s, box-shadow 0.2s;
-      position: relative;
     }
-
-    .close-btn::before,
-    .close-btn::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 11px;
-      height: 1.5px;
-      background: var(--close-icon);
-      border-radius: 2px;
-      transform-origin: center;
-      transition: background 0.2s;
-    }
-
-    .close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
-    .close-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
-
-    .close-btn:hover {
-      border-color: var(--neon-magenta);
-      box-shadow: var(--danger-glow);
-    }
-
-    .close-btn:hover::before,
-    .close-btn:hover::after {
-      background: var(--neon-magenta);
-    }
-
-    .tabs {
-      display: flex;
-      gap: 10px;
-      padding: 12px 16px 0;
-      background: var(--bg);
+    .close-btn:hover { border-color: var(--neon-magenta, #ff2d78); color: var(--neon-magenta, #ff2d78); }
+    .layout { flex: 1; display: flex; min-height: 0; }
+    .sidebar {
+      width: 200px;
       flex-shrink: 0;
-    }
-
-    .tab-btn {
-      flex: 1;
-      background: transparent;
-      color: var(--text-muted);
-      border: 1px solid var(--border);
-      border-radius: 10px 10px 0 0;
-      padding: 10px 14px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 600;
-      transition: all 0.2s;
-    }
-
-    .tab-btn.active {
-      color: var(--neon-cyan);
-      border-color: var(--border-bright);
-      background: var(--accent-bg-dim);
-      box-shadow: var(--glow-sm);
-    }
-
-    .content-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-    }
-
-    .panel {
-      display: none;
-      animation: fadeIn 0.2s ease;
-    }
-
-    .panel.active {
-      display: block;
-    }
-
-    .section-card,
-    .history-item,
-    .fact-item,
-    .profile-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px;
-      margin-bottom: 12px;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .section-card:hover,
-    .history-item:hover,
-    .fact-item:hover,
-    .profile-card:hover {
-      border-color: var(--border-bright);
-    }
-
-    .profile-header,
-    .item-header,
-    .fact-header {
+      border-right: 1px solid var(--border);
+      background: var(--header-bg, rgba(0,15,30,0.98));
+      padding: 14px 0;
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 10px;
+      flex-direction: column;
+      gap: 2px;
     }
-
-    .profile-toggle {
+    .nav-item {
       width: 100%;
-      background: transparent;
       border: none;
-      color: inherit;
+      border-left: 3px solid transparent;
+      background: transparent;
+      color: var(--text-muted, rgba(160,220,240,0.85));
       text-align: left;
+      padding: 12px 20px;
       cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .profile-title,
-    .section-title {
       font-size: 13px;
-      font-weight: 600;
-      color: var(--neon-cyan);
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
-
-    .profile-subtitle,
-    .section-desc,
-    .item-time,
-    .fact-meta,
-    .profile-empty,
-    .empty-state,
-    .loading-state {
-      font-size: 12px;
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
-
-    .profile-body {
-      display: none;
-      margin-top: 12px;
-    }
-
-    .profile-card.expanded .profile-body {
-      display: block;
-    }
-
-    .profile-grid {
-      display: grid;
-      gap: 10px;
-    }
-
-    .profile-field {
-      display: grid;
-      grid-template-columns: 90px 1fr;
-      gap: 10px;
-      align-items: start;
-      font-size: 13px;
-    }
-
-    .profile-label {
-      color: var(--text-muted);
-    }
-
-    .profile-value {
+    .nav-item:hover {
       color: var(--text);
-      word-break: break-word;
-      line-height: 1.6;
+      background: var(--accent-bg-faint, rgba(0,255,240,0.05));
     }
-
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      padding: 3px 8px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.03);
-      color: var(--text-muted);
-      font-size: 11px;
-      flex-shrink: 0;
-    }
-
-    .tag.user {
-      color: var(--neon-magenta);
-      border-color: rgba(255, 45, 120, 0.4);
-    }
-
-    .tag.assistant {
-      color: var(--neon-cyan);
-      border-color: rgba(0, 255, 240, 0.4);
-    }
-
-    .tag.personal,
-    .tag.preference,
-    .tag.event,
-    .tag.relationship,
-    .tag.routine {
-      color: var(--neon-cyan);
-    }
-
-    .item-content,
-    .fact-content {
+    .nav-item.active {
       color: var(--text);
-      line-height: 1.7;
-      font-size: 13px;
-      white-space: pre-wrap;
-      word-break: break-word;
+      border-left-color: var(--neon-cyan);
+      background: var(--accent-bg-dim, rgba(0,255,240,0.08));
     }
-
-    .item-actions,
-    .fact-actions,
-    .profile-actions,
-    .footer-buttons {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .icon-btn,
-    .btn {
-      border-radius: var(--radius);
-      cursor: pointer;
-      transition: all 0.15s;
-      font-size: 12px;
-    }
-
-    .icon-btn {
-      min-width: 32px;
-      height: 32px;
-      padding: 0 10px;
-      background: transparent;
-      color: var(--text-muted);
+    .panel-area { flex: 1; min-width: 0; padding: 14px; overflow-y: auto; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
       border: 1px solid var(--border);
-    }
-
-    .icon-btn:hover {
-      color: var(--neon-cyan);
-      border-color: var(--border-bright);
-      box-shadow: var(--glow-sm);
-    }
-
-    .icon-btn.danger:hover {
-      color: var(--neon-magenta);
-      border-color: var(--danger-border);
-      box-shadow: var(--danger-glow);
-    }
-
-    .btn {
-      padding: 9px 18px;
-      font-weight: 600;
-      background: transparent;
-    }
-
-    .btn-primary {
-      color: var(--neon-cyan);
-      border: 1px solid var(--border-bright);
-    }
-
-    .btn-primary:hover {
-      background: var(--accent-hover-bg);
-      box-shadow: var(--glow-sm);
-    }
-
-    .btn-danger {
-      color: var(--neon-magenta);
-      border: 1px solid var(--danger-border);
-    }
-
-    .btn-danger:hover {
-      background: var(--danger-hover-bg);
-      box-shadow: var(--danger-glow);
-    }
-
-    .confirm-dialog {
-      display: none;
-      margin: 0 16px 12px;
-      background: var(--confirm-bg);
-      border: 1px solid var(--neon-magenta);
+      background: var(--bg-card);
       border-radius: var(--radius);
       padding: 16px;
-      box-shadow: var(--danger-glow);
-      flex-shrink: 0;
-    }
-
-    .confirm-dialog.show {
-      display: block;
-      animation: fadeIn 0.2s ease;
-    }
-
-    .confirm-title {
-      color: var(--neon-magenta);
-      font-size: 13px;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-
-    .confirm-text {
-      color: var(--text);
-      font-size: 13px;
-      line-height: 1.6;
       margin-bottom: 12px;
     }
-
-    .footer-buttons {
-      background: var(--input-area-bg);
-      padding: 12px 16px;
-      border-top: 1px solid var(--border);
-      justify-content: space-between;
-      flex-shrink: 0;
+    .card-title { color: var(--neon-cyan); font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+    .muted { color: var(--text-muted); font-size: 12px; }
+    .history-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      background: var(--bg-card);
     }
-
-    .footer-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
+    .history-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .history-content { font-size: 13px; line-height: 1.6; word-break: break-word; white-space: pre-wrap; color: var(--text); }
+    .empty { font-size: 12px; color: var(--text-muted); padding: 18px 0; text-align: center; }
+    .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .search-row input {
+      flex: 1;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--input-field-bg);
+      color: var(--text);
+      padding: 9px 10px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s ease;
     }
-
-    .message {
-      position: fixed;
-      left: 50%;
-      bottom: 18px;
-      transform: translateX(-50%) translateY(12px);
-      padding: 9px 14px;
-      border-radius: 999px;
-      border: 1px solid var(--border-bright);
-      background: var(--header-bg);
+    .search-row input:focus { border-color: var(--border-bright); }
+    .search-row input::placeholder { color: var(--text-muted); }
+    .btn {
+      border: 1px solid var(--border);
+      background: transparent;
       color: var(--neon-cyan);
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
       font-size: 12px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.18s ease, transform 0.18s ease;
-      box-shadow: var(--glow-sm);
-      z-index: 20;
     }
-
-    .message.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
+    .btn:hover { border-color: var(--border-bright, rgba(0,255,240,0.7)); }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
     }
-
-    .message.error {
-      border-color: var(--danger-border);
-      color: var(--neon-magenta);
-      box-shadow: var(--danger-glow);
+    .stat-box {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--bg-card);
     }
-
-    .empty-state,
-    .loading-state {
-      text-align: center;
-      padding: 48px 18px;
+    .stat-value { font-size: 18px; font-weight: 700; color: var(--neon-cyan); }
+    .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; height: 130px; margin-top: 10px; }
+    .bar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .bar {
+      width: 100%;
+      min-height: 2px;
+      border-radius: 6px 6px 0 0;
+      background: linear-gradient(180deg, rgba(0,255,240,0.95), rgba(0,255,240,0.3));
     }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    ::-webkit-scrollbar { width: 3px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+    .bar-day { font-size: 11px; color: var(--text-muted); }
+    .bar-num { font-size: 10px; color: var(--text-muted); }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,255,240,0.35); border-radius: 4px; }
   </style>
 </head>
 <body>
   <div class="window-header">
-    <div class="window-title">📜 历史与记忆</div>
-    <button class="close-btn" onclick="closeWindow()"></button>
+    <span>📜 对话历史</span>
+    <button class="close-btn" onclick="closeWindow()">×</button>
   </div>
 
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="conversations" onclick="switchTab('conversations')">对话历史</button>
-    <button class="tab-btn" data-tab="memories" onclick="switchTab('memories')">记忆管理</button>
-  </div>
+  <div class="layout">
+    <aside class="sidebar">
+      <button class="nav-item active" data-panel="history" onclick="switchPanel('history')">📜 对话历史</button>
+      <button class="nav-item" data-panel="search" onclick="switchPanel('search')">🔍 记忆搜索</button>
+      <button class="nav-item" data-panel="stats" onclick="switchPanel('stats')">📊 数据统计</button>
+    </aside>
 
-  <div class="content-area">
-    <section class="panel active" id="panel-conversations">
-      <div id="conversationList" class="loading-state">正在加载对话历史...</div>
-    </section>
-
-    <section class="panel" id="panel-memories">
-      <div class="profile-card expanded" id="profileCard">
-        <button class="profile-toggle" onclick="toggleProfileCard()">
-          <div>
-            <div class="profile-title">用户画像</div>
-            <div class="profile-subtitle">来自对话自动提取，清空后继续聊天可自动重建</div>
-          </div>
-          <span class="tag">折叠/展开</span>
-        </button>
-        <div class="profile-body">
-          <div id="profileContent" class="profile-empty">正在加载画像...</div>
-          <div class="profile-actions" style="margin-top: 12px;">
-            <button class="btn btn-danger" onclick="confirmClearProfile()">清空画像</button>
-          </div>
+    <main class="panel-area">
+      <section class="panel active" id="panel-history">
+        <div class="card">
+          <div class="card-title">最近对话</div>
+          <div class="muted">展示最近 200 条对话记录。</div>
         </div>
-      </div>
+        <div id="historyList"></div>
+      </section>
 
-      <div class="section-card">
-        <div class="section-title">事实记忆</div>
-        <div class="section-desc">可逐条删除结构化事实，删除后列表会立即刷新。</div>
-      </div>
-      <div id="factList" class="loading-state">正在加载事实记忆...</div>
-    </section>
+      <section class="panel" id="panel-search">
+        <div class="card">
+          <div class="card-title">关键词检索</div>
+          <div class="search-row">
+            <input id="searchInput" placeholder="输入关键词，例如：喝水、工作、周末计划">
+            <button class="btn" onclick="searchConversations()">搜索</button>
+          </div>
+          <div class="muted">调用 `window.electron.searchConversations(keyword)`，并展示摘要结果。</div>
+        </div>
+        <div id="searchResults"></div>
+      </section>
+
+      <section class="panel" id="panel-stats">
+        <div class="card">
+          <div class="card-title">对话统计</div>
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-value" id="totalCount">0</div>
+              <div class="stat-label">总对话次数</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" id="todayCount">0</div>
+              <div class="stat-label">今日对话次数</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" id="topPersonality">-</div>
+              <div class="stat-label">最多使用的性格</div>
+            </div>
+          </div>
+          <div class="muted">最近 7 天每日对话柱状图</div>
+          <div class="bars" id="weekBars"></div>
+        </div>
+      </section>
+    </main>
   </div>
-
-  <div class="confirm-dialog" id="confirmDialog">
-    <div class="confirm-title" id="confirmTitle">确认操作</div>
-    <div class="confirm-text" id="confirmText">确定继续吗？</div>
-    <div class="footer-actions">
-      <button class="btn btn-danger" id="confirmActionBtn">确定</button>
-      <button class="btn btn-primary" onclick="hideConfirmDialog()">取消</button>
-    </div>
-  </div>
-
-  <div class="footer-buttons">
-    <div class="footer-actions" id="footerActions"></div>
-    <button class="btn btn-primary" onclick="closeWindow()">关闭</button>
-  </div>
-
-  <div class="message" id="toast"></div>
 
   <script>
     const state = {
-      activeTab: 'conversations',
+      activePanel: 'history',
       conversations: [],
-      facts: [],
-      profile: {},
-      confirmAction: null,
-      toastTimer: null,
-      loadingConversations: false,
-      loadingMemories: false
+      searchResults: []
     };
 
     function closeWindow() {
       if (window.electron && window.electron.closeChildWindow) {
         window.electron.closeChildWindow('history');
       }
-    }
-
-    function showToast(message, isError = false) {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.className = isError ? 'message show error' : 'message show';
-      if (state.toastTimer) {
-        clearTimeout(state.toastTimer);
-      }
-      state.toastTimer = setTimeout(() => {
-        toast.className = isError ? 'message error' : 'message';
-      }, 2200);
     }
 
     function formatTime(timestamp) {
@@ -535,333 +240,210 @@
         .replace(/'/g, '&#39;');
     }
 
-    function profileValueOf(value) {
-      if (!value) return '';
-      if (typeof value === 'string') return value;
-      if (typeof value === 'number') return String(value);
-      if (typeof value === 'object' && typeof value.value === 'string') return value.value;
-      return '';
-    }
-
-    function normalizeProfile(profile) {
-      const normalized = {
-        name: '',
-        age: '',
-        occupation: '',
-        interests: '',
-        notes: '',
-        extra: []
-      };
-
-      if (!profile || typeof profile !== 'object') {
-        return normalized;
-      }
-
-      normalized.name = profileValueOf(profile.name);
-      normalized.age = profileValueOf(profile.age);
-      normalized.occupation = profileValueOf(profile.occupation);
-      normalized.notes = profileValueOf(profile.notes);
-
-      const interests = [];
-      const rawPreferences = Array.isArray(profile.preferences) ? profile.preferences : [];
-      rawPreferences.forEach((item) => {
-        if (typeof item === 'string') interests.push(item);
-        else if (item && typeof item === 'object') {
-          if (typeof item.value === 'string') interests.push(item.value);
-          else if (typeof item.object === 'string') interests.push(item.object);
-        }
+    function switchPanel(panel) {
+      state.activePanel = panel;
+      document.querySelectorAll('.nav-item').forEach((node) => {
+        node.classList.toggle('active', node.dataset.panel === panel);
       });
-
-      if (profile.interests) {
-        const direct = Array.isArray(profile.interests) ? profile.interests : [profile.interests];
-        direct.forEach((item) => {
-          const value = profileValueOf(item);
-          if (value) interests.push(value);
-        });
-      }
-
-      normalized.interests = Array.from(new Set(interests)).join('、');
-
-      for (const [key, value] of Object.entries(profile)) {
-        if (['name', 'age', 'occupation', 'preferences', 'interests', 'notes'].includes(key)) {
-          continue;
-        }
-        if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) {
-          continue;
-        }
-        if (Array.isArray(value)) {
-          const text = value.map((item) => profileValueOf(item) || JSON.stringify(item)).filter(Boolean).join('、');
-          if (text) {
-            normalized.extra.push({ key, value: text });
-          }
-          continue;
-        }
-        const text = profileValueOf(value) || (typeof value === 'object' ? JSON.stringify(value) : String(value));
-        if (text) {
-          normalized.extra.push({ key, value: text });
-        }
-      }
-
-      return normalized;
+      document.querySelectorAll('.panel').forEach((node) => {
+        node.classList.toggle('active', node.id === `panel-${panel}`);
+      });
     }
 
-    function factText(fact) {
-      const parts = [fact.subject, fact.predicate, fact.object].filter(Boolean);
-      return parts.join(' ').trim() || fact.predicate || '未命名事实';
-    }
-
-    function renderFooterActions() {
-      const container = document.getElementById('footerActions');
-      if (state.activeTab === 'conversations') {
-        container.innerHTML = '<button class="btn btn-danger" onclick="confirmClearConversations()">清空全部</button>';
-      } else {
-        container.innerHTML = '<button class="btn btn-danger" onclick="confirmClearFacts()">清空所有事实</button>';
-      }
-    }
-
-    function renderConversations() {
-      const container = document.getElementById('conversationList');
-      if (state.loadingConversations) {
-        container.className = 'loading-state';
-        container.textContent = '正在加载对话历史...';
-        return;
-      }
-
+    function renderHistory() {
+      const container = document.getElementById('historyList');
       if (!state.conversations.length) {
-        container.className = 'empty-state';
-        container.textContent = '还没有对话记录哦~';
+        container.innerHTML = '<div class="empty">暂无对话记录</div>';
         return;
       }
 
-      container.className = '';
       container.innerHTML = state.conversations.map((item) => {
-        const roleLabel = item.role === 'user' ? '你' : '宠物';
-        const roleClass = item.role === 'user' ? 'user' : 'assistant';
+        const roleLabel = item.role === 'user' ? '用户' : '宠物';
+        const mood = item.metadata && Number.isFinite(Number(item.metadata.mood)) ? Number(item.metadata.mood) : null;
         return `
           <div class="history-item">
-            <div class="item-header">
-              <div>
-                <span class="tag ${roleClass}">${roleLabel}</span>
-                <div class="item-time">${escapeHtml(formatTime(item.timestamp))}</div>
-              </div>
-              <div class="item-actions">
-                <button class="icon-btn" onclick="copyConversation('${escapeHtml(item.id)}')">📋</button>
-                <button class="icon-btn danger" onclick="confirmDeleteConversation('${escapeHtml(item.id)}')">🗑️</button>
-              </div>
+            <div class="history-meta">
+              <span>${escapeHtml(roleLabel)} · ${escapeHtml(formatTime(item.timestamp))}</span>
+              <span>${mood == null ? '' : `心情 ${mood}`}</span>
             </div>
-            <div class="item-content">${escapeHtml(item.content)}</div>
+            <div class="history-content">${escapeHtml(item.content || '')}</div>
           </div>
         `;
       }).join('');
     }
 
-    function renderProfile() {
-      const container = document.getElementById('profileContent');
-      const profile = normalizeProfile(state.profile);
-      const rows = [
-        { label: '姓名', value: profile.name },
-        { label: '年龄', value: profile.age },
-        { label: '职业', value: profile.occupation },
-        { label: '兴趣', value: profile.interests },
-        { label: '备注', value: profile.notes }
-      ].filter((item) => item.value);
-
-      profile.extra.forEach((item) => {
-        rows.push({ label: item.key, value: item.value });
-      });
-
-      if (!rows.length) {
-        container.className = 'profile-empty';
-        container.textContent = '当前还没有可展示的用户画像。';
-        return;
+    function normalizeSearchResult(raw) {
+      if (!raw || typeof raw !== 'object') {
+        return { date: '未知时间', summary: String(raw || ''), mood: '--' };
       }
-
-      container.className = 'profile-grid';
-      container.innerHTML = rows.map((item) => `
-        <div class="profile-field">
-          <div class="profile-label">${escapeHtml(item.label)}</div>
-          <div class="profile-value">${escapeHtml(item.value)}</div>
-        </div>
-      `).join('');
-    }
-
-    function renderFacts() {
-      const container = document.getElementById('factList');
-      if (state.loadingMemories) {
-        container.className = 'loading-state';
-        container.textContent = '正在加载事实记忆...';
-        return;
-      }
-
-      if (!state.facts.length) {
-        container.className = 'empty-state';
-        container.textContent = '还没有事实记忆。';
-        return;
-      }
-
-      container.className = '';
-      container.innerHTML = state.facts.map((fact) => `
-        <div class="fact-item">
-          <div class="fact-header">
-            <div>
-              <span class="tag ${escapeHtml(fact.fact_type || 'fact')}">${escapeHtml(fact.fact_type || 'fact')}</span>
-              <div class="fact-meta">置信度 ${(Number(fact.confidence || 0) * 100).toFixed(0)}% · ${escapeHtml(formatTime(fact.updated_at || fact.created_at))}</div>
-            </div>
-            <div class="fact-actions">
-              <button class="icon-btn danger" onclick="deleteFact('${escapeHtml(fact.id)}')">🗑️</button>
-            </div>
-          </div>
-          <div class="fact-content">${escapeHtml(factText(fact))}</div>
-        </div>
-      `).join('');
-    }
-
-    function switchTab(tab) {
-      state.activeTab = tab;
-      document.querySelectorAll('.tab-btn').forEach((btn) => {
-        btn.classList.toggle('active', btn.dataset.tab === tab);
-      });
-      document.querySelectorAll('.panel').forEach((panel) => {
-        panel.classList.toggle('active', panel.id === `panel-${tab}`);
-      });
-      renderFooterActions();
-    }
-
-    function toggleProfileCard() {
-      document.getElementById('profileCard').classList.toggle('expanded');
-    }
-
-    function showConfirmDialog(title, text, action) {
-      state.confirmAction = action;
-      document.getElementById('confirmTitle').textContent = title;
-      document.getElementById('confirmText').textContent = text;
-      const actionBtn = document.getElementById('confirmActionBtn');
-      actionBtn.onclick = async () => {
-        if (typeof state.confirmAction === 'function') {
-          await state.confirmAction();
-        }
-        hideConfirmDialog();
+      const ts = raw.timestamp || raw.created_at || raw.createdAt || raw.updated_at || raw.updatedAt;
+      const content = raw.content || raw.text || raw.summary || raw.snippet || '';
+      const mood = raw.metadata && Number.isFinite(Number(raw.metadata.mood)) ? Number(raw.metadata.mood) : '--';
+      return {
+        date: formatTime(ts),
+        summary: content || '(无内容)',
+        mood
       };
-      document.getElementById('confirmDialog').classList.add('show');
     }
 
-    function hideConfirmDialog() {
-      state.confirmAction = null;
-      document.getElementById('confirmDialog').classList.remove('show');
-    }
-
-    function confirmDeleteConversation(id) {
-      showConfirmDialog('删除对话', '确定要删除这条对话记录吗？', async () => {
-        await window.PetMemory.deleteConversation(id);
-        await loadConversations();
-        showToast('对话已删除');
-      });
-    }
-
-    function confirmClearConversations() {
-      showConfirmDialog('清空全部对话', '确定要清空所有对话历史吗？该操作不可撤销。', async () => {
-        await window.PetMemory.clearAll();
-        await Promise.all([loadConversations(), loadMemories()]);
-        showToast('已清空全部对话与记忆');
-      });
-    }
-
-    function confirmClearFacts() {
-      showConfirmDialog('清空所有事实', '确定要删除所有事实记忆吗？', async () => {
-        const facts = await window.PetMemory.getFacts({ limit: 1000 });
-        await Promise.all(facts.map((item) => window.PetMemory.deleteFact(item.id)));
-        await loadMemories();
-        showToast('已清空所有事实');
-      });
-    }
-
-    function getProfileDerivedFacts(facts = state.facts) {
-      return facts.filter((fact) => ['personal', 'preference', 'relationship'].includes(fact.fact_type));
-    }
-
-    function confirmClearProfile() {
-      showConfirmDialog('清空画像', '确定要清空用户画像吗？清空后与宠物继续对话，画像会自动重建。', async () => {
-        await window.PetMemory.clearUserProfile();
-        await loadMemories();
-        showToast('用户画像已清空，继续和宠物聊天可自动重建');
-      });
-    }
-
-    async function copyConversation(id) {
-      const item = state.conversations.find((entry) => entry.id === id);
-      if (!item) return;
-      try {
-        await navigator.clipboard.writeText(item.content || '');
-        showToast('已复制到剪贴板');
-      } catch (error) {
-        console.error('[history-window] copy failed:', error);
-        showToast('复制失败', true);
+    function renderSearchResults() {
+      const container = document.getElementById('searchResults');
+      if (!state.searchResults.length) {
+        container.innerHTML = '<div class="empty">暂无搜索结果</div>';
+        return;
       }
+
+      container.innerHTML = state.searchResults.map((item) => `
+        <div class="card">
+          <div class="history-meta">
+            <span>${escapeHtml(item.date)}</span>
+            <span>心情：${escapeHtml(item.mood)}</span>
+          </div>
+          <div class="history-content">${escapeHtml(item.summary)}</div>
+        </div>
+      `).join('');
     }
 
-    async function deleteFact(id) {
-      try {
-        await window.PetMemory.deleteFact(id);
-        await loadMemories();
-        showToast('事实已删除');
-      } catch (error) {
-        console.error('[history-window] delete fact failed:', error);
-        showToast('删除事实失败', true);
+    async function searchConversations() {
+      const keyword = document.getElementById('searchInput').value.trim();
+      if (!keyword) {
+        state.searchResults = [];
+        renderSearchResults();
+        return;
       }
+
+      try {
+        let results = [];
+        if (window.electron && window.electron.searchConversations) {
+          const searched = await window.electron.searchConversations(keyword, { limit: 50 });
+          results = Array.isArray(searched) ? searched : [];
+        }
+
+        if (!results.length) {
+          results = state.conversations.filter((item) => String(item.content || '').includes(keyword));
+        }
+
+        state.searchResults = results.map(normalizeSearchResult);
+      } catch (error) {
+        console.error('[history-window] search failed:', error);
+        state.searchResults = [];
+      }
+      renderSearchResults();
+    }
+
+    function getLocalChatHistoryFallback() {
+      const keys = ['chat_history', 'chatHistory'];
+      for (const key of keys) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        } catch (error) {
+          console.warn('[history-window] parse localStorage history failed:', key, error);
+        }
+      }
+      return [];
+    }
+
+    function calcStatsFromConversations(conversations) {
+      const now = new Date();
+      const todayStr = now.toDateString();
+      const personalityMap = new Map();
+      const sevenDays = [];
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        sevenDays.push({ date: d, key: d.toDateString(), count: 0 });
+      }
+
+      let todayCount = 0;
+      for (const item of conversations) {
+        const ts = item.timestamp || item.created_at || item.createdAt;
+        if (!ts) continue;
+        const date = new Date(ts);
+        if (date.toDateString() === todayStr) {
+          todayCount += 1;
+        }
+        const day = sevenDays.find((v) => v.key === date.toDateString());
+        if (day) day.count += 1;
+
+        const personality = item.metadata && item.metadata.personality ? String(item.metadata.personality) : '';
+        if (personality) {
+          personalityMap.set(personality, (personalityMap.get(personality) || 0) + 1);
+        }
+      }
+
+      let topPersonality = '-';
+      let maxCount = 0;
+      personalityMap.forEach((count, key) => {
+        if (count > maxCount) {
+          maxCount = count;
+          topPersonality = key;
+        }
+      });
+
+      return {
+        total: conversations.length,
+        today: todayCount,
+        topPersonality,
+        week: sevenDays
+      };
+    }
+
+    function renderStats() {
+      const fallback = getLocalChatHistoryFallback();
+      const source = state.conversations.length ? state.conversations : fallback;
+      const stats = calcStatsFromConversations(source);
+
+      document.getElementById('totalCount').textContent = String(stats.total);
+      document.getElementById('todayCount').textContent = String(stats.today);
+      document.getElementById('topPersonality').textContent = stats.topPersonality;
+
+      const max = Math.max(1, ...stats.week.map((d) => d.count));
+      document.getElementById('weekBars').innerHTML = stats.week.map((day) => {
+        const h = Math.max(2, Math.round((day.count / max) * 100));
+        const label = `${day.date.getMonth() + 1}/${day.date.getDate()}`;
+        return `
+          <div class="bar-col">
+            <div class="bar" style="height:${h}px;"></div>
+            <div class="bar-num">${day.count}</div>
+            <div class="bar-day">${label}</div>
+          </div>
+        `;
+      }).join('');
     }
 
     async function loadConversations() {
-      state.loadingConversations = true;
-      renderConversations();
-      try {
-        state.conversations = await window.PetMemory.getConversations({ limit: 200 });
-      } catch (error) {
-        console.error('[history-window] load conversations failed:', error);
-        state.conversations = [];
-        showToast('加载对话历史失败', true);
-      } finally {
-        state.loadingConversations = false;
-        renderConversations();
-      }
-    }
-
-    async function loadMemories() {
-      state.loadingMemories = true;
-      renderProfile();
-      renderFacts();
-      try {
-        const [profile, facts] = await Promise.all([
-          window.PetMemory.getUserProfile(),
-          window.PetMemory.getFacts({ limit: 100 })
-        ]);
-        state.profile = profile || {};
-        state.facts = Array.isArray(facts) ? facts : [];
-      } catch (error) {
-        console.error('[history-window] load memories failed:', error);
-        state.profile = {};
-        state.facts = [];
-        showToast('加载记忆失败', true);
-      } finally {
-        state.loadingMemories = false;
-        renderProfile();
-        renderFacts();
-      }
-    }
-
-    async function initialize() {
-      renderFooterActions();
       try {
         if (window.PetMemory && window.PetMemory.initialize) {
           await window.PetMemory.initialize();
         }
+        if (window.PetMemory && window.PetMemory.getConversations) {
+          const list = await window.PetMemory.getConversations({ limit: 200 });
+          state.conversations = Array.isArray(list) ? list : [];
+        } else {
+          state.conversations = [];
+        }
       } catch (error) {
-        console.error('[history-window] memory init failed:', error);
+        console.error('[history-window] load conversations failed:', error);
+        state.conversations = [];
       }
-      await Promise.all([loadConversations(), loadMemories()]);
+      renderHistory();
+      renderStats();
+      renderSearchResults();
     }
 
-    window.addEventListener('DOMContentLoaded', initialize);
-    console.log('[history-window] 主题系统已加载');
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadConversations();
+      document.getElementById('searchInput').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          void searchConversations();
+        }
+      });
+    });
   </script>
 </body>
 </html>

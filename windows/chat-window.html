@@ -3,425 +3,432 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>和宠物说话</title>
+  <title>宠物的小窝</title>
   <script src="../src/theme-manager.js"></script>
   <script src="../src/plan-manager.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
   <style>
-    * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-:root {
-  --bg: #020810;
-  --bg-surface: rgba(2, 10, 20, 0.98);
-  --bg-card: rgba(0, 30, 55, 0.6);
-  --border: rgba(0, 255, 240, 0.3);
-  --border-bright: rgba(0, 255, 240, 0.7);
-  --neon-cyan: #00fff0;
-  --neon-magenta: #ff2d78;
-  --text: #cff0ff;
-  --text-muted: rgba(160, 220, 240, 0.55);
-  --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
-  --glow-md: 0 0 16px rgba(0, 255, 240, 0.35), 0 0 4px rgba(0, 255, 240, 0.6);
-  --radius: 8px;
-  --header-bg: rgba(0, 15, 30, 0.98);
-  --input-area-bg: rgba(0, 12, 25, 0.98);
-  --input-field-bg: rgba(0, 20, 40, 0.8);
-  --close-icon: rgba(160, 220, 240, 0.6);
-  --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
-  --scrollbar: rgba(0, 255, 240, 0.35);
-  --scrollbar-hover: rgba(0, 255, 240, 0.6);
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.window-header {
-  background: var(--header-bg);
-  padding: 12px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
-  flex-shrink: 0;
-}
-
-.window-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--neon-cyan);
-  letter-spacing: 0.5px;
-  text-shadow: var(--glow-sm);
-}
-
-.close-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  position: relative;
-  flex-shrink: 0;
-}
-
-.close-btn::before,
-.close-btn::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 11px;
-  height: 1.5px;
-  background: var(--close-icon);
-  border-radius: 2px;
-  transform-origin: center;
-  transition: background 0.2s;
-}
-
-.close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
-.close-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
-
-.close-btn:hover {
-  border-color: var(--neon-magenta);
-  box-shadow: var(--danger-glow);
-}
-
-.close-btn:hover::before,
-.close-btn:hover::after {
-  background: var(--neon-magenta);
-}
-
-.chat-container {
-  flex: 1;
-  padding: 16px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: var(--bg);
-}
-
-.chat-message {
-  max-width: 75%;
-  padding: 9px 13px;
-  border-radius: var(--radius);
-  animation: fadeIn 0.2s ease;
-  word-wrap: break-word;
-  line-height: 1.55;
-  font-size: 13px;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.user-message {
-  align-self: flex-end;
-  background: var(--accent-bg-dim, rgba(0, 255, 240, 0.07));
-  color: var(--neon-cyan);
-  border: 1px solid var(--border);
-  border-bottom-right-radius: 3px;
-}
-
-.assistant-message {
-  align-self: flex-start;
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-bottom-left-radius: 3px;
-}
-
-.input-container {
-  background: var(--input-area-bg);
-  padding: 10px 12px;
-  display: flex;
-  gap: 8px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.chat-input {
-  flex: 1;
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 13px;
-  outline: none;
-  background: var(--input-field-bg);
-  color: var(--text);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.chat-input::placeholder {
-  color: var(--text-muted);
-}
-
-.chat-input:focus {
-  border-color: var(--border-bright);
-  box-shadow: var(--glow-sm);
-}
-
-.send-btn {
-  background: transparent;
-  color: var(--neon-cyan);
-  border: 1px solid var(--border-bright);
-  padding: 9px 16px;
-  border-radius: var(--radius);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, box-shadow 0.2s;
-  white-space: nowrap;
-}
-
-.send-btn:hover {
-  background: var(--accent-hover-bg, rgba(0, 255, 240, 0.1));
-  box-shadow: var(--glow-sm);
-}
-
-.send-btn:active {
-  background: var(--accent-bg-dim, rgba(0, 255, 240, 0.18));
-}
-
-.send-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.typing-indicator {
-  display: none;
-  align-self: flex-start;
-  padding: 9px 12px;
-  background: var(--bg-card);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  border-bottom-left-radius: 3px;
-}
-
-.typing-indicator span {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--neon-cyan);
-  margin: 0 2px;
-  animation: typing 1.4s infinite;
-  opacity: 0.7;
-}
-
-.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes typing {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.7; }
-  30% { transform: translateY(-8px); opacity: 1; }
-}
-
-::-webkit-scrollbar { width: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
-
-/* 执行计划卡片 */
-.plan-card {
-  background: rgba(0, 255, 240, 0.05);
-  border: 1px solid rgba(0, 255, 240, 0.3);
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin: 6px 0;
-  font-size: 12px;
-}
-.plan-card-header {
-  color: var(--neon-cyan, #00fff0);
-  font-weight: bold;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-.plan-card-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.plan-step {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 0;
-  transition: color 0.3s;
-}
-.plan-step--pending { color: rgba(255,255,255,0.5); }
-.plan-step--running { color: var(--neon-cyan, #00fff0); }
-.plan-step--done { color: #4cff91; text-decoration: line-through; opacity: 0.7; }
-.plan-step--error { color: var(--neon-magenta, #ff2d78); }
-.plan-step-icon { font-size: 14px; flex-shrink: 0; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.plan-step--running .plan-step-icon { display: inline-block; animation: spin 1s linear infinite; }
-
-.confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(2, 8, 16, 0.78);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  padding: 16px;
-}
-
-.confirm-overlay.show {
-  display: flex;
-}
-
-.confirm-dialog {
-  width: min(760px, 100%);
-  background: rgba(2, 10, 20, 0.98);
-  border: 1px solid var(--border-bright);
-  border-radius: 10px;
-  box-shadow: var(--glow-md);
-  padding: 16px;
-}
-
-.confirm-title {
-  color: var(--neon-cyan);
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 10px;
-}
-
-.confirm-message {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
-}
-
-.confirm-diff {
-  margin-top: 12px;
-  display: none;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: rgba(0, 10, 20, 0.72);
-  overflow: hidden;
-}
-
-.confirm-diff.show {
-  display: block;
-}
-
-.confirm-diff-meta {
-  padding: 8px 10px;
-  font-size: 12px;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
-}
-
-.confirm-diff-lines {
-  max-height: 280px;
-  overflow: auto;
-  font-family: Consolas, "SFMono-Regular", Monaco, monospace;
-  font-size: 12px;
-}
-
-.confirm-diff-line {
-  display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: 10px;
-  padding: 4px 10px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.confirm-diff-line--remove {
-  background: rgba(255, 45, 120, 0.14);
-  color: #ff9abc;
-}
-
-.confirm-diff-line--add {
-  background: rgba(76, 255, 145, 0.12);
-  color: #98ffc0;
-}
-
-.confirm-diff-line-number {
-  color: var(--text-muted);
-  text-align: right;
-}
-
-.confirm-diff-line-text {
-  overflow-wrap: anywhere;
-}
-
-.confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.confirm-btn {
-  border-radius: var(--radius);
-  padding: 8px 14px;
-  font-size: 12px;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-}
-
-.confirm-btn.primary {
-  color: var(--neon-cyan);
-  border-color: var(--border-bright);
-}
-
-.confirm-btn.danger {
-  color: var(--neon-magenta);
-  border-color: rgba(255, 45, 120, 0.45);
-}
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+      background: var(--bg, #020810);
+      color: var(--text, #cff0ff);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .window-header {
+      height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px 0 16px;
+      border-bottom: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: var(--header-bg, rgba(0,15,30,0.98));
+      color: var(--neon-cyan, #00fff0);
+      font-size: 14px;
+      font-weight: 700;
+      -webkit-app-region: drag;
+    }
+    .close-btn {
+      width: 26px;
+      height: 26px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: transparent;
+      color: var(--text-muted, rgba(160,220,240,0.6));
+      border-radius: 6px;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
+    .close-btn:hover {
+      border-color: var(--neon-magenta, #ff2d78);
+      color: var(--neon-magenta, #ff2d78);
+    }
+    .app-body { flex: 1; display: flex; overflow: hidden; }
+    .pet-sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      background: var(--header-bg, rgba(0,15,30,0.98));
+      border-right: 1px solid var(--border, rgba(0,255,240,0.3));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px;
+      gap: 12px;
+    }
+    .pet-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--neon-cyan, #00fff0);
+      text-shadow: var(--glow-sm, 0 0 8px rgba(0,255,240,0.4));
+    }
+    .pet-lottie-wrap { width: 180px; height: 180px; flex-shrink: 0; }
+    .mood-section { width: 100%; }
+    .mood-label { font-size: 12px; color: var(--text, #cff0ff); }
+    .mood-bar {
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(0,255,240,0.15);
+      margin: 6px 0;
+    }
+    .mood-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--neon-cyan, #00fff0);
+      transition: width 0.4s ease;
+      width: 0;
+    }
+    .mood-text {
+      font-size: 12px;
+      color: rgba(160,220,240,0.9);
+      line-height: 1.4;
+      min-height: 18px;
+    }
+    .pet-sidebar-btns {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      margin-top: auto;
+    }
+    .pet-sidebar-btns button {
+      flex: 1;
+      padding: 8px 0;
+      font-size: 12px;
+      background: var(--accent-bg-dim, rgba(0,255,240,0.08));
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      border-radius: 8px;
+      color: var(--text, #cff0ff);
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .pet-sidebar-btns button:hover {
+      border-color: var(--neon-cyan, #00fff0);
+      color: var(--neon-cyan, #00fff0);
+    }
+    .chat-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .messages-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .msg { display: flex; gap: 8px; max-width: 80%; }
+    .msg.user { flex-direction: row-reverse; align-self: flex-end; }
+    .msg.ai { align-self: flex-start; }
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .bubble.has-image {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bubble-image {
+      display: block;
+      width: min(280px, 100%);
+      border-radius: 12px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: var(--bg-surface, rgba(0,15,30,0.98));
+    }
+    .msg.user .bubble {
+      background: var(--neon-cyan, #00fff0);
+      color: #020810;
+      border-radius: 12px 2px 12px 12px;
+    }
+    .msg.ai .bubble {
+      background: var(--bubble-bg, var(--bg-card, rgba(0,30,55,0.8)));
+      border: 1px solid var(--bubble-border, var(--border, rgba(0,255,240,0.3)));
+      box-shadow: 0 8px 18px color-mix(in srgb, var(--bubble-shadow, rgba(0,255,240,0.18)) 100%, transparent);
+      color: var(--text, #cff0ff);
+      border-radius: 2px 12px 12px 12px;
+    }
+    .typing {
+      display: none;
+      color: var(--text-muted, rgba(160,220,240,0.65));
+      font-size: 12px;
+      padding-left: 2px;
+    }
+    .composer {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .attachment-tray {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: var(--bg-card, rgba(0,30,55,0.6));
+    }
+    .attachment-tray.show {
+      display: flex;
+    }
+    .attachment-thumb {
+      width: 52px;
+      height: 52px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: var(--bg-surface, rgba(0,15,30,0.98));
+      flex-shrink: 0;
+    }
+    .attachment-meta {
+      flex: 1;
+      min-width: 0;
+    }
+    .attachment-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text, #cff0ff);
+    }
+    .attachment-desc {
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--text-muted, rgba(160,220,240,0.75));
+    }
+    .attachment-remove {
+      padding: 7px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: transparent;
+      color: var(--text-muted, rgba(160,220,240,0.75));
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .input-area {
+      display: flex;
+      gap: 12px;
+      padding: 14px 20px 18px;
+      background: var(--input-area-bg, rgba(0,12,25,0.98));
+      border-top: 1px solid var(--border, rgba(0,255,240,0.3));
+      align-items: flex-end;
+    }
+    .tool-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: var(--bg-surface, rgba(2,10,20,0.98));
+      color: var(--text, #cff0ff);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .tool-btn:hover { background: var(--accent-bg-faint, rgba(0,255,240,0.06)); }
+    textarea#chatInput {
+      flex: 1;
+      resize: none;
+      height: 92px;
+      min-height: 92px;
+      max-height: 92px;
+      overflow-y: auto;
+      background: var(--input-field-bg, rgba(0,20,40,0.8));
+      color: var(--text, #cff0ff);
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      border-radius: 16px;
+      padding: 12px 14px;
+      font-size: 14px;
+      outline: none;
+      font-family: inherit;
+      line-height: 1.6;
+    }
+    textarea#chatInput:focus {
+      border-color: var(--border, rgba(0,255,240,0.3));
+      box-shadow: none;
+    }
+    textarea#chatInput::placeholder { color: var(--text-muted, rgba(160,220,240,0.75)); }
+    .send-btn {
+      height: 40px;
+      padding: 0 22px;
+      border-radius: 12px;
+      background: var(--neon-cyan, #00fff0);
+      color: #020810;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .send-btn:hover { opacity: 0.85; }
+    .send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .empty-state {
+      text-align: center;
+      color: var(--text-muted, rgba(160,220,240,0.65));
+      font-size: 13px;
+      padding: 40px 16px;
+    }
+    .plan-card {
+      background: rgba(0,255,240,0.05);
+      border: 1px solid rgba(0,255,240,0.3);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    .plan-card-header { color: var(--neon-cyan, #00fff0); font-weight: bold; margin-bottom: 8px; }
+    .plan-card-steps { display: flex; flex-direction: column; gap: 4px; }
+    .plan-step { display: flex; align-items: center; gap: 6px; }
+    .plan-step--pending { color: rgba(255,255,255,0.5); }
+    .plan-step--running { color: var(--neon-cyan, #00fff0); }
+    .plan-step--done { color: #4cff91; text-decoration: line-through; opacity: 0.7; }
+    .plan-step--error { color: var(--neon-magenta, #ff2d78); }
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 8, 16, 0.78);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      padding: 16px;
+    }
+    .confirm-overlay.show { display: flex; }
+    .confirm-dialog {
+      width: min(760px, 100%);
+      background: rgba(2, 10, 20, 0.98);
+      border: 1px solid var(--border-bright, rgba(0,255,240,0.7));
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .confirm-title { color: var(--neon-cyan, #00fff0); font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+    .confirm-message {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text, #cff0ff);
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .confirm-btn {
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: transparent;
+      color: var(--text, #cff0ff);
+    }
+    .confirm-btn.danger {
+      color: var(--neon-magenta, #ff2d78);
+      border-color: rgba(255,45,120,0.45);
+    }
+    .confirm-diff {
+      margin-top: 12px;
+      display: none;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      border-radius: 8px;
+      background: rgba(0,10,20,0.72);
+      overflow: hidden;
+    }
+    .confirm-diff.show { display: block; }
+    .confirm-diff-meta {
+      padding: 8px 10px;
+      font-size: 12px;
+      color: var(--text-muted, rgba(160,220,240,0.65));
+      border-bottom: 1px solid var(--border, rgba(0,255,240,0.3));
+    }
+    .confirm-diff-lines {
+      max-height: 280px;
+      overflow: auto;
+      font-family: Consolas, "SFMono-Regular", Monaco, monospace;
+      font-size: 12px;
+    }
+    .confirm-diff-line {
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      gap: 10px;
+      padding: 4px 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .confirm-diff-line--remove { background: rgba(255,45,120,0.14); color: #ff9abc; }
+    .confirm-diff-line--add { background: rgba(76,255,145,0.12); color: #98ffc0; }
+    .confirm-diff-line-number { color: var(--text-muted, rgba(160,220,240,0.65)); text-align: right; }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 12px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: rgba(2,15,30,0.95);
+      color: var(--neon-cyan, #00fff0);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,255,240,0.35); border-radius: 4px; }
   </style>
 </head>
 <body>
   <div class="window-header">
-    <div class="window-title">💬 和宠物说话</div>
-    <button class="close-btn" onclick="closeWindow()"></button>
+    <span>宠物的小窝</span>
+    <button class="close-btn" onclick="closeWindow()">×</button>
   </div>
 
-  <div class="chat-container" id="chatContainer">
-    <div class="empty-state" id="emptyState" style="text-align:center;padding:60px 20px;color:var(--text-muted);font-size:13px;">和你的宠物说说话吧~</div>
-    <div class="typing-indicator" id="typingIndicator">
-      <span></span>
-      <span></span>
-      <span></span>
+  <div class="app-body">
+    <div class="pet-sidebar">
+      <div class="pet-name" id="petName">···</div>
+      <div class="pet-lottie-wrap" id="chatLottie"></div>
+      <div class="mood-section">
+        <div class="mood-label">心情 <span id="moodValue">--</span></div>
+        <div class="mood-bar"><div class="mood-fill" id="moodFill"></div></div>
+        <div class="mood-text" id="moodText">···</div>
+      </div>
+      <div class="pet-sidebar-btns">
+        <button onclick="goToSettings()">⚙️ 设置</button>
+        <button onclick="goToHistory()">📜 历史</button>
+      </div>
     </div>
-  </div>
 
-  <div class="input-container">
-    <input
-      type="text"
-      id="chatInput"
-      class="chat-input"
-      placeholder="输入你想说的话..."
-      onkeyup="if(event.key==='Enter')sendMessage()"
-      autofocus
-    >
-    <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
+    <div class="chat-panel">
+      <div class="messages-wrap" id="messagesWrap">
+        <div class="empty-state" id="emptyState">和我说说今天发生了什么吧~</div>
+        <div class="typing" id="typingText">正在思考中...</div>
+      </div>
+
+      <div class="input-area">
+        <button class="tool-btn" id="screenshotBtn" title="截图">📸</button>
+        <div class="composer">
+          <div class="attachment-tray" id="attachmentTray">
+            <img class="attachment-thumb" id="attachmentThumb" alt="attachment preview">
+            <div class="attachment-meta">
+              <div class="attachment-title" id="attachmentTitle">已粘贴截图</div>
+              <div class="attachment-desc" id="attachmentDesc">发送后会连同文字一起分析</div>
+            </div>
+            <button class="attachment-remove" id="attachmentRemoveBtn" type="button">移除</button>
+          </div>
+          <textarea id="chatInput" placeholder="和我说说话吧~" rows="1"></textarea>
+        </div>
+        <button class="send-btn" id="sendBtn">发送</button>
+      </div>
+    </div>
   </div>
 
   <div class="confirm-overlay" id="confirmOverlay">
@@ -439,12 +446,16 @@ body {
     </div>
   </div>
 
+  <div class="toast" id="toast"></div>
+
   <script>
     let isProcessing = false;
     let pendingApprovalDialog = null;
     let agentSessionId = sessionStorage.getItem('chatAgentSessionId') || null;
     let activeAgentStream = null;
     let streamingAssistantMessage = null;
+    let toastTimer = null;
+    let pendingImageAttachment = null;
 
     function closeWindow() {
       if (window.electron && window.electron.closeChildWindow) {
@@ -452,45 +463,122 @@ body {
       }
     }
 
-    function addMessage(role, content) {
-      const container = document.getElementById('chatContainer');
-      // 隐藏空状态提示
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+    }
+
+    function autoGrowTextarea() {
+      const input = document.getElementById('chatInput');
+      input.style.height = '92px';
+    }
+
+    function renderAttachmentPreview() {
+      const tray = document.getElementById('attachmentTray');
+      const thumb = document.getElementById('attachmentThumb');
+      const title = document.getElementById('attachmentTitle');
+      const desc = document.getElementById('attachmentDesc');
+      if (!tray || !thumb || !title || !desc) return;
+
+      if (!pendingImageAttachment) {
+        tray.classList.remove('show');
+        thumb.removeAttribute('src');
+        return;
+      }
+
+      thumb.src = pendingImageAttachment.dataURL;
+      title.textContent = pendingImageAttachment.name || '已粘贴截图';
+      desc.textContent = '发送后会连同文字一起分析';
+      tray.classList.add('show');
+    }
+
+    function clearPendingImageAttachment() {
+      pendingImageAttachment = null;
+      renderAttachmentPreview();
+    }
+
+    function fileToDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error('file_read_failed'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleImagePaste(file) {
+      const dataURL = await fileToDataURL(file);
+      pendingImageAttachment = {
+        type: 'image',
+        name: file.name || `pasted-image-${Date.now()}.png`,
+        mimeType: file.type || 'image/png',
+        dataURL
+      };
+      renderAttachmentPreview();
+      showToast('截图已粘贴');
+    }
+
+    function createMessageNode(role, content, attachments = null) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `msg ${role === 'user' ? 'user' : 'ai'}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      const imageAttachment = Array.isArray(attachments)
+        ? attachments.find((attachment) => attachment && typeof attachment.dataURL === 'string')
+        : null;
+      if (imageAttachment) {
+        bubble.classList.add('has-image');
+        const image = document.createElement('img');
+        image.className = 'bubble-image';
+        image.src = imageAttachment.dataURL;
+        image.alt = imageAttachment.name || 'attachment';
+        bubble.appendChild(image);
+      }
+      const textNode = document.createElement('div');
+      textNode.textContent = content;
+      bubble.appendChild(textNode);
+      wrapper.appendChild(bubble);
+      return { wrapper, bubble };
+    }
+
+    function addMessage(role, content, attachments = null) {
+      const container = document.getElementById('messagesWrap');
       const emptyState = document.getElementById('emptyState');
       if (emptyState) emptyState.style.display = 'none';
-      const message = document.createElement('div');
-      message.className = `chat-message ${role}-message`;
 
-      // 如果是 assistant 消息，检查是否包含执行计划
+      const messageNode = createMessageNode(role, content, attachments);
+
       if (role === 'assistant' && window.PlanManager) {
         const plan = window.PlanManager.parsePlan(content);
         if (plan) {
-          message.textContent = content;
-          container.appendChild(message);
-          window.PlanManager.injectPlanCard(message, plan);
+          container.appendChild(messageNode.wrapper);
+          window.PlanManager.injectPlanCard(messageNode.wrapper, plan);
           const doneStep = window.PlanManager.parseStepDone(content);
           if (doneStep) window.PlanManager.updateStep(doneStep, 'done');
           container.scrollTop = container.scrollHeight;
-          return;
+          return messageNode.bubble;
         }
-        // 检查步骤完成标记（更新现有计划卡片）
         const doneStep = window.PlanManager.parseStepDone(content);
         if (doneStep) window.PlanManager.updateStep(doneStep, 'done');
       }
 
-      message.textContent = content;
-      container.appendChild(message);
+      container.appendChild(messageNode.wrapper);
       container.scrollTop = container.scrollHeight;
-      return message;
+      return messageNode.bubble;
     }
 
     function showTyping() {
-      document.getElementById('typingIndicator').style.display = 'block';
-      const container = document.getElementById('chatContainer');
+      const typing = document.getElementById('typingText');
+      typing.style.display = 'block';
+      const container = document.getElementById('messagesWrap');
       container.scrollTop = container.scrollHeight;
     }
 
     function hideTyping() {
-      document.getElementById('typingIndicator').style.display = 'none';
+      document.getElementById('typingText').style.display = 'none';
     }
 
     function persistAgentSession() {
@@ -504,15 +592,33 @@ body {
       if (!window.PetAgent || !window.PetAgent.startSession) {
         throw new Error('PetAgent unavailable');
       }
+      console.log('[chat-window] startSession begin');
       const started = await window.PetAgent.startSession({
         channel: 'chat-window',
-        metadata: {
-          personality: 'healing'
-        }
+        metadata: { personality: 'healing' }
       });
+      console.log('[chat-window] startSession result:', started);
+      if (!started || started.error || !started.sessionId) {
+        throw new Error((started && started.error) || 'agent_start_session_failed');
+      }
       agentSessionId = started.sessionId;
       persistAgentSession();
       return agentSessionId;
+    }
+
+    async function sendViaBasicChat(message) {
+      if (!window.electron || !window.electron.sendChatMessage) {
+        throw new Error('聊天通道不可用');
+      }
+
+      const result = await window.electron.sendChatMessage(message);
+      hideTyping();
+      if (result && result.success) {
+        addMessage('assistant', result.reply || '好的~');
+        return true;
+      }
+
+      throw new Error((result && result.error) ? result.error : 'basic_chat_failed');
     }
 
     function appendAssistantDelta(delta) {
@@ -521,7 +627,7 @@ body {
         streamingAssistantMessage = addMessage('assistant', '');
       }
       streamingAssistantMessage.textContent += delta || '';
-      const container = document.getElementById('chatContainer');
+      const container = document.getElementById('messagesWrap');
       container.scrollTop = container.scrollHeight;
     }
 
@@ -539,91 +645,86 @@ body {
     async function sendMessage() {
       const input = document.getElementById('chatInput');
       const message = input.value.trim();
-
-      if (!message || isProcessing) return;
+      const attachments = pendingImageAttachment ? [pendingImageAttachment] : null;
+      const previousAttachment = pendingImageAttachment;
+      const effectiveMessage = message || (attachments ? '请帮我看下这张截图。' : '');
+      if ((!effectiveMessage && !attachments) || isProcessing) return;
 
       isProcessing = true;
       document.getElementById('sendBtn').disabled = true;
-
-      // 显示用户消息
-      addMessage('user', message);
+      addMessage('user', message || '发送了一张截图', attachments);
       input.value = '';
-
-      // 显示输入中状态
+      autoGrowTextarea();
+      clearPendingImageAttachment();
       showTyping();
 
-      // 通过 IPC 发送消息到主窗口
       try {
-        if (window.PetAgent) {
-          const sessionId = await ensureAgentSession();
-          const result = await window.PetAgent.send({
-            sessionId,
-            text: message,
-            source: 'chat-window'
-          });
+        // 先快速检查 agentRuntime 是否就绪，避免 15 秒超时等待
+        const agentReady = window.PetAgent?.isReady ? await window.PetAgent.isReady() : false;
+        if (window.PetAgent && agentReady) {
+          try {
+            const sessionId = await ensureAgentSession();
+            console.log('[chat-window] send begin:', {
+              sessionId,
+              textLength: effectiveMessage.length,
+              attachments: attachments ? attachments.length : 0
+            });
+            const result = await window.PetAgent.send({
+              sessionId,
+              text: effectiveMessage,
+              attachments,
+              source: 'chat-window'
+            });
+            console.log('[chat-window] send result:', result);
 
-          if (result && result.status === 'failed') {
-            throw new Error(result.reason || 'agent_send_failed');
+            if (result && result.status === 'failed') {
+              throw new Error(result.reason || 'agent_send_failed');
+            }
+
+            console.log('[chat-window] wait begin:', { runId: result.runId });
+            const waited = await window.PetAgent.wait({
+              runId: result.runId,
+              timeoutMs: 120000
+            });
+            console.log('[chat-window] wait result:', waited);
+            hideTyping();
+
+            if (!waited || !waited.ok) {
+              throw new Error((waited && waited.error) || 'agent_wait_failed');
+            }
+
+            addMessage('assistant', waited.finalText || '好的~');
+            finishAgentRun();
+            return;
+          } catch (agentError) {
+            const errorText = String(agentError && agentError.message ? agentError.message : agentError || '');
+            console.error('[chat-window] agent path failed:', agentError);
+            const canFallbackToBasicChat = !attachments &&
+              /agent_runtime_unavailable|agent_start_session_failed|agent_send_failed|agent_wait_failed|PetAgent unavailable/.test(errorText);
+
+            if (canFallbackToBasicChat) {
+              finishAgentRun();
+              console.log('[chat-window] fallback to basic chat');
+              await sendViaBasicChat(effectiveMessage);
+              return;
+            }
+
+            throw agentError;
           }
-
-          if (activeAgentStream && typeof activeAgentStream.close === 'function') {
-            activeAgentStream.close();
-          }
-          streamingAssistantMessage = null;
-          activeAgentStream = await window.PetAgent.openStream({
-            sessionId,
-            runId: result.runId,
-            afterSeq: 0
-          }, (agentEvent) => {
-            if (!agentEvent) return;
-
-            if (agentEvent.type === 'message.delta') {
-              appendAssistantDelta(agentEvent.payload && agentEvent.payload.delta);
-            }
-
-            if (agentEvent.type === 'approval.requested') {
-              hideTyping();
-              showAgentApproval(agentEvent.payload || {}, agentEvent.runId);
-            }
-
-            if (agentEvent.type === 'run.completed') {
-              if (!streamingAssistantMessage) {
-                addMessage('assistant', (agentEvent.payload && agentEvent.payload.summary) || '濂界殑~');
-              }
-              finishAgentRun();
-            }
-
-            if (agentEvent.type === 'run.failed') {
-              if (!streamingAssistantMessage) {
-                addMessage('assistant', (agentEvent.payload && (agentEvent.payload.message || agentEvent.payload.reason)) || '鎶辨瓑锛屼换鍔″け璐ヤ簡...');
-              }
-              finishAgentRun();
-            }
-
-            if (agentEvent.type === 'run.cancelled') {
-              if (!streamingAssistantMessage) {
-                addMessage('assistant', '已取消');
-              }
-              finishAgentRun();
-            }
-          });
-          return;
         }
 
-        if (!window.electron || !window.electron.sendChatMessage) {
-          throw new Error('聊天通道不可用');
+        if (attachments) {
+          throw new Error('当前聊天通道暂不支持图片，请使用 Agent 模式。');
         }
-        const result = await window.electron.sendChatMessage(message);
-        hideTyping();
-        if (result && result.success) {
-          addMessage('assistant', result.reply || '好的~');
-        } else {
-          addMessage('assistant', (result && result.error) ? result.error : '抱歉，出了点小问题...');
-        }
+
+        await sendViaBasicChat(effectiveMessage);
       } catch (error) {
-        if (window.PetAgent) {
-          finishAgentRun();
+        console.error('[chat-window] sendMessage failed:', error);
+        if (!pendingImageAttachment && previousAttachment) {
+          pendingImageAttachment = previousAttachment;
+          renderAttachmentPreview();
         }
+        if (window.PetAgent) finishAgentRun();
         hideTyping();
         addMessage('assistant', '抱歉，聊天失败了...');
       } finally {
@@ -638,9 +739,8 @@ body {
       const panel = document.getElementById('confirmDiffPanel');
       const metaEl = document.getElementById('confirmDiffMeta');
       const linesEl = document.getElementById('confirmDiffLines');
-      if (!panel || !metaEl || !linesEl) return;
+      const diff = Array.isArray(preview && preview.diff) ? preview.diff : [];
 
-      const diff = Array.isArray(preview?.diff) ? preview.diff : [];
       if (!preview || diff.length === 0) {
         panel.classList.remove('show');
         metaEl.textContent = '';
@@ -661,7 +761,7 @@ body {
         return `
           <div class="confirm-diff-line confirm-diff-line--${type}">
             <div class="confirm-diff-line-number">${symbol}${lineNumber}</div>
-            <div class="confirm-diff-line-text">${text || '&nbsp;'}</div>
+            <div>${text || '&nbsp;'}</div>
           </div>
         `;
       }).join('');
@@ -671,31 +771,20 @@ body {
     function showApprovalDialog({ title, message, kind, approvalId = null, runId = null, requestId = null, preview = null }) {
       pendingApprovalDialog = { title, message, kind, approvalId, runId, requestId, preview };
       const overlay = document.getElementById('confirmOverlay');
-      const titleEl = overlay ? overlay.querySelector('.confirm-title') : null;
-      const messageEl = document.getElementById('confirmMessage');
-      if (titleEl) {
-        titleEl.textContent = title || '确认执行高风险操作';
-      }
-      if (messageEl) {
-        messageEl.textContent = message || '是否继续执行该操作？';
-      }
+      overlay.querySelector('.confirm-title').textContent = title || '确认执行高风险操作';
+      document.getElementById('confirmMessage').textContent = message || '是否继续执行该操作？';
       renderApprovalDiff(preview);
-      if (overlay) {
-        overlay.classList.add('show');
-      }
+      overlay.classList.add('show');
     }
 
     async function resolveApprovalDialog(approved) {
       if (!pendingApprovalDialog) return;
       const current = pendingApprovalDialog;
       pendingApprovalDialog = null;
-      const overlay = document.getElementById('confirmOverlay');
-      if (overlay) {
-        overlay.classList.remove('show');
-      }
+      document.getElementById('confirmOverlay').classList.remove('show');
       renderApprovalDiff(null);
 
-      if (current.kind === 'agent' && window.PetAgent?.approve) {
+      if (current.kind === 'agent' && window.PetAgent && window.PetAgent.approve) {
         try {
           await window.PetAgent.approve({
             runId: current.runId,
@@ -708,57 +797,171 @@ body {
         return;
       }
 
-      if (current.kind === 'skill' && window.PetSkills?.respondConfirm) {
+      if (current.kind === 'skill' && window.PetSkills && window.PetSkills.respondConfirm) {
         window.PetSkills.respondConfirm(current.requestId, approved);
       }
     }
 
-    function approveSkillConfirm() {
-      void resolveApprovalDialog(true);
-    }
-
-    function rejectSkillConfirm() {
-      void resolveApprovalDialog(false);
-    }
+    function approveSkillConfirm() { void resolveApprovalDialog(true); }
+    function rejectSkillConfirm() { void resolveApprovalDialog(false); }
 
     function showAgentApproval(payload, runId) {
-      const summary = payload?.summary || `批准执行工具 ${payload?.toolName || ''}`.trim();
-      const argsText = payload?.args ? `\n\n参数:\n${JSON.stringify(payload.args, null, 2)}` : '';
+      const summary = payload && payload.summary ? payload.summary : `批准执行工具 ${payload && payload.toolName ? payload.toolName : ''}`.trim();
+      const argsText = payload && payload.args ? `\n\n参数:\n${JSON.stringify(payload.args, null, 2)}` : '';
       showApprovalDialog({
         kind: 'agent',
-        approvalId: payload?.approvalId || null,
+        approvalId: payload && payload.approvalId ? payload.approvalId : null,
         runId: runId || null,
         title: '确认执行 Agent 操作',
         message: `${summary}${argsText}`,
-        preview: payload?.preview || null
+        preview: payload && payload.preview ? payload.preview : null
       });
     }
 
-    document.addEventListener('keydown', (event) => {
-      if (!pendingApprovalDialog) return;
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        rejectSkillConfirm();
+    async function loadPetName() {
+      const PET_NAMES = { '🐱': '猫咪', '🐶': '狗狗', '🐰': '兔兔', '🦊': '小狐', '🐻': '小熊' };
+      let name = '';
+      // 第一优先：记忆系统 user_profile 中的名字
+      try {
+        if (window.electron && window.electron.getPetProfile) {
+          const profile = await window.electron.getPetProfile();
+          if (Array.isArray(profile)) {
+            const row = profile.find(r => r.key === 'name' || r.key === 'pet_name');
+            if (row && row.value) name = row.value;
+          } else if (profile) {
+            name = profile.petName || profile.name || '';
+          }
+        }
+      } catch (e) {}
+      // 第二优先：localStorage pet_data.basePet → 中文名
+      if (!name) {
+        try {
+          const petData = JSON.parse(localStorage.getItem('pet_data') || '{}');
+          name = PET_NAMES[petData.basePet] || '';
+        } catch (e) {}
       }
-    });
+      document.getElementById('petName').textContent = name || '我的宠物';
+    }
 
-    window.addEventListener('beforeunload', () => {
-      if (pendingApprovalDialog) {
-        void resolveApprovalDialog(false);
-      }
-    });
+    function updateMoodDisplay(mood) {
+      const safeMood = Math.max(0, Math.min(100, Number.isFinite(Number(mood)) ? Number(mood) : 80));
+      document.getElementById('moodValue').textContent = `${safeMood}`;
+      document.getElementById('moodFill').style.width = `${safeMood}%`;
+      const texts = [[80,'今天心情很好~'],[60,'还不错哦'],[40,'有点无聊...'],[0,'心情低落中']];
+      const found = texts.find(([t]) => safeMood >= t);
+      document.getElementById('moodText').textContent = found ? found[1] : '心情低落中';
+    }
 
-    if (window.PetSkills && typeof window.PetSkills.onConfirmRequest === 'function') {
-      window.PetSkills.onConfirmRequest((data) => {
-        if (!data || !data.requestId) return;
-        showApprovalDialog({
-          kind: 'skill',
-          requestId: data.requestId,
-          title: '确认执行高风险操作',
-          message: data.message
+    function initLottie() {
+      if (!window.lottie) return;
+      try {
+        window.lottie.loadAnimation({
+          container: document.getElementById('chatLottie'),
+          renderer: 'svg',
+          loop: true,
+          autoplay: true,
+          path: '../lottie/cat/猫坐在枕头上.json'
         });
-      });
+      } catch (e) {
+        console.warn('[chat-window] lottie init failed:', e);
+      }
     }
+
+    function goToSettings() {
+      if (!window.electron || !window.electron.createChildWindow) return;
+      // 不关闭聊天窗口，并排打开设置，关闭设置后自然回到聊天
+      window.electron.createChildWindow({ id: 'settings', title: '设置', width: 910, height: 640, html: 'windows/settings-window.html' });
+    }
+
+    function goToHistory() {
+      if (!window.electron || !window.electron.createChildWindow) return;
+      // 不关闭聊天窗口，并排打开历史，关闭历史后自然回到聊天
+      window.electron.createChildWindow({ id: 'history', title: '对话历史', width: 910, height: 640, html: 'windows/history-window.html' });
+    }
+
+    async function handleScreenshot() {
+      try {
+        if (!window.PetScreenshot || !window.PetScreenshot.captureFullScreen) {
+          showToast('截图功能不可用');
+          return;
+        }
+        await window.PetScreenshot.captureFullScreen();
+        showToast('已触发截图');
+      } catch (error) {
+        showToast('截图失败');
+      }
+    }
+
+    function bindEvents() {
+      const input = document.getElementById('chatInput');
+      const sendBtn = document.getElementById('sendBtn');
+      const screenshotBtn = document.getElementById('screenshotBtn');
+      const attachmentRemoveBtn = document.getElementById('attachmentRemoveBtn');
+
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          void sendMessage();
+        }
+      });
+      input.addEventListener('paste', async (event) => {
+        const items = event.clipboardData ? Array.from(event.clipboardData.items || []) : [];
+        const imageItem = items.find((item) => item.type && item.type.startsWith('image/'));
+        if (!imageItem) return;
+        event.preventDefault();
+        const file = imageItem.getAsFile();
+        if (!file) return;
+        try {
+          await handleImagePaste(file);
+        } catch (error) {
+          showToast('图片粘贴失败');
+        }
+      });
+      sendBtn.addEventListener('click', () => void sendMessage());
+      screenshotBtn.addEventListener('click', () => void handleScreenshot());
+      attachmentRemoveBtn.addEventListener('click', clearPendingImageAttachment);
+
+      document.addEventListener('keydown', (event) => {
+        if (!pendingApprovalDialog) return;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          rejectSkillConfirm();
+        }
+      });
+
+      window.addEventListener('beforeunload', () => {
+        if (pendingApprovalDialog) {
+          void resolveApprovalDialog(false);
+        }
+      });
+
+      if (window.PetSkills && typeof window.PetSkills.onConfirmRequest === 'function') {
+        window.PetSkills.onConfirmRequest((data) => {
+          if (!data || !data.requestId) return;
+          showApprovalDialog({
+            kind: 'skill',
+            requestId: data.requestId,
+            title: '确认执行高风险操作',
+            message: data.message
+          });
+        });
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      bindEvents();
+      autoGrowTextarea();
+      renderAttachmentPreview();
+      initLottie();
+      await loadPetName();
+      // 从 localStorage 读取实际心情值，而非硬编码
+      try {
+        const petData = JSON.parse(localStorage.getItem('pet_data') || '{}');
+        updateMoodDisplay(typeof petData.mood === 'number' ? petData.mood : 80);
+      } catch (e) {
+        updateMoodDisplay(80);
+      }
+    });
   </script>
 </body>
 </html>

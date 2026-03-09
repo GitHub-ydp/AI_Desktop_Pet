@@ -269,11 +269,19 @@ class AgentRuntime {
   }
 
   async send({ sessionId, text, attachments = null, source = 'desktop-chat' }) {
+    console.log('[AgentRuntime] send called:', {
+      sessionId,
+      source,
+      textLength: typeof text === 'string' ? text.length : 0,
+      attachments: Array.isArray(attachments) ? attachments.length : 0
+    });
     const session = this.sessionStore.getSession(sessionId);
     if (!session) {
+      console.error('[AgentRuntime] send failed: session not found', sessionId);
       throw new Error(`Session not found: ${sessionId}`);
     }
     if (session.state === 'archived') {
+      console.error('[AgentRuntime] send failed: session archived', sessionId);
       throw new Error('Session is archived');
     }
 
@@ -304,8 +312,8 @@ class AgentRuntime {
             message: 'The session queue is full'
           }
         });
-        return { runId: failedRun.id, status: 'failed', reason: 'queue_full' };
-      }
+      return { runId: failedRun.id, status: 'failed', reason: 'queue_full' };
+    }
 
       const queuedRun = this.sessionStore.createRun({
         sessionId,
@@ -347,6 +355,7 @@ class AgentRuntime {
       }
     });
     void this._executeRun(run.id);
+    console.log('[AgentRuntime] run created:', { runId: run.id, sessionId, source });
     return { runId: run.id, status: 'running' };
   }
 
@@ -435,6 +444,7 @@ class AgentRuntime {
   }
 
   wait({ runId, timeoutMs = 90000 }) {
+    console.log('[AgentRuntime] wait called:', { runId, timeoutMs });
     return this.eventBus.waitForRunCompletion(runId, timeoutMs);
   }
 
@@ -628,13 +638,15 @@ class AgentRuntime {
 
     const memoryContext = await this._buildMemoryContext(intent, run.sourceText);
 
-    const tools = route.supportsTools ? this.capabilityRegistry.listTools() : [];
+    const hasAttachments = Array.isArray(run.attachments) && run.attachments.length > 0;
+    const tools = route.supportsTools && !hasAttachments ? this.capabilityRegistry.listTools() : [];
     let messages = this._buildMessages({
       personality,
       intent,
       memoryContext,
       sessionId: run.sessionId,
-      userText: run.sourceText
+      userText: run.sourceText,
+      attachments: run.attachments
     });
 
     let finalText = '';
@@ -850,7 +862,7 @@ class AgentRuntime {
     }
   }
 
-  _buildMessages({ personality, intent, memoryContext, sessionId, userText }) {
+  _buildMessages({ personality, intent, memoryContext, sessionId, userText, attachments = null }) {
     let systemPrompt = buildPersonalityPrompt(personality);
     if (intent === 'task' || intent === 'code') {
       systemPrompt += ' Use tools when needed. Keep tool results grounded in the actual output.';
@@ -867,8 +879,39 @@ class AgentRuntime {
       { role: 'system', content: systemPrompt },
       ...(conversationSummary ? [{ role: 'assistant', content: `之前对话摘要：\n${conversationSummary}` }] : []),
       ...history,
-      { role: 'user', content: userText }
+      { role: 'user', content: this._buildUserContent(userText, attachments) }
     ];
+  }
+
+  _buildUserContent(userText, attachments = null) {
+    const normalizedText = String(userText || '').trim();
+    const imageAttachments = Array.isArray(attachments)
+      ? attachments.filter((attachment) =>
+          attachment &&
+          typeof attachment.dataURL === 'string' &&
+          attachment.dataURL.startsWith('data:image/')
+        )
+      : [];
+
+    if (imageAttachments.length === 0) {
+      return normalizedText;
+    }
+
+    const content = [
+      {
+        type: 'text',
+        text: normalizedText || '请结合这张图片回答。'
+      }
+    ];
+
+    imageAttachments.slice(0, 4).forEach((attachment) => {
+      content.push({
+        type: 'image_url',
+        image_url: { url: attachment.dataURL }
+      });
+    });
+
+    return content;
   }
 
   async _buildMemoryContext(intent, userText) {

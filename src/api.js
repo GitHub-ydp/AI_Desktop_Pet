@@ -1,59 +1,69 @@
-// Renderer chat API shim. The actual LLM/tool runtime lives in the main process.
+// Renderer chat API shim.
+// 注意：chatWithAI 主要作为 chat:send relay 的处理函数被调用。
+// 聊天窗口已自行处理 PetAgent 路径；这里直接走 DeepSeek HTTP 降级。
 
-let legacyAgentSessionId = null;
-let legacyAgentPersonality = null;
-
-async function ensureLegacyRendererAgentSession(personality) {
-  if (!window.PetAgent) {
-    throw new Error('PetAgent unavailable');
+// 直接调用 DeepSeek API
+async function directDeepSeekChat(userMessage, personality, chatHistory = []) {
+  const apiKey = await window.electron?.getProviderAPIKey?.('deepseek');
+  if (!apiKey) {
+    throw new Error('no deepseek api key');
   }
 
-  if (!legacyAgentSessionId || legacyAgentPersonality !== personality) {
-    const started = await window.PetAgent.startSession({
-      channel: 'renderer-chat',
-      metadata: { personality }
+  const systemPrompt = window.PersonalityPrompts?.getPrompt?.(personality) || '你是一个可爱的桌面宠物助手，请用中文简短回复。';
+  const messages = [{ role: 'system', content: systemPrompt }];
+
+  // 附带最近 10 条历史（来自 app-vanilla.js 的 state.chatHistory）
+  const recent = Array.isArray(chatHistory) ? chatHistory.slice(-10) : [];
+  for (const h of recent) {
+    messages.push({
+      role: h.role === 'user' ? 'user' : 'assistant',
+      content: h.content || ''
     });
-    legacyAgentSessionId = started.sessionId;
-    legacyAgentPersonality = personality;
+  }
+  messages.push({ role: 'user', content: userMessage });
+
+  const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages,
+      max_tokens: 500,
+      temperature: 0.8
+    })
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => resp.status);
+    throw new Error(`DeepSeek API error: ${resp.status} ${text}`);
   }
 
-  return legacyAgentSessionId;
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content || '';
 }
 
-async function chatWithAI(userMessage, personality) {
-  if (!window.PersonalityPrompts || !window.PetAgent) {
+async function chatWithAI(userMessage, personality, chatHistory = []) {
+  if (!window.PersonalityPrompts) {
     return '遇到了点问题，请稍后再试~';
   }
 
   try {
-    const sessionId = await ensureLegacyRendererAgentSession(personality);
-    const sent = await window.PetAgent.send({
-      sessionId,
-      text: userMessage,
-      source: 'renderer-chat'
-    });
-
-    if (sent.status === 'failed') {
-      throw new Error(sent.reason || 'agent_send_failed');
-    }
-
-    const waited = await window.PetAgent.wait({
-      runId: sent.runId,
-      timeoutMs: 90000
-    });
-
-    if (!waited.ok) {
-      throw new Error(waited.error || 'agent_wait_failed');
-    }
-
-    return waited.finalText || '';
+    const reply = await directDeepSeekChat(userMessage, personality, chatHistory);
+    if (reply) return reply;
+    throw new Error('empty reply');
   } catch (error) {
-    console.warn('[API] PetAgent path failed:', error.message);
+    console.warn('[API] directDeepSeekChat failed:', error.message);
     return '遇到了点问题，请稍后再试~';
   }
 }
 
 window.PetAPI = {
   chatWithAI,
-  isConfigured: async () => !!window.PetAgent
+  isConfigured: async () => {
+    const apiKey = await window.electron?.getProviderAPIKey?.('deepseek');
+    return !!apiKey;
+  }
 };

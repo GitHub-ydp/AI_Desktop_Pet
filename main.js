@@ -40,13 +40,20 @@ let capabilityRegistry = null;
 let channelRegistry = null;
 let agentRuntime = null;
 let agentHttpServer = null;
+let resolveAgentRuntimeReady = null;
+const agentRuntimeReadyPromise = new Promise((resolve) => {
+  resolveAgentRuntimeReady = resolve;
+});
 let childWindows = new Map(); // 管理所有子窗口
 let lastSmallBounds = null; // 记录小窗口位置，避免缩放漂移
+let isPetHidden = false; // 宠物是否已隐藏到托盘（子窗口打开时）
 let menuWindow = null;
 let bubbleWindow = null;
 let bubbleWindowReady = false;
 let pendingBubblePayload = null;
 let legacyChatSessionId = null;
+let screenshotIPCHandlersRegistered = false;
+const SCREENSHOT_SHORTCUT = 'CommandOrControl+Shift+A';
 
 // 窗口尺寸常量
 const WINDOW_SIZES = {
@@ -1022,6 +1029,7 @@ function normalizeBubblePayload(payloadOrMessage, duration) {
 }
 
 function showBubbleWindow(payloadOrMessage, duration) {
+  if (isPetHidden) return; // 宠物隐藏到托盘时不弹气泡
   if (!bubbleWindow || bubbleWindow.isDestroyed()) {
     createBubbleWindow();
   }
@@ -1039,6 +1047,28 @@ function showBubbleWindow(payloadOrMessage, duration) {
 function hideBubbleWindow() {
   if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
   bubbleWindow.hide();
+}
+
+function registerScreenshotShortcut() {
+  try {
+    globalShortcut.unregister(SCREENSHOT_SHORTCUT);
+    const registered = globalShortcut.register(SCREENSHOT_SHORTCUT, () => {
+      console.log('[Screenshot] Global shortcut triggered');
+      startScreenshotCapture();
+    });
+
+    if (!registered) {
+      console.error(`[Screenshot] Failed to register shortcut: ${SCREENSHOT_SHORTCUT}`);
+      return false;
+    }
+
+    console.log('✅ 截图快捷键已注册');
+    console.log(`   ${SCREENSHOT_SHORTCUT}: 快速截图`);
+    return true;
+  } catch (error) {
+    console.error('Failed to register screenshot shortcuts:', error);
+    return false;
+  }
 }
 
 function openMenuWindow() {
@@ -1102,6 +1132,54 @@ function recordDisplayProfiles(reason = 'unknown') {
   } catch (error) {
     console.error('[Display] Failed to record profiles:', error.message);
   }
+}
+
+function markAgentRuntimeReady() {
+  if (typeof resolveAgentRuntimeReady === 'function') {
+    console.log('[AgentRuntime] readiness signal emitted:', Boolean(agentRuntime));
+    resolveAgentRuntimeReady(agentRuntime);
+    resolveAgentRuntimeReady = null;
+  }
+}
+
+async function waitForAgentRuntime(timeoutMs = 15000) {
+  if (agentRuntime) {
+    return agentRuntime;
+  }
+
+  console.log('[AgentRuntime] waitForAgentRuntime begin:', { timeoutMs });
+
+  const timeoutPromise = new Promise((resolve) => {
+    setTimeout(() => resolve(null), timeoutMs);
+  });
+
+  const runtime = await Promise.race([
+    agentRuntimeReadyPromise.then(() => agentRuntime || null),
+    timeoutPromise
+  ]);
+
+  console.log('[AgentRuntime] waitForAgentRuntime result:', {
+    ready: Boolean(runtime)
+  });
+  return runtime;
+}
+
+function refreshAgentCapabilities() {
+  if (!capabilityRegistry) {
+    return;
+  }
+
+  capabilityRegistry.skillRegistry = skillRegistry;
+  capabilityRegistry.skillExecutor = skillExecutor;
+  capabilityRegistry.workflowManager = workflowManager;
+  capabilityRegistry.toolSystem = toolSystem;
+  capabilityRegistry.refresh();
+  console.log('[AgentRuntime] capabilities refreshed:', {
+    hasSkillRegistry: Boolean(skillRegistry),
+    hasSkillExecutor: Boolean(skillExecutor),
+    hasWorkflowManager: Boolean(workflowManager),
+    hasToolSystem: Boolean(toolSystem)
+  });
 }
 
 // 创建系统托盘
@@ -1168,6 +1246,8 @@ app.whenReady().then(async () => {
   createTray();
   console.log('Setting auto launch...');
   setAutoLaunch();
+  registerScreenshotIPCHandlers(ipcMain);
+  registerScreenshotShortcut();
 
   // 初始化记忆系统
   console.log('Initializing memory system...');
@@ -1188,11 +1268,68 @@ app.whenReady().then(async () => {
   ipcMain.handle('memory:clear-user-profile', async () => {
     return memorySystem.clearUserProfile();
   });
+  ipcMain.handle('memory:get-user-profile', async () => {
+    try {
+      if (memorySystem) return await memorySystem.getUserProfile();
+      return null;
+    } catch (e) {
+      return null;
+    }
+  });
   // 初始化模型路由器
   modelRouter = new ModelRouter();
   modelRouter.registerIPCHandlers(ipcMain);
   // 设置主窗口引用（提醒通知需要）
   memorySystem.setMainWindow(mainWindow);
+  try {
+    console.log('Initializing memory storage for agent runtime...');
+    await memorySystem.storage.initialize();
+    console.log('Memory storage initialized for agent runtime');
+  } catch (error) {
+    console.error('Failed to initialize memory storage for agent runtime:', error);
+  }
+
+  console.log('Initializing agent runtime...');
+  try {
+    agentSessionStore = new AgentSessionStore(memorySystem?.storage?.db);
+    agentEventBus = new AgentEventBus(agentSessionStore, { maxEventsPerRun: 100 });
+    capabilityRegistry = new CapabilityRegistry({
+      skillRegistry,
+      skillExecutor,
+      workflowManager,
+      toolSystem
+    });
+    channelRegistry = new ChannelRegistry(agentEventBus, { keepAliveMs: 15000 });
+    agentRuntime = new AgentRuntime({
+      sessionStore: agentSessionStore,
+      eventBus: agentEventBus,
+      capabilityRegistry,
+      memorySystem,
+      modelRouter,
+      getSceneConfig: () => llmSceneConfig,
+      getDesktopPath: () => app.getPath('desktop'),
+      onSummaryEvent: (event) => {
+        if (channelRegistry) {
+          channelRegistry.emitSummary(event);
+        }
+      }
+    });
+    agentRuntime.initialize();
+    agentHttpServer = new AgentHttpServer({
+      runtime: agentRuntime,
+      channelRegistry,
+      host: '127.0.0.1',
+      port: 47831,
+      tokenFilePath: path.join(app.getPath('userData'), 'http-token.txt')
+    });
+    agentHttpServer.start();
+    console.log('Agent runtime initialized successfully');
+    markAgentRuntimeReady();
+  } catch (error) {
+    console.error('Failed to initialize agent runtime:', error);
+    markAgentRuntimeReady();
+  }
+
   try {
     await memorySystem.initialize();
     console.log('Memory system initialized successfully');
@@ -1208,6 +1345,7 @@ app.whenReady().then(async () => {
     const { initializeTools, getToolSystem } = await import('./main-process/tools/index.js');
     await initializeTools();
     toolSystem = getToolSystem();
+    refreshAgentCapabilities();
     console.log('Tool system initialized successfully');
   } catch (error) {
     console.error('Failed to initialize tool system:', error);
@@ -1222,18 +1360,20 @@ app.whenReady().then(async () => {
       dataPath: userDataPath
     });
     await screenshotSystem.initialize();
-    // 注册截图 IPC 处理器
-    registerScreenshotIPCHandlers(ipcMain);
     console.log('Screenshot system initialized successfully');
   } catch (error) {
     console.error('Failed to initialize screenshot system:', error);
   }
+  // 无论截图系统是否初始化成功，都必须注册 IPC handlers
+  // 否则截图窗口打开后无法关闭（capture-cancel 等无响应）
+  registerScreenshotIPCHandlers(ipcMain);
 
   // 初始化工作流系统（Python 工具调用）
   console.log('Initializing workflow manager...');
   try {
     workflowManager = new WorkflowManager();
     workflowManager.initialize();
+    refreshAgentCapabilities();
     console.log('Workflow manager initialized successfully');
   } catch (error) {
     console.error('Failed to initialize workflow manager:', error);
@@ -1286,49 +1426,10 @@ app.whenReady().then(async () => {
       weatherDefaultCity: readAppConfig().weatherDefaultCity || ''
     });
     skillExecutor.setMainWindow(mainWindow);
+    refreshAgentCapabilities();
     console.log('Skills system initialized successfully');
   } catch (error) {
     console.error('Failed to initialize skills system:', error);
-  }
-
-  // 注册 Skills IPC handlers
-  console.log('Initializing agent runtime...');
-  try {
-    agentSessionStore = new AgentSessionStore(memorySystem?.storage?.db);
-    agentEventBus = new AgentEventBus(agentSessionStore, { maxEventsPerRun: 100 });
-    capabilityRegistry = new CapabilityRegistry({
-      skillRegistry,
-      skillExecutor,
-      workflowManager,
-      toolSystem
-    });
-    channelRegistry = new ChannelRegistry(agentEventBus, { keepAliveMs: 15000 });
-    agentRuntime = new AgentRuntime({
-      sessionStore: agentSessionStore,
-      eventBus: agentEventBus,
-      capabilityRegistry,
-      memorySystem,
-      modelRouter,
-      getSceneConfig: () => llmSceneConfig,
-      getDesktopPath: () => app.getPath('desktop'),
-      onSummaryEvent: (event) => {
-        if (channelRegistry) {
-          channelRegistry.emitSummary(event);
-        }
-      }
-    });
-    agentRuntime.initialize();
-    agentHttpServer = new AgentHttpServer({
-      runtime: agentRuntime,
-      channelRegistry,
-      host: '127.0.0.1',
-      port: 47831,
-      tokenFilePath: path.join(app.getPath('userData'), 'http-token.txt')
-    });
-    agentHttpServer.start();
-    console.log('Agent runtime initialized successfully');
-  } catch (error) {
-    console.error('Failed to initialize agent runtime:', error);
   }
 
   ipcMain.handle('skill:list', () => {
@@ -1436,20 +1537,6 @@ app.whenReady().then(async () => {
     console.error('Failed to register shortcuts:', error);
   }
 
-  // 注册截图快捷键
-  console.log('Registering screenshot shortcuts...');
-  try {
-    // Ctrl+Shift+A: 快速截图
-    globalShortcut.register('CommandOrControl+Shift+A', () => {
-      console.log('[Screenshot] Global shortcut triggered');
-      startScreenshotCapture();
-    });
-    console.log('✅ 截图快捷键已注册');
-    console.log('   Ctrl+Shift+A: 快速截图');
-  } catch (error) {
-    console.error('Failed to register screenshot shortcuts:', error);
-  }
-
   console.log('App initialization complete');
 
   // 监听显示器变化并记录
@@ -1476,6 +1563,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+  globalShortcut.unregisterAll();
   // 关闭记忆系统
   if (memorySystem) {
     memorySystem.close();
@@ -1553,10 +1641,25 @@ function createChildWindow(options) {
 
   // 加载HTML内容
   childWindow.loadFile(html);
+  childWindow.webContents.on('console-message', (event, level, message) => {
+    console.log(`[Child Renderer:${id}] ${message}`);
+  });
+  childWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error(`[Child Renderer:${id}] Failed to load:`, errorCode, errorDescription);
+  });
+
+  // 通知主窗口：子窗口已打开
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('child-window-state', 'opened');
+  }
 
   // 窗口关闭时从Map中移除
   childWindow.on('closed', () => {
     childWindows.delete(id);
+    // 通知主窗口：子窗口已关闭
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('child-window-state', 'closed');
+    }
   });
 
   childWindows.set(id, childWindow);
@@ -1738,19 +1841,34 @@ ipcMain.handle('bubble:hide', () => {
   return { success: true };
 });
 
+// 快速检查 agentRuntime 是否已就绪（不等待）
+ipcMain.handle('agent:is-ready', () => !!agentRuntime);
+
 ipcMain.handle('agent:start-session', async (event, payload = {}) => {
-  if (!agentRuntime) {
+  const runtime = agentRuntime || await waitForAgentRuntime(15000);
+  if (!runtime) {
     return { error: 'agent_runtime_unavailable' };
   }
-  const session = agentRuntime.startSession(payload);
+  console.log('[Agent IPC] start-session payload:', payload);
+  const session = runtime.startSession(payload);
+  console.log('[Agent IPC] start-session result:', session.id);
   return { sessionId: session.id };
 });
 
 ipcMain.handle('agent:send', async (event, payload = {}) => {
-  if (!agentRuntime) {
+  const runtime = agentRuntime || await waitForAgentRuntime(15000);
+  if (!runtime) {
     return { status: 'failed', reason: 'agent_runtime_unavailable' };
   }
-  return await agentRuntime.send(payload);
+  console.log('[Agent IPC] send payload:', {
+    sessionId: payload.sessionId,
+    source: payload.source,
+    textLength: typeof payload.text === 'string' ? payload.text.length : 0,
+    attachments: Array.isArray(payload.attachments) ? payload.attachments.length : 0
+  });
+  const result = await runtime.send(payload);
+  console.log('[Agent IPC] send result:', result);
+  return result;
 });
 
 ipcMain.handle('agent:get-state', async (event, payload = {}) => {
@@ -1761,11 +1879,12 @@ ipcMain.handle('agent:get-state', async (event, payload = {}) => {
 });
 
 ipcMain.handle('agent:open-stream', async (event, payload = {}) => {
-  if (!agentRuntime || !channelRegistry) {
+  const runtime = agentRuntime || await waitForAgentRuntime(15000);
+  if (!runtime || !channelRegistry) {
     return { error: 'agent_runtime_unavailable' };
   }
   const streamId = payload.streamId || `stream_${createChatRequestId()}`;
-  const state = agentRuntime.getState({
+  const state = runtime.getState({
     sessionId: payload.sessionId,
     runId: payload.runId || null
   });
@@ -1793,16 +1912,36 @@ ipcMain.handle('agent:cancel', async (event, payload = {}) => {
 });
 
 ipcMain.handle('agent:wait', async (event, payload = {}) => {
-  if (!agentRuntime) {
+  const runtime = agentRuntime || await waitForAgentRuntime(15000);
+  if (!runtime) {
     return { ok: false, error: 'agent_runtime_unavailable' };
   }
-  return await agentRuntime.wait(payload);
+  console.log('[Agent IPC] wait payload:', payload);
+  const result = await runtime.wait(payload);
+  console.log('[Agent IPC] wait result:', result);
+  return result;
 });
 
 // 聊天 IPC
 ipcMain.handle('chat:send', async (event, message) => {
   if (!agentRuntime) {
-    return { success: false, error: '主窗口不可用' };
+    // 降级：转发给主窗口 renderer，由 app-vanilla.js 的 initChatIpc 通过 PetAPI 处理
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return { success: false, error: '主窗口不可用' };
+    }
+    return new Promise((resolve) => {
+      const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const replyChannel = `chat:response:${requestId}`;
+      const timeout = setTimeout(() => {
+        ipcMain.removeAllListeners(replyChannel);
+        resolve({ success: false, error: 'chat_timeout' });
+      }, 30000);
+      ipcMain.once(replyChannel, (_e, result) => {
+        clearTimeout(timeout);
+        resolve(result || { success: false, error: 'chat_no_result' });
+      });
+      mainWindow.webContents.send('chat:send', { requestId, message });
+    });
   }
   try {
     if (!legacyChatSessionId) {
@@ -1880,6 +2019,20 @@ ipcMain.on('pet:state-updated', (event, payload) => {
     : null;
   if (bubbleWindow && !bubbleWindow.isDestroyed() && bubbleWindow.isVisible()) {
     bubbleWindow.setBounds(getBubbleWindowBounds(), false);
+  }
+});
+
+ipcMain.on('hide-to-pet-tray', () => {
+  isPetHidden = true;
+  if (mainWindow) mainWindow.hide();
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.hide();
+});
+
+ipcMain.on('show-from-tray', () => {
+  isPetHidden = false;
+  if (mainWindow) {
+    mainWindow.show();
+    mainWindow.setSkipTaskbar(true);
   }
 });
 
@@ -2280,7 +2433,7 @@ async function startScreenshotCapture() {
     screenshotCaptureWindow = null;
   }
 
-  // 隐藏主窗口和所有子窗口
+  // 隐藏主窗口、菜单、气泡和所有子窗口（避免被截进截图）
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.hide();
   }
@@ -2290,6 +2443,9 @@ async function startScreenshotCapture() {
   if (bubbleWindow && !bubbleWindow.isDestroyed()) {
     bubbleWindow.hide();
   }
+  childWindows.forEach((win) => {
+    if (win && !win.isDestroyed()) win.hide();
+  });
 
   // 等待窗口完全隐藏
   await new Promise(resolve => setTimeout(resolve, 150));
@@ -2333,7 +2489,8 @@ async function startScreenshotCapture() {
     resizable: false,
     movable: false,
     fullscreen: false,
-    backgroundColor: '#00000000',
+    focusable: true,
+    backgroundColor: '#01000001',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -2342,6 +2499,12 @@ async function startScreenshotCapture() {
   });
 
   screenshotCaptureWindow.loadFile('windows/screenshot-capture.html');
+  screenshotCaptureWindow.setAlwaysOnTop(true, 'screen-saver');
+  screenshotCaptureWindow.focus();
+  screenshotCaptureWindow.webContents.once('did-finish-load', () => {
+    if (!screenshotCaptureWindow || screenshotCaptureWindow.isDestroyed()) return;
+    screenshotCaptureWindow.focus();
+  });
 
   screenshotCaptureWindow.on('closed', () => {
     screenshotCaptureWindow = null;
@@ -2453,11 +2616,15 @@ function closeScreenshotCapture() {
   showMainWindow();
 }
 
-// 显示主窗口
+// 显示主窗口及所有子窗口
 function showMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show();
   }
+  // 恢复截图前隐藏的子窗口
+  childWindows.forEach((win) => {
+    if (win && !win.isDestroyed()) win.show();
+  });
 }
 
 // ==================== 工具系统 IPC 处理器 ====================
@@ -2533,6 +2700,10 @@ function generateSessionId() {
 
 // 注册截图 IPC 处理器
 function registerScreenshotIPCHandlers(ipc) {
+  if (screenshotIPCHandlersRegistered) {
+    return;
+  }
+  screenshotIPCHandlersRegistered = true;
 
   // ---- 新版截图流程 IPC（ScreenshotBridge 使用） ----
 
@@ -2674,10 +2845,12 @@ function registerScreenshotIPCHandlers(ipc) {
   // 从 dataURL 复制图片到剪贴板（无需文件路径）
   ipc.handle('screenshot:copy-data', async (event, dataURL) => {
     try {
-      if (!screenshotSystem) {
-        throw new Error('截图系统未初始化');
+      const { clipboard, nativeImage } = require('electron');
+      const image = nativeImage.createFromDataURL(String(dataURL || ''));
+      if (image.isEmpty()) {
+        throw new Error('截图数据无效');
       }
-      screenshotSystem.copyDataToClipboard(dataURL);
+      clipboard.writeImage(image);
       return { success: true };
     } catch (error) {
       console.error('[Screenshot] Failed to copy data to clipboard:', error);

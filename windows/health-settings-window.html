@@ -6,504 +6,460 @@
   <title>健康提醒</title>
   <script src="../src/theme-manager.js"></script>
   <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
-      --bg: #020810;
-      --bg-card: rgba(0, 30, 55, 0.6);
-      --border: rgba(0, 255, 240, 0.3);
-      --border-bright: rgba(0, 255, 240, 0.5);
-      --neon-cyan: #00fff0;
-      --neon-magenta: #ff2d78;
-      --text: #cff0ff;
-      --text-muted: rgba(160, 220, 240, 0.55);
-      --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
-      --header-bg: rgba(0, 15, 30, 0.98);
-      --danger-border: rgba(255, 45, 120, 0.5);
-      --danger-hover-bg: rgba(255, 45, 120, 0.2);
-      --accent-hover-bg: rgba(0, 255, 240, 0.2);
-      --scrollbar: rgba(0, 255, 240, 0.3);
-      --scrollbar-hover: rgba(0, 255, 240, 0.5);
+      --bg: #020810; --bg-surface: rgba(0,15,30,0.98); --bg-card: rgba(0,30,55,0.6);
+      --border: rgba(0,255,240,0.3); --border-bright: rgba(0,255,240,0.7);
+      --neon-cyan: #00fff0; --neon-magenta: #ff2d78;
+      --text: #cff0ff; --text-muted: rgba(160,220,240,0.75);
+      --header-bg: rgba(0,15,30,0.98); --input-field-bg: rgba(0,16,32,0.75);
+      --accent-bg-dim: rgba(0,255,240,0.08); --accent-bg-faint: rgba(0,255,240,0.05);
+      --glow-sm: 0 0 8px rgba(0,255,240,0.4); --radius: 10px;
     }
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
     body {
-      font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
-      background: var(--bg);
+      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+      background: var(--bg, #020810);
       color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    .container {
-      padding: 20px;
-    }
-
-    .header {
+      height: 100vh;
+      overflow: hidden;
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
+    }
+    .window-header {
+      height: 46px;
+      display: flex;
       align-items: center;
-      margin-bottom: 24px;
-      padding: 12px 20px 16px;
+      justify-content: space-between;
+      padding: 0 12px 0 16px;
       border-bottom: 1px solid var(--border);
-      background: var(--header-bg);
+      background: var(--header-bg, rgba(0,15,30,0.98));
+      color: var(--neon-cyan);
+      font-size: 14px;
+      font-weight: 700;
       -webkit-app-region: drag;
     }
-
-    .header h1 {
-      font-size: 20px;
-      color: var(--neon-cyan);
-      text-shadow: var(--glow-sm);
-    }
-
     .close-btn {
-      width: 32px;
-      height: 32px;
+      width: 26px;
+      height: 26px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
       background: transparent;
-      border: 1px solid var(--danger-border);
-      color: var(--neon-magenta);
-      font-size: 18px;
+      color: var(--text-muted, rgba(160,220,240,0.6));
       cursor: pointer;
-      border-radius: 4px;
-      transition: all 0.2s;
       -webkit-app-region: no-drag;
     }
-
-    .close-btn:hover {
-      background: var(--danger-hover-bg);
-      box-shadow: 0 0 10px var(--danger-border);
+    .close-btn:hover { border-color: var(--neon-magenta, #ff2d78); color: var(--neon-magenta, #ff2d78); }
+    .layout { flex: 1; min-height: 0; display: flex; }
+    .sidebar {
+      width: 200px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: var(--header-bg, rgba(0,15,30,0.98));
+      padding: 14px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
-
-    .reminder-card {
+    .nav-item {
+      width: 100%;
+      border: none;
+      border-left: 3px solid transparent;
+      background: transparent;
+      color: var(--text-muted, rgba(160,220,240,0.85));
+      text-align: left;
+      padding: 12px 20px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .nav-item:hover {
+      color: var(--text);
+      background: var(--accent-bg-faint, rgba(0,255,240,0.05));
+    }
+    .nav-item.active {
+      color: var(--text);
+      border-left-color: var(--neon-cyan);
+      background: var(--accent-bg-dim, rgba(0,255,240,0.08));
+    }
+    .panel-area { flex: 1; min-width: 0; overflow-y: auto; padding: 14px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
+      border: 1px solid var(--border);
       background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .card-title { color: var(--neon-cyan); font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+    .row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+    .row label { font-size: 12px; color: var(--text-muted); }
+    input[type="text"], input[type="number"], select {
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 16px;
-      transition: all 0.2s;
+      background: var(--input-field-bg);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s ease;
     }
-
-    .reminder-card:hover {
-      border-color: var(--border-bright);
+    input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: var(--border-bright); }
+    input[type="text"]::placeholder, input[type="number"]::placeholder { color: var(--text-muted); }
+    select option { background: var(--bg-surface); color: var(--text); }
+    input[type="text"] { flex: 1; min-width: 160px; }
+    .switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text);
     }
-
-    .reminder-header {
+    .btn {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--neon-cyan);
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .btn:hover { border-color: var(--border-bright, rgba(0,255,240,0.7)); }
+    .muted { color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+    .list-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 8px;
+      background: var(--bg-card);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      gap: 8px;
     }
-
-    .reminder-icon {
-      font-size: 24px;
-      margin-right: 12px;
-    }
-
-    .reminder-title {
-      flex: 1;
-      font-size: 16px;
-      color: var(--text);
-    }
-
-    .toggle-switch {
-      position: relative;
-      width: 48px;
-      height: 24px;
-    }
-
-    .toggle-switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .toggle-slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: var(--border);
-      border-radius: 24px;
-      transition: 0.3s;
-    }
-
-    .toggle-slider:before {
-      position: absolute;
-      content: "";
-      height: 18px;
-      width: 18px;
-      left: 3px;
-      bottom: 3px;
-      background: #fff;
-      border-radius: 50%;
-      transition: 0.3s;
-    }
-
-    .toggle-switch input:checked + .toggle-slider {
-      background: var(--neon-cyan);
-    }
-
-    .toggle-switch input:checked + .toggle-slider:before {
-      transform: translateX(24px);
-    }
-
-    .reminder-settings {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid var(--border);
-    }
-
-    .setting-group {
-      flex: 1;
-      min-width: 120px;
-    }
-
-    .setting-group label {
-      display: block;
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-bottom: 4px;
-    }
-
-    .setting-group input[type="number"] {
-      width: 100%;
-      padding: 8px 12px;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--text);
-      font-size: 14px;
-    }
-
-    .setting-group input[type="number"]:focus {
-      outline: none;
-      border-color: var(--neon-cyan);
-      box-shadow: var(--glow-sm);
-    }
-
-    .setting-group input[type="text"] {
-      width: 100%;
-      padding: 8px 12px;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--text);
-      font-size: 14px;
-    }
-
-    .setting-group input[type="text"]:focus {
-      outline: none;
-      border-color: var(--neon-cyan);
-    }
-
-    .stats-section {
-      margin-top: 24px;
-      padding: 16px;
-      background: rgba(0, 30, 55, 0.4);
-      border-radius: 8px;
-    }
-
-    .stats-title {
-      font-size: 14px;
-      color: var(--text-muted);
-      margin-bottom: 12px;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-    }
-
-    .stat-item {
-      text-align: center;
-      padding: 12px;
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 6px;
-    }
-
-    .stat-value {
-      font-size: 24px;
-      font-weight: bold;
-      color: var(--neon-cyan);
-    }
-
-    .stat-label {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-
-    .save-btn {
-      width: 100%;
-      padding: 12px;
-      margin-top: 20px;
-      background: transparent;
-      border: 1px solid var(--neon-cyan);
-      color: var(--neon-cyan);
-      font-size: 14px;
-      cursor: pointer;
-      border-radius: 6px;
-      transition: all 0.2s;
-    }
-
-    .save-btn:hover {
-      background: var(--accent-hover-bg);
-      box-shadow: var(--glow-sm);
-    }
-
-    .save-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .message {
+    .actions { display: flex; gap: 8px; }
+    .danger { color: var(--neon-magenta, #ff2d78); border-color: rgba(255,45,120,0.4); }
+    .toast {
       position: fixed;
-      bottom: 20px;
       left: 50%;
+      bottom: 14px;
       transform: translateX(-50%);
-      padding: 12px 24px;
-      background: var(--accent-hover-bg);
-      border: 1px solid var(--neon-cyan);
-      border-radius: 6px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(2,15,30,0.95);
       color: var(--neon-cyan);
-      font-size: 14px;
+      padding: 7px 14px;
+      font-size: 12px;
       opacity: 0;
-      transition: opacity 0.3s;
+      transition: opacity 0.2s ease;
       pointer-events: none;
     }
-
-    .message.show {
-      opacity: 1;
-    }
-
-    .message.error {
-      background: var(--danger-hover-bg);
-      border-color: var(--neon-magenta);
-      color: var(--neon-magenta);
-    }
-
-    /* 滚动条样式 */
-    ::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.2);
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: var(--scrollbar);
-      border-radius: 3px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--scrollbar-hover);
-    }
+    .toast.show { opacity: 1; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,255,240,0.35); border-radius: 4px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>健康提醒设置</h1>
-      <button class="close-btn" onclick="window.close()">X</button>
-    </div>
-
-    <!-- 久坐提醒 -->
-    <div class="reminder-card" data-type="sedentary">
-      <div class="reminder-header">
-        <span class="reminder-icon">🪑</span>
-        <span class="reminder-title">久坐提醒</span>
-        <label class="toggle-switch">
-          <input type="checkbox" id="sedentary-enabled" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="reminder-settings">
-        <div class="setting-group">
-          <label>间隔时间（分钟）</label>
-          <input type="number" id="sedentary-interval" min="5" max="120" value="45">
-        </div>
-        <div class="setting-group" style="flex: 2;">
-          <label>自定义消息（可选）</label>
-          <input type="text" id="sedentary-message" placeholder="该起来活动一下啦~">
-        </div>
-      </div>
-    </div>
-
-    <!-- 喝水提醒 -->
-    <div class="reminder-card" data-type="water">
-      <div class="reminder-header">
-        <span class="reminder-icon">💧</span>
-        <span class="reminder-title">喝水提醒</span>
-        <label class="toggle-switch">
-          <input type="checkbox" id="water-enabled" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="reminder-settings">
-        <div class="setting-group">
-          <label>间隔时间（分钟）</label>
-          <input type="number" id="water-interval" min="5" max="120" value="30">
-        </div>
-        <div class="setting-group" style="flex: 2;">
-          <label>自定义消息（可选）</label>
-          <input type="text" id="water-message" placeholder="记得喝水哦~">
-        </div>
-      </div>
-    </div>
-
-    <!-- 护眼提醒 -->
-    <div class="reminder-card" data-type="eyecare">
-      <div class="reminder-header">
-        <span class="reminder-icon">👁️</span>
-        <span class="reminder-title">护眼提醒（20-20-20法则）</span>
-        <label class="toggle-switch">
-          <input type="checkbox" id="eyecare-enabled" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="reminder-settings">
-        <div class="setting-group">
-          <label>间隔时间（分钟）</label>
-          <input type="number" id="eyecare-interval" min="5" max="60" value="20">
-        </div>
-        <div class="setting-group" style="flex: 2;">
-          <label>自定义消息（可选）</label>
-          <input type="text" id="eyecare-message" placeholder="看看远处，让眼睛休息一下~">
-        </div>
-      </div>
-    </div>
-
-    <!-- 今日统计 -->
-    <div class="stats-section">
-      <div class="stats-title">今日统计</div>
-      <div class="stats-grid">
-        <div class="stat-item">
-          <div class="stat-value" id="stat-sedentary">0</div>
-          <div class="stat-label">活动提醒</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value" id="stat-water">0</div>
-          <div class="stat-label">喝水提醒</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value" id="stat-eyecare">0</div>
-          <div class="stat-label">护眼提醒</div>
-        </div>
-      </div>
-    </div>
-
-    <button class="save-btn" id="save-btn" onclick="saveSettings()">保存设置</button>
+  <div class="window-header">
+    <span>💧 健康提醒</span>
+    <button class="close-btn" onclick="closeWindow()">×</button>
   </div>
 
-  <div class="message" id="message"></div>
+  <div class="layout">
+    <aside class="sidebar">
+      <button class="nav-item active" data-panel="water" onclick="switchPanel('water')">💧 喝水提醒</button>
+      <button class="nav-item" data-panel="eye" onclick="switchPanel('eye')">👁️ 护眼休息</button>
+      <button class="nav-item" data-panel="exercise" onclick="switchPanel('exercise')">🧘 伸展运动</button>
+      <button class="nav-item" data-panel="custom" onclick="switchPanel('custom')">💊 自定义提醒</button>
+    </aside>
+
+    <main class="panel-area">
+      <section class="panel active" id="panel-water">
+        <div class="card">
+          <div class="card-title">喝水提醒（当前功能）</div>
+          <div class="row">
+            <label class="switch"><input type="checkbox" id="waterEnabled"> 启用提醒</label>
+          </div>
+          <div class="row">
+            <label>间隔（分钟）</label>
+            <input type="number" id="waterInterval" min="5" max="180" value="30" style="width:100px;">
+            <input type="text" id="waterMessage" placeholder="记得喝水哦~">
+            <button class="btn" onclick="saveWaterSettings()">保存喝水设置</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-eye">
+        <div class="card">
+          <div class="card-title">护眼休息</div>
+          <div class="row">
+            <label class="switch"><input type="checkbox" id="eyeEnabled"> 启用护眼提醒</label>
+          </div>
+          <div class="row">
+            <label>提醒间隔</label>
+            <select id="eyeInterval">
+              <option value="20">20分钟</option>
+              <option value="30">30分钟</option>
+              <option value="60">1小时</option>
+            </select>
+            <button class="btn" onclick="saveEyeSettings()">保存护眼设置</button>
+          </div>
+          <div class="muted">20-20-20 法则：每看屏幕 20 分钟，抬头看 20 英尺（约 6 米）外至少 20 秒，帮助缓解视疲劳。</div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-exercise">
+        <div class="card">
+          <div class="card-title">伸展运动</div>
+          <div class="row">
+            <label class="switch"><input type="checkbox" id="exerciseEnabled"> 启用伸展提醒</label>
+          </div>
+          <div class="row">
+            <label>提醒间隔</label>
+            <select id="exerciseInterval">
+              <option value="20">20分钟</option>
+              <option value="30">30分钟</option>
+              <option value="60">1小时</option>
+            </select>
+            <button class="btn" onclick="randomExerciseTip()">换一个动作</button>
+            <button class="btn" onclick="saveExerciseSettings()">保存伸展设置</button>
+          </div>
+          <div class="muted" id="exerciseTip">动作建议：肩颈绕环 30 秒。</div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-custom">
+        <div class="card">
+          <div class="card-title">自定义提醒</div>
+          <div class="row">
+            <input type="text" id="customContent" placeholder="提醒内容，例如：起身活动一下">
+            <label>间隔</label>
+            <input type="number" id="customInterval" min="5" max="1440" value="45" style="width:90px;">
+            <button class="btn" onclick="createCustomReminder()">新增提醒</button>
+          </div>
+          <div class="muted">新增后将调用 `window.PetReminder.create()`，并保存到本地配置。</div>
+          <div id="customReminderList"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
 
   <script>
-    // 提醒类型配置
-    const reminderTypes = ['sedentary', 'water', 'eyecare'];
+    const STORAGE_EYE = 'health_eye_settings';
+    const STORAGE_EXERCISE = 'health_exercise_settings';
+    const STORAGE_CUSTOM = 'health_custom_reminders';
 
-    // 加载配置
-    async function loadConfigs() {
+    const EXERCISE_TIPS = [
+      '动作建议：肩颈绕环 30 秒。',
+      '动作建议：站立前屈拉伸后侧链。',
+      '动作建议：双臂上举伸展，深呼吸 5 次。',
+      '动作建议：转动手腕和脚踝，各 20 秒。'
+    ];
+
+    let toastTimer = null;
+    let customReminders = [];
+
+    function closeWindow() {
+      if (window.electron && window.electron.closeChildWindow) {
+        window.electron.closeChildWindow('health');
+      }
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+    }
+
+    function switchPanel(panel) {
+      document.querySelectorAll('.nav-item').forEach((node) => {
+        node.classList.toggle('active', node.dataset.panel === panel);
+      });
+      document.querySelectorAll('.panel').forEach((node) => {
+        node.classList.toggle('active', node.id === `panel-${panel}`);
+      });
+    }
+
+    function loadLocalJSON(key, fallback) {
       try {
-        const configs = await window.PetHealth.getAll();
-        console.log('[Health] Loaded configs:', configs);
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        return JSON.parse(raw);
+      } catch (error) {
+        return fallback;
+      }
+    }
 
-        if (configs && configs.length > 0) {
-          configs.forEach(config => {
-            const enabledEl = document.getElementById(`${config.type}-enabled`);
-            const intervalEl = document.getElementById(`${config.type}-interval`);
-            const messageEl = document.getElementById(`${config.type}-message`);
+    function saveLocalJSON(key, data) {
+      localStorage.setItem(key, JSON.stringify(data));
+    }
 
-            if (enabledEl) enabledEl.checked = !!config.enabled;
-            if (intervalEl) intervalEl.value = config.interval_minutes;
-            if (messageEl && config.custom_message) messageEl.value = config.custom_message;
+    async function loadWaterSettings() {
+      try {
+        if (!window.PetHealth || !window.PetHealth.getConfig) return;
+        const config = await window.PetHealth.getConfig('water');
+        if (!config) return;
+        document.getElementById('waterEnabled').checked = !!config.enabled;
+        document.getElementById('waterInterval').value = Number(config.interval_minutes || 30);
+        document.getElementById('waterMessage').value = config.custom_message || '';
+      } catch (error) {
+        console.error('[health-window] load water settings failed:', error);
+      }
+    }
+
+    async function saveWaterSettings() {
+      const enabled = document.getElementById('waterEnabled').checked;
+      const interval = Math.max(5, Number(document.getElementById('waterInterval').value || 30));
+      const message = document.getElementById('waterMessage').value.trim();
+      try {
+        if (window.PetHealth && window.PetHealth.updateConfig) {
+          await window.PetHealth.updateConfig('health-water', {
+            enabled: enabled ? 1 : 0,
+            interval_minutes: interval,
+            custom_message: message || null
           });
         }
+        showToast('喝水设置已保存');
       } catch (error) {
-        console.error('[Health] Failed to load configs:', error);
-        showMessage('加载配置失败', true);
+        console.error('[health-window] save water settings failed:', error);
+        showToast('喝水设置保存失败');
       }
     }
 
-    // 加载今日统计
-    async function loadTodayStats() {
-      try {
-        const stats = await window.PetHealth.getTodayStats();
-        console.log('[Health] Today stats:', stats);
+    function loadEyeSettings() {
+      const cfg = loadLocalJSON(STORAGE_EYE, { enabled: false, interval: 20 });
+      document.getElementById('eyeEnabled').checked = !!cfg.enabled;
+      document.getElementById('eyeInterval').value = String(cfg.interval || 20);
+    }
 
-        if (stats) {
-          document.getElementById('stat-sedentary').textContent = stats.sedentary_count || 0;
-          document.getElementById('stat-water').textContent = stats.water_count || 0;
-          document.getElementById('stat-eyecare').textContent = stats.eyecare_count || 0;
+    function saveEyeSettings() {
+      const cfg = {
+        enabled: document.getElementById('eyeEnabled').checked,
+        interval: Number(document.getElementById('eyeInterval').value || 20)
+      };
+      saveLocalJSON(STORAGE_EYE, cfg);
+      showToast('护眼设置已保存');
+    }
+
+    function loadExerciseSettings() {
+      const cfg = loadLocalJSON(STORAGE_EXERCISE, { enabled: false, interval: 30, tip: EXERCISE_TIPS[0] });
+      document.getElementById('exerciseEnabled').checked = !!cfg.enabled;
+      document.getElementById('exerciseInterval').value = String(cfg.interval || 30);
+      document.getElementById('exerciseTip').textContent = cfg.tip || EXERCISE_TIPS[0];
+    }
+
+    function randomExerciseTip() {
+      const tip = EXERCISE_TIPS[Math.floor(Math.random() * EXERCISE_TIPS.length)];
+      document.getElementById('exerciseTip').textContent = tip;
+    }
+
+    function saveExerciseSettings() {
+      const cfg = {
+        enabled: document.getElementById('exerciseEnabled').checked,
+        interval: Number(document.getElementById('exerciseInterval').value || 30),
+        tip: document.getElementById('exerciseTip').textContent
+      };
+      saveLocalJSON(STORAGE_EXERCISE, cfg);
+      showToast('伸展设置已保存');
+    }
+
+    function renderCustomReminderList() {
+      const container = document.getElementById('customReminderList');
+      if (!customReminders.length) {
+        container.innerHTML = '<div class="muted" style="margin-top:10px;">暂无自定义健康提醒</div>';
+        return;
+      }
+
+      container.innerHTML = customReminders.map((item) => `
+        <div class="list-item">
+          <div>
+            <div style="font-size:13px;">${escapeHtml(item.content)}</div>
+            <div class="muted">每 ${item.intervalMinutes} 分钟 · ${item.enabled ? '启用' : '停用'}</div>
+          </div>
+          <div class="actions">
+            <button class="btn danger" onclick="removeCustomReminder('${item.id}')">删除</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function escapeHtml(text) {
+      return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function loadCustomReminders() {
+      customReminders = loadLocalJSON(STORAGE_CUSTOM, []);
+      if (!Array.isArray(customReminders)) customReminders = [];
+      renderCustomReminderList();
+    }
+
+    async function createCustomReminder() {
+      const content = document.getElementById('customContent').value.trim();
+      const intervalMinutes = Math.max(5, Number(document.getElementById('customInterval').value || 45));
+      if (!content) {
+        showToast('请输入提醒内容');
+        return;
+      }
+
+      let reminderId = null;
+      try {
+        if (window.PetReminder && window.PetReminder.create) {
+          const created = await window.PetReminder.create({
+            content,
+            remindAt: Date.now() + intervalMinutes * 60 * 1000,
+            metadata: { category: 'health_custom', intervalMinutes }
+          });
+          reminderId = created && created.id ? created.id : null;
         }
       } catch (error) {
-        console.error('[Health] Failed to load stats:', error);
+        console.error('[health-window] create custom reminder failed:', error);
       }
-    }
 
-    // 保存设置
-    async function saveSettings() {
-      const saveBtn = document.getElementById('save-btn');
-      saveBtn.disabled = true;
-      saveBtn.textContent = '保存中...';
-
-      const updates = [];
-
-      reminderTypes.forEach(type => {
-        const enabledEl = document.getElementById(`${type}-enabled`);
-        const intervalEl = document.getElementById(`${type}-interval`);
-        const messageEl = document.getElementById(`${type}-message`);
-
-        updates.push({
-          id: `health-${type}`,
-          enabled: enabledEl ? enabledEl.checked ? 1 : 0 : 1,
-          interval_minutes: intervalEl ? parseInt(intervalEl.value, 10) : 45,
-          custom_message: messageEl ? messageEl.value || null : null
-        });
+      customReminders.unshift({
+        id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        content,
+        intervalMinutes,
+        enabled: true,
+        reminderId
       });
+      saveLocalJSON(STORAGE_CUSTOM, customReminders);
+      document.getElementById('customContent').value = '';
+      renderCustomReminderList();
+      showToast('已添加自定义提醒');
+    }
+
+    async function removeCustomReminder(id) {
+      const target = customReminders.find((item) => item.id === id);
+      if (!target) return;
 
       try {
-        const result = await window.PetHealth.batchUpdate(updates);
-        console.log('[Health] Save result:', result);
-
-        if (result.failed === 0) {
-          showMessage('设置已保存');
-        } else {
-          showMessage(`保存完成（${result.success} 成功，${result.failed} 失败）`, true);
+        if (target.reminderId && window.PetReminder && window.PetReminder.cancel) {
+          await window.PetReminder.cancel(target.reminderId);
         }
       } catch (error) {
-        console.error('[Health] Failed to save:', error);
-        showMessage('保存失败：' + error.message, true);
-      } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = '保存设置';
+        console.warn('[health-window] cancel custom reminder failed:', error);
       }
+
+      customReminders = customReminders.filter((item) => item.id !== id);
+      saveLocalJSON(STORAGE_CUSTOM, customReminders);
+      renderCustomReminderList();
+      showToast('已删除自定义提醒');
     }
 
-    // 显示消息
-    function showMessage(text, isError = false) {
-      const messageEl = document.getElementById('message');
-      messageEl.textContent = text;
-      messageEl.classList.toggle('error', isError);
-      messageEl.classList.add('show');
-
-      setTimeout(() => {
-        messageEl.classList.remove('show');
-      }, 3000);
-    }
-
-    // 初始化
-    document.addEventListener('DOMContentLoaded', async () => {
-      await loadConfigs();
-      await loadTodayStats();
+    window.addEventListener('DOMContentLoaded', async () => {
+      await loadWaterSettings();
+      loadEyeSettings();
+      loadExerciseSettings();
+      loadCustomReminders();
     });
   </script>
 </body>

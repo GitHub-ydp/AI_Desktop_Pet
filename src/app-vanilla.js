@@ -11,7 +11,9 @@ let state = {
   quickMenuVisible: false,
   bubbleTimer: null,
   reminders: [],
-  pendingReminder: null  // 待确认的模糊时间提醒
+  pendingReminder: null,  // 待确认的模糊时间提醒
+  childWindowCount: 0,
+  suppressBubble: false
 };
 
 // 初始化记忆系统
@@ -511,6 +513,7 @@ function closeQuickMenu() {
 }
 
 function showBubbleMessage(message) {
+  if (state.suppressBubble) return;
   if (window.electron && window.electron.showBubble) {
     window.electron.showBubble(message, 5000);
     return;
@@ -540,9 +543,9 @@ function openChat(resetPendingReminder = true) {
   if (window.electron && window.electron.createChildWindow) {
     window.electron.createChildWindow({
       id: 'chat',
-      title: '和宠物说话',
-      width: 400,
-      height: 500,
+      title: '宠物的小窝',
+      width: 1120,
+      height: 760,
       html: 'windows/chat-window.html'
     });
   } else {
@@ -887,8 +890,8 @@ function openHistory() {
     window.electron.createChildWindow({
       id: 'history',
       title: '对话历史',
-      width: 500,
-      height: 600,
+      width: 910,
+      height: 640,
       html: 'windows/history-window.html'
     });
   } else {
@@ -925,8 +928,8 @@ function openHealthSettings() {
     window.electron.createChildWindow({
       id: 'health',
       title: '健康提醒',
-      width: 420,
-      height: 500,
+      width: 910,
+      height: 640,
       html: 'windows/health-settings-window.html'
     }).then(result => {
       console.log('[App] 健康设置窗口创建结果:', result);
@@ -948,8 +951,8 @@ function openTasks() {
     window.electron.createChildWindow({
       id: 'tasks',
       title: '任务管理',
-      width: 480,
-      height: 580,
+      width: 910,
+      height: 640,
       html: 'windows/task-window.html'
     });
   } else {
@@ -968,8 +971,8 @@ function openWidgets() {
     window.electron.createChildWindow({
       id: 'widgets',
       title: '小组件',
-      width: 400,
-      height: 520,
+      width: 910,
+      height: 640,
       html: 'windows/widget-window.html'
     }).then(result => {
       console.log('[App] 小组件窗口创建结果:', result);
@@ -1156,6 +1159,7 @@ function stopTimers() {
 
 function scheduleAutoSpeak() {
   if (!state.settings.autoSpeak) return;
+  if (state.suppressBubble) return;
   
   const moodFactor = state.mood <= 60 ? 1.8 : 1;
   const delay = (30000 + Math.random() * 30000) * moodFactor;
@@ -1272,6 +1276,23 @@ document.addEventListener('DOMContentLoaded', () => {
   init();
   initDrag();
   initReminderListener();
+  if (window.electron && window.electron.onChildWindowState) {
+    window.electron.onChildWindowState((event, action) => {
+      if (action === 'opened') {
+        state.childWindowCount++;
+        state.suppressBubble = true;
+        if (state.autoSpeakTimer) clearTimeout(state.autoSpeakTimer);
+        if (window.electron.hideToPetTray) window.electron.hideToPetTray();
+      } else if (action === 'closed') {
+        state.childWindowCount = Math.max(0, state.childWindowCount - 1);
+        if (state.childWindowCount === 0) {
+          state.suppressBubble = false;
+          if (window.electron.showFromTray) window.electron.showFromTray();
+          scheduleAutoSpeak();
+        }
+      }
+    });
+  }
   
   // 暴露测试函数到全局，方便调试
   window.testReminder = async () => {
@@ -1629,4 +1650,5 @@ function initFileDropHandler() {
     console.log('[FileDrop] 文件拖拽处理器初始化完成');
   }
 }
+
 

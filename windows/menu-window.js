@@ -10,9 +10,9 @@ function openChat() {
   if (window.electron && window.electron.createChildWindow) {
     window.electron.createChildWindow({
       id: 'chat',
-      title: '和宠物说话',
-      width: 400,
-      height: 500,
+      title: '宠物的小窝',
+      width: 1120,
+      height: 760,
       html: 'windows/chat-window.html'
     });
   }
@@ -37,8 +37,8 @@ function openHistory() {
     window.electron.createChildWindow({
       id: 'history',
       title: '对话历史',
-      width: 500,
-      height: 600,
+      width: 910,
+      height: 640,
       html: 'windows/history-window.html'
     });
   }
@@ -63,8 +63,8 @@ function openHealthSettings() {
     window.electron.createChildWindow({
       id: 'health',
       title: '健康提醒',
-      width: 420,
-      height: 500,
+      width: 910,
+      height: 640,
       html: 'windows/health-settings-window.html'
     });
   }
@@ -76,8 +76,8 @@ function openTasks() {
     window.electron.createChildWindow({
       id: 'tasks',
       title: '任务管理',
-      width: 480,
-      height: 580,
+      width: 910,
+      height: 640,
       html: 'windows/task-window.html'
     });
   }
