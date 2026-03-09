@@ -487,7 +487,9 @@ class MemoryStorage {
     const {
       factType = null,
       subject = null,
-      minConfidence = 0
+      minConfidence = 0,
+      limit = null,
+      offset = 0
     } = options;
 
     let query = 'SELECT * FROM memory_facts WHERE confidence >= ?';
@@ -504,6 +506,11 @@ class MemoryStorage {
     }
 
     query += ' ORDER BY created_at DESC';
+
+    if (Number.isFinite(limit) && limit > 0) {
+      query += ' LIMIT ? OFFSET ?';
+      params.push(limit, Math.max(0, offset || 0));
+    }
 
     const stmt = this.db.prepare(query);
     return stmt.all(...params);
@@ -685,6 +692,36 @@ class MemoryStorage {
     return info.changes;
   }
 
+  // 删除单条对话
+  deleteConversation(id) {
+    if (!this.db) throw new Error('Database not initialized');
+    const stmt = this.db.prepare('DELETE FROM conversations WHERE id = ?');
+    const info = stmt.run(id);
+    const chunkStmt = this.db.prepare('DELETE FROM memory_chunks WHERE conversation_id = ?');
+    chunkStmt.run(id);
+    return info.changes;
+  }
+
+  // 删除单条事实记忆
+  deleteFact(id) {
+    if (!this.db) throw new Error('Database not initialized');
+    const stmt = this.db.prepare('DELETE FROM memory_facts WHERE id = ?');
+    const info = stmt.run(id);
+    const profileStmt = this.db.prepare('DELETE FROM user_profile WHERE source_fact_id = ?');
+    profileStmt.run(id);
+    return info.changes;
+  }
+
+  // 清空用户画像
+  clearUserProfile() {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+    this.db.exec('DELETE FROM user_profile');
+    // 同步删除画像相关事实
+    this.db.prepare("DELETE FROM memory_facts WHERE fact_type IN ('personal', 'preference', 'relationship')").run();
+  }
+
   // 清空所有数据
   clearAll() {
     if (!this.db) {
@@ -695,6 +732,7 @@ class MemoryStorage {
     this.db.exec('DELETE FROM memory_chunks');
     this.db.exec('DELETE FROM memory_facts');
     this.db.exec('DELETE FROM embedding_cache');
+    this.db.exec('DELETE FROM user_profile');
   }
 
   // ==================== 提醒操作 ====================

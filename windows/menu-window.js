@@ -24,8 +24,8 @@ function openSettings() {
     window.electron.createChildWindow({
       id: 'settings',
       title: '设置',
-      width: 500,
-      height: 600,
+      width: 910,
+      height: 640,
       html: 'windows/settings-window.html'
     });
   }
@@ -48,11 +48,37 @@ function openHistory() {
 function openTheme() {
   if (window.electron && window.electron.createChildWindow) {
     window.electron.createChildWindow({
-      id: 'theme',
-      title: '切换主题',
-      width: 360,
-      height: 380,
-      html: 'windows/theme-window.html'
+      id: 'settings',
+      title: '设置',
+      width: 910,
+      height: 640,
+      html: 'windows/settings-window.html'
+    });
+  }
+  closeMenuWindow();
+}
+
+function openHealthSettings() {
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'health',
+      title: '健康提醒',
+      width: 420,
+      height: 500,
+      html: 'windows/health-settings-window.html'
+    });
+  }
+  closeMenuWindow();
+}
+
+function openTasks() {
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'tasks',
+      title: '任务管理',
+      width: 480,
+      height: 580,
+      html: 'windows/task-window.html'
     });
   }
   closeMenuWindow();
@@ -62,6 +88,8 @@ window.openChat = openChat;
 window.openSettings = openSettings;
 window.openHistory = openHistory;
 window.openTheme = openTheme;
+window.openHealthSettings = openHealthSettings;
+window.openTasks = openTasks;
 
 const MenuWindowUtils = window.MenuWindowUtils || {
   shouldCloseMenuOnTarget: (target) => {

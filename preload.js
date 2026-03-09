@@ -170,6 +170,9 @@ contextBridge.exposeInMainWorld('PetMemory', {
   searchMemories: (query, options) =>
     ipcRenderer.invoke('memory:search', query, options),
 
+  getConversations: (options) =>
+    ipcRenderer.invoke('memory:get-conversations', options),
+
   getContext: (query, options) =>
     ipcRenderer.invoke('memory:get-context', query, options),
 
@@ -183,6 +186,15 @@ contextBridge.exposeInMainWorld('PetMemory', {
   // 统计
   getStats: () =>
     ipcRenderer.invoke('memory:get-stats'),
+
+  deleteConversation: (id) =>
+    ipcRenderer.invoke('memory:delete-conversation', id),
+
+  deleteFact: (id) =>
+    ipcRenderer.invoke('memory:delete-fact', id),
+
+  clearUserProfile: () =>
+    ipcRenderer.invoke('memory:clear-user-profile'),
 
   // 清理
   clearAll: () =>

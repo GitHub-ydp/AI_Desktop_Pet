@@ -24,35 +24,28 @@ class RotaryMenuController {
         icon: '⚙️',
         label: '设置',
         action: () => window.openSettings && window.openSettings(),
-        angle: 60
+        angle: 72
       },
       {
         id: 'history',
         icon: '📋',
         label: '历史',
         action: () => window.openHistory && window.openHistory(),
-        angle: 120
-      },
-      {
-        id: 'theme',
-        icon: '🎨',
-        label: '主题',
-        action: () => window.openTheme && window.openTheme(),
-        angle: 180
+        angle: 144
       },
       {
         id: 'more',
         icon: '➕',
         label: '更多',
         action: () => this.toggleSecondLevel(),
-        angle: 240
+        angle: 216
       },
       {
         id: 'close',
         icon: '❌',
         label: '关闭',
         action: () => this.close(),
-        angle: 300
+        angle: 288
       }
     ];
     
@@ -66,24 +59,24 @@ class RotaryMenuController {
         angle: 0
       },
       {
-        id: 'debug',
-        icon: '🐛',
-        label: '调试',
-        action: () => this.openDebugConsole(),
+        id: 'theme',
+        icon: '🎨',
+        label: '主题',
+        action: () => window.openSettings && window.openSettings(),
         angle: 72
       },
       {
-        id: 'about',
-        icon: 'ℹ️',
-        label: '关于',
-        action: () => this.showAbout(),
+        id: 'health',
+        icon: '❤️',
+        label: '健康',
+        action: () => window.openHealthSettings && window.openHealthSettings(),
         angle: 144
       },
       {
-        id: 'hide',
-        icon: '👁️',
-        label: '隐藏',
-        action: () => this.hideApp(),
+        id: 'tasks',
+        icon: '✅',
+        label: '任务',
+        action: () => window.openTasks && window.openTasks(),
         angle: 216
       },
       {
@@ -265,9 +258,10 @@ class RotaryMenuController {
     this.currentLevel = 1;
     this.renderMenuItems(); // 确保每次打开都重置为一级菜单
 
-    // 仅主窗口需要扩展尺寸
+    // 仅主窗口需要扩展尺寸，传入 anchor 使窗口以宠物为中心扩展，避免位置跳动
     if (!this.isMenuWindow && window.electron && window.electron.resizeWindow) {
-      window.electron.resizeWindow('medium');
+      const anchor = this.getAnchorPoint();
+      window.electron.resizeWindow('medium', anchor);
     }
     
     if (this.menuElement) {
@@ -302,9 +296,10 @@ class RotaryMenuController {
       return;
     }
 
-    // 立即缩小窗口，避免可见移动过程
+    // 立即缩小窗口，传入 anchor 使窗口以宠物为中心收缩，避免位置闪烁
     if (window.electron && window.electron.resizeWindow) {
-      window.electron.resizeWindow('small');
+      const anchor = this.getAnchorPoint();
+      window.electron.resizeWindow('small', anchor);
     }
   }
   
@@ -507,58 +502,6 @@ class RotaryMenuController {
     }
   }
 
-  // ========== 菜单项动作（复用原有逻辑） ==========
-
-  showReminderMenu() {
-    console.log('[RotaryMenu] 显示提醒菜单');
-    this.close();
-    // 打开聊天窗口，引导用户说出提醒内容
-    if (window.openChat) {
-      window.openChat();
-    }
-    // 稍微延迟显示引导气泡，等聊天窗口打开后再提示
-    setTimeout(() => {
-      if (window.showBubbleMessage) {
-        window.showBubbleMessage('告诉我你需要提醒什么~');
-      }
-    }, 300);
-  }
-
-  showToolsMenu() {
-    console.log('[RotaryMenu] 显示工具菜单（开发中）');
-    this.close();
-    if (window.showBubbleMessage) {
-      window.showBubbleMessage('工具功能开发中...');
-    }
-  }
-
-  openDebugConsole() {
-    console.log('[RotaryMenu] 打开调试控制台');
-    if (window.electron && window.electron.openDevTools) {
-      window.electron.openDevTools();
-    } else {
-      console.log('[RotaryMenu] DevTools API 不可用');
-    }
-    this.close();
-  }
-
-  showAbout() {
-    console.log('[RotaryMenu] 显示关于信息');
-    this.close();
-    if (window.showBubbleMessage) {
-      window.showBubbleMessage('AI Desktop Pet - 你的 AI 桌面伙伴 ✨');
-    }
-  }
-  
-  hideApp() {
-    console.log('[RotaryMenu] 隐藏应用');
-    if (window.electron && window.electron.minimizeWindow) {
-      window.electron.minimizeWindow();
-    } else {
-      console.log('[RotaryMenu] Minimize API 不可用');
-    }
-    this.close();
-  }
 }
 
 // 创建全局实例

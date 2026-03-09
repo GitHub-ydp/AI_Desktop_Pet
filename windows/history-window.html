@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>对话历史</title>
+  <title>历史与记忆</title>
   <script src="../src/theme-manager.js"></script>
   <style>
     * {
@@ -28,6 +28,7 @@
       --confirm-bg: rgba(0, 20, 45, 0.98);
       --close-icon: rgba(160, 220, 240, 0.6);
       --accent-hover-bg: rgba(0, 255, 240, 0.1);
+      --accent-bg-dim: rgba(0, 255, 240, 0.08);
       --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
       --danger-hover-bg: rgba(255, 45, 120, 0.08);
       --danger-border: rgba(255, 45, 120, 0.5);
@@ -103,113 +104,227 @@
       background: var(--neon-magenta);
     }
 
-    .history-container {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
+    .tabs {
+      display: flex;
+      gap: 10px;
+      padding: 12px 16px 0;
       background: var(--bg);
+      flex-shrink: 0;
     }
 
-    .history-item {
-      background: var(--bg-card);
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      color: var(--text-muted);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 12px 14px;
-      margin-bottom: 8px;
-      animation: fadeIn 0.3s ease;
-      transition: border-color 0.2s;
-    }
-
-    .history-item:hover {
-      border-color: var(--border-bright);
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .history-role {
-      font-weight: 600;
-      font-size: 11px;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-      color: var(--neon-cyan);
-    }
-
-    .history-role.user {
-      color: var(--neon-magenta);
-    }
-
-    .history-content {
-      color: var(--text);
-      line-height: 1.6;
+      border-radius: 10px 10px 0 0;
+      padding: 10px 14px;
+      cursor: pointer;
       font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
     }
 
-    .history-time {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 5px;
+    .tab-btn.active {
+      color: var(--neon-cyan);
+      border-color: var(--border-bright);
+      background: var(--accent-bg-dim);
+      box-shadow: var(--glow-sm);
     }
 
-    .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--text-muted);
-      font-size: 14px;
-    }
-
-    .confirm-dialog {
-      display: none;
-      background: var(--confirm-bg);
-      border: 1px solid var(--neon-magenta);
-      border-radius: var(--radius);
+    .content-area {
+      flex: 1;
+      overflow-y: auto;
       padding: 16px;
-      margin-bottom: 12px;
-      box-shadow: var(--danger-glow);
     }
 
-    .confirm-dialog.show {
-      display: block;
+    .panel {
+      display: none;
       animation: fadeIn 0.2s ease;
     }
 
-    .confirm-dialog p {
-      color: var(--text);
-      font-size: 13px;
-      margin-bottom: 12px;
-      line-height: 1.5;
+    .panel.active {
+      display: block;
     }
 
-    .confirm-dialog .dialog-btns {
+    .section-card,
+    .history-item,
+    .fact-item,
+    .profile-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 12px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .section-card:hover,
+    .history-item:hover,
+    .fact-item:hover,
+    .profile-card:hover {
+      border-color: var(--border-bright);
+    }
+
+    .profile-header,
+    .item-header,
+    .fact-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .profile-toggle {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .profile-title,
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--neon-cyan);
+    }
+
+    .profile-subtitle,
+    .section-desc,
+    .item-time,
+    .fact-meta,
+    .profile-empty,
+    .empty-state,
+    .loading-state {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .profile-body {
+      display: none;
+      margin-top: 12px;
+    }
+
+    .profile-card.expanded .profile-body {
+      display: block;
+    }
+
+    .profile-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .profile-field {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 10px;
+      align-items: start;
+      font-size: 13px;
+    }
+
+    .profile-label {
+      color: var(--text-muted);
+    }
+
+    .profile-value {
+      color: var(--text);
+      word-break: break-word;
+      line-height: 1.6;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+
+    .tag.user {
+      color: var(--neon-magenta);
+      border-color: rgba(255, 45, 120, 0.4);
+    }
+
+    .tag.assistant {
+      color: var(--neon-cyan);
+      border-color: rgba(0, 255, 240, 0.4);
+    }
+
+    .tag.personal,
+    .tag.preference,
+    .tag.event,
+    .tag.relationship,
+    .tag.routine {
+      color: var(--neon-cyan);
+    }
+
+    .item-content,
+    .fact-content {
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .item-actions,
+    .fact-actions,
+    .profile-actions,
+    .footer-buttons {
       display: flex;
       gap: 8px;
-      justify-content: flex-end;
+      align-items: center;
+      flex-wrap: wrap;
     }
 
-    .footer-buttons {
-      background: var(--input-area-bg);
-      padding: 12px 16px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-      flex-shrink: 0;
+    .icon-btn,
+    .btn {
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 12px;
+    }
+
+    .icon-btn {
+      min-width: 32px;
+      height: 32px;
+      padding: 0 10px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .icon-btn:hover {
+      color: var(--neon-cyan);
+      border-color: var(--border-bright);
+      box-shadow: var(--glow-sm);
+    }
+
+    .icon-btn.danger:hover {
+      color: var(--neon-magenta);
+      border-color: var(--danger-border);
+      box-shadow: var(--danger-glow);
     }
 
     .btn {
       padding: 9px 18px;
-      border-radius: var(--radius);
-      font-size: 13px;
       font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s, box-shadow 0.2s;
+      background: transparent;
     }
 
     .btn-primary {
-      background: transparent;
       color: var(--neon-cyan);
       border: 1px solid var(--border-bright);
     }
@@ -220,7 +335,6 @@
     }
 
     .btn-danger {
-      background: transparent;
       color: var(--neon-magenta);
       border: 1px solid var(--danger-border);
     }
@@ -228,6 +342,90 @@
     .btn-danger:hover {
       background: var(--danger-hover-bg);
       box-shadow: var(--danger-glow);
+    }
+
+    .confirm-dialog {
+      display: none;
+      margin: 0 16px 12px;
+      background: var(--confirm-bg);
+      border: 1px solid var(--neon-magenta);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--danger-glow);
+      flex-shrink: 0;
+    }
+
+    .confirm-dialog.show {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .confirm-title {
+      color: var(--neon-magenta);
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .confirm-text {
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+
+    .footer-buttons {
+      background: var(--input-area-bg);
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .footer-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .message {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%) translateY(12px);
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border-bright);
+      background: var(--header-bg);
+      color: var(--neon-cyan);
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      box-shadow: var(--glow-sm);
+      z-index: 20;
+    }
+
+    .message.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .message.error {
+      border-color: var(--danger-border);
+      color: var(--neon-magenta);
+      box-shadow: var(--danger-glow);
+    }
+
+    .empty-state,
+    .loading-state {
+      text-align: center;
+      padding: 48px 18px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     ::-webkit-scrollbar { width: 3px; }
@@ -238,80 +436,72 @@
 </head>
 <body>
   <div class="window-header">
-    <div class="window-title">📜 对话历史</div>
+    <div class="window-title">📜 历史与记忆</div>
     <button class="close-btn" onclick="closeWindow()"></button>
   </div>
 
-  <div class="history-container" id="historyContainer">
-    <div class="empty-state">还没有对话记录哦~</div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="conversations" onclick="switchTab('conversations')">对话历史</button>
+    <button class="tab-btn" data-tab="memories" onclick="switchTab('memories')">记忆管理</button>
   </div>
 
-  <div class="confirm-dialog" id="clearConfirmDialog">
-    <p>确定要清空所有对话历史吗？</p>
-    <div class="dialog-btns">
-      <button class="btn btn-danger" onclick="confirmClear()">确定</button>
-      <button class="btn btn-primary" onclick="cancelClear()">取消</button>
+  <div class="content-area">
+    <section class="panel active" id="panel-conversations">
+      <div id="conversationList" class="loading-state">正在加载对话历史...</div>
+    </section>
+
+    <section class="panel" id="panel-memories">
+      <div class="profile-card expanded" id="profileCard">
+        <button class="profile-toggle" onclick="toggleProfileCard()">
+          <div>
+            <div class="profile-title">用户画像</div>
+            <div class="profile-subtitle">来自对话自动提取，清空后继续聊天可自动重建</div>
+          </div>
+          <span class="tag">折叠/展开</span>
+        </button>
+        <div class="profile-body">
+          <div id="profileContent" class="profile-empty">正在加载画像...</div>
+          <div class="profile-actions" style="margin-top: 12px;">
+            <button class="btn btn-danger" onclick="confirmClearProfile()">清空画像</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">事实记忆</div>
+        <div class="section-desc">可逐条删除结构化事实，删除后列表会立即刷新。</div>
+      </div>
+      <div id="factList" class="loading-state">正在加载事实记忆...</div>
+    </section>
+  </div>
+
+  <div class="confirm-dialog" id="confirmDialog">
+    <div class="confirm-title" id="confirmTitle">确认操作</div>
+    <div class="confirm-text" id="confirmText">确定继续吗？</div>
+    <div class="footer-actions">
+      <button class="btn btn-danger" id="confirmActionBtn">确定</button>
+      <button class="btn btn-primary" onclick="hideConfirmDialog()">取消</button>
     </div>
   </div>
 
   <div class="footer-buttons">
-    <button class="btn btn-danger" onclick="clearHistory()">清空历史</button>
+    <div class="footer-actions" id="footerActions"></div>
     <button class="btn btn-primary" onclick="closeWindow()">关闭</button>
   </div>
 
-  <script src="../src/storage.js"></script>
+  <div class="message" id="toast"></div>
+
   <script>
-    function loadHistory() {
-      const history = window.PetStorage.get('chat_history') || [];
-      const container = document.getElementById('historyContainer');
-
-      if (history.length === 0) {
-        container.innerHTML = '<div class="empty-state">还没有对话记录哦~</div>';
-        return;
-      }
-
-      container.innerHTML = '';
-      history.forEach((item, index) => {
-        const div = document.createElement('div');
-        div.className = 'history-item';
-        div.style.animationDelay = `${index * 0.05}s`;
-
-        const role = document.createElement('div');
-        role.className = `history-role ${item.role}`;
-        role.textContent = item.role === 'user' ? '你' : '宠物';
-
-        const content = document.createElement('div');
-        content.className = 'history-content';
-        content.textContent = item.content;
-
-        const time = document.createElement('div');
-        time.className = 'history-time';
-        time.textContent = new Date(item.timestamp).toLocaleString('zh-CN');
-
-        div.appendChild(role);
-        div.appendChild(content);
-        div.appendChild(time);
-        container.appendChild(div);
-      });
-
-      // 滚动到底部
-      container.scrollTop = container.scrollHeight;
-    }
-
-    function clearHistory() {
-      document.getElementById('clearConfirmDialog').classList.add('show');
-    }
-
-    function confirmClear() {
-      document.getElementById('clearConfirmDialog').classList.remove('show');
-      window.PetStorage.remove('chat_history');
-      window.dispatchEvent(new CustomEvent('history-cleared'));
-      loadHistory();
-    }
-
-    function cancelClear() {
-      document.getElementById('clearConfirmDialog').classList.remove('show');
-    }
+    const state = {
+      activeTab: 'conversations',
+      conversations: [],
+      facts: [],
+      profile: {},
+      confirmAction: null,
+      toastTimer: null,
+      loadingConversations: false,
+      loadingMemories: false
+    };
 
     function closeWindow() {
       if (window.electron && window.electron.closeChildWindow) {
@@ -319,11 +509,358 @@
       }
     }
 
-    // 页面加载时加载历史
-    window.addEventListener('DOMContentLoaded', loadHistory);
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = isError ? 'message show error' : 'message show';
+      if (state.toastTimer) {
+        clearTimeout(state.toastTimer);
+      }
+      state.toastTimer = setTimeout(() => {
+        toast.className = isError ? 'message error' : 'message';
+      }, 2200);
+    }
 
-    // 监听历史更新
-    window.addEventListener('history-updated', loadHistory);
+    function formatTime(timestamp) {
+      if (!timestamp) return '未知时间';
+      return new Date(timestamp).toLocaleString('zh-CN');
+    }
+
+    function escapeHtml(text) {
+      return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function profileValueOf(value) {
+      if (!value) return '';
+      if (typeof value === 'string') return value;
+      if (typeof value === 'number') return String(value);
+      if (typeof value === 'object' && typeof value.value === 'string') return value.value;
+      return '';
+    }
+
+    function normalizeProfile(profile) {
+      const normalized = {
+        name: '',
+        age: '',
+        occupation: '',
+        interests: '',
+        notes: '',
+        extra: []
+      };
+
+      if (!profile || typeof profile !== 'object') {
+        return normalized;
+      }
+
+      normalized.name = profileValueOf(profile.name);
+      normalized.age = profileValueOf(profile.age);
+      normalized.occupation = profileValueOf(profile.occupation);
+      normalized.notes = profileValueOf(profile.notes);
+
+      const interests = [];
+      const rawPreferences = Array.isArray(profile.preferences) ? profile.preferences : [];
+      rawPreferences.forEach((item) => {
+        if (typeof item === 'string') interests.push(item);
+        else if (item && typeof item === 'object') {
+          if (typeof item.value === 'string') interests.push(item.value);
+          else if (typeof item.object === 'string') interests.push(item.object);
+        }
+      });
+
+      if (profile.interests) {
+        const direct = Array.isArray(profile.interests) ? profile.interests : [profile.interests];
+        direct.forEach((item) => {
+          const value = profileValueOf(item);
+          if (value) interests.push(value);
+        });
+      }
+
+      normalized.interests = Array.from(new Set(interests)).join('、');
+
+      for (const [key, value] of Object.entries(profile)) {
+        if (['name', 'age', 'occupation', 'preferences', 'interests', 'notes'].includes(key)) {
+          continue;
+        }
+        if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) {
+          continue;
+        }
+        if (Array.isArray(value)) {
+          const text = value.map((item) => profileValueOf(item) || JSON.stringify(item)).filter(Boolean).join('、');
+          if (text) {
+            normalized.extra.push({ key, value: text });
+          }
+          continue;
+        }
+        const text = profileValueOf(value) || (typeof value === 'object' ? JSON.stringify(value) : String(value));
+        if (text) {
+          normalized.extra.push({ key, value: text });
+        }
+      }
+
+      return normalized;
+    }
+
+    function factText(fact) {
+      const parts = [fact.subject, fact.predicate, fact.object].filter(Boolean);
+      return parts.join(' ').trim() || fact.predicate || '未命名事实';
+    }
+
+    function renderFooterActions() {
+      const container = document.getElementById('footerActions');
+      if (state.activeTab === 'conversations') {
+        container.innerHTML = '<button class="btn btn-danger" onclick="confirmClearConversations()">清空全部</button>';
+      } else {
+        container.innerHTML = '<button class="btn btn-danger" onclick="confirmClearFacts()">清空所有事实</button>';
+      }
+    }
+
+    function renderConversations() {
+      const container = document.getElementById('conversationList');
+      if (state.loadingConversations) {
+        container.className = 'loading-state';
+        container.textContent = '正在加载对话历史...';
+        return;
+      }
+
+      if (!state.conversations.length) {
+        container.className = 'empty-state';
+        container.textContent = '还没有对话记录哦~';
+        return;
+      }
+
+      container.className = '';
+      container.innerHTML = state.conversations.map((item) => {
+        const roleLabel = item.role === 'user' ? '你' : '宠物';
+        const roleClass = item.role === 'user' ? 'user' : 'assistant';
+        return `
+          <div class="history-item">
+            <div class="item-header">
+              <div>
+                <span class="tag ${roleClass}">${roleLabel}</span>
+                <div class="item-time">${escapeHtml(formatTime(item.timestamp))}</div>
+              </div>
+              <div class="item-actions">
+                <button class="icon-btn" onclick="copyConversation('${escapeHtml(item.id)}')">📋</button>
+                <button class="icon-btn danger" onclick="confirmDeleteConversation('${escapeHtml(item.id)}')">🗑️</button>
+              </div>
+            </div>
+            <div class="item-content">${escapeHtml(item.content)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderProfile() {
+      const container = document.getElementById('profileContent');
+      const profile = normalizeProfile(state.profile);
+      const rows = [
+        { label: '姓名', value: profile.name },
+        { label: '年龄', value: profile.age },
+        { label: '职业', value: profile.occupation },
+        { label: '兴趣', value: profile.interests },
+        { label: '备注', value: profile.notes }
+      ].filter((item) => item.value);
+
+      profile.extra.forEach((item) => {
+        rows.push({ label: item.key, value: item.value });
+      });
+
+      if (!rows.length) {
+        container.className = 'profile-empty';
+        container.textContent = '当前还没有可展示的用户画像。';
+        return;
+      }
+
+      container.className = 'profile-grid';
+      container.innerHTML = rows.map((item) => `
+        <div class="profile-field">
+          <div class="profile-label">${escapeHtml(item.label)}</div>
+          <div class="profile-value">${escapeHtml(item.value)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderFacts() {
+      const container = document.getElementById('factList');
+      if (state.loadingMemories) {
+        container.className = 'loading-state';
+        container.textContent = '正在加载事实记忆...';
+        return;
+      }
+
+      if (!state.facts.length) {
+        container.className = 'empty-state';
+        container.textContent = '还没有事实记忆。';
+        return;
+      }
+
+      container.className = '';
+      container.innerHTML = state.facts.map((fact) => `
+        <div class="fact-item">
+          <div class="fact-header">
+            <div>
+              <span class="tag ${escapeHtml(fact.fact_type || 'fact')}">${escapeHtml(fact.fact_type || 'fact')}</span>
+              <div class="fact-meta">置信度 ${(Number(fact.confidence || 0) * 100).toFixed(0)}% · ${escapeHtml(formatTime(fact.updated_at || fact.created_at))}</div>
+            </div>
+            <div class="fact-actions">
+              <button class="icon-btn danger" onclick="deleteFact('${escapeHtml(fact.id)}')">🗑️</button>
+            </div>
+          </div>
+          <div class="fact-content">${escapeHtml(factText(fact))}</div>
+        </div>
+      `).join('');
+    }
+
+    function switchTab(tab) {
+      state.activeTab = tab;
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+      });
+      document.querySelectorAll('.panel').forEach((panel) => {
+        panel.classList.toggle('active', panel.id === `panel-${tab}`);
+      });
+      renderFooterActions();
+    }
+
+    function toggleProfileCard() {
+      document.getElementById('profileCard').classList.toggle('expanded');
+    }
+
+    function showConfirmDialog(title, text, action) {
+      state.confirmAction = action;
+      document.getElementById('confirmTitle').textContent = title;
+      document.getElementById('confirmText').textContent = text;
+      const actionBtn = document.getElementById('confirmActionBtn');
+      actionBtn.onclick = async () => {
+        if (typeof state.confirmAction === 'function') {
+          await state.confirmAction();
+        }
+        hideConfirmDialog();
+      };
+      document.getElementById('confirmDialog').classList.add('show');
+    }
+
+    function hideConfirmDialog() {
+      state.confirmAction = null;
+      document.getElementById('confirmDialog').classList.remove('show');
+    }
+
+    function confirmDeleteConversation(id) {
+      showConfirmDialog('删除对话', '确定要删除这条对话记录吗？', async () => {
+        await window.PetMemory.deleteConversation(id);
+        await loadConversations();
+        showToast('对话已删除');
+      });
+    }
+
+    function confirmClearConversations() {
+      showConfirmDialog('清空全部对话', '确定要清空所有对话历史吗？该操作不可撤销。', async () => {
+        await window.PetMemory.clearAll();
+        await Promise.all([loadConversations(), loadMemories()]);
+        showToast('已清空全部对话与记忆');
+      });
+    }
+
+    function confirmClearFacts() {
+      showConfirmDialog('清空所有事实', '确定要删除所有事实记忆吗？', async () => {
+        const facts = await window.PetMemory.getFacts({ limit: 1000 });
+        await Promise.all(facts.map((item) => window.PetMemory.deleteFact(item.id)));
+        await loadMemories();
+        showToast('已清空所有事实');
+      });
+    }
+
+    function getProfileDerivedFacts(facts = state.facts) {
+      return facts.filter((fact) => ['personal', 'preference', 'relationship'].includes(fact.fact_type));
+    }
+
+    function confirmClearProfile() {
+      showConfirmDialog('清空画像', '确定要清空用户画像吗？清空后与宠物继续对话，画像会自动重建。', async () => {
+        await window.PetMemory.clearUserProfile();
+        await loadMemories();
+        showToast('用户画像已清空，继续和宠物聊天可自动重建');
+      });
+    }
+
+    async function copyConversation(id) {
+      const item = state.conversations.find((entry) => entry.id === id);
+      if (!item) return;
+      try {
+        await navigator.clipboard.writeText(item.content || '');
+        showToast('已复制到剪贴板');
+      } catch (error) {
+        console.error('[history-window] copy failed:', error);
+        showToast('复制失败', true);
+      }
+    }
+
+    async function deleteFact(id) {
+      try {
+        await window.PetMemory.deleteFact(id);
+        await loadMemories();
+        showToast('事实已删除');
+      } catch (error) {
+        console.error('[history-window] delete fact failed:', error);
+        showToast('删除事实失败', true);
+      }
+    }
+
+    async function loadConversations() {
+      state.loadingConversations = true;
+      renderConversations();
+      try {
+        state.conversations = await window.PetMemory.getConversations({ limit: 200 });
+      } catch (error) {
+        console.error('[history-window] load conversations failed:', error);
+        state.conversations = [];
+        showToast('加载对话历史失败', true);
+      } finally {
+        state.loadingConversations = false;
+        renderConversations();
+      }
+    }
+
+    async function loadMemories() {
+      state.loadingMemories = true;
+      renderProfile();
+      renderFacts();
+      try {
+        const [profile, facts] = await Promise.all([
+          window.PetMemory.getUserProfile(),
+          window.PetMemory.getFacts({ limit: 100 })
+        ]);
+        state.profile = profile || {};
+        state.facts = Array.isArray(facts) ? facts : [];
+      } catch (error) {
+        console.error('[history-window] load memories failed:', error);
+        state.profile = {};
+        state.facts = [];
+        showToast('加载记忆失败', true);
+      } finally {
+        state.loadingMemories = false;
+        renderProfile();
+        renderFacts();
+      }
+    }
+
+    async function initialize() {
+      renderFooterActions();
+      try {
+        if (window.PetMemory && window.PetMemory.initialize) {
+          await window.PetMemory.initialize();
+        }
+      } catch (error) {
+        console.error('[history-window] memory init failed:', error);
+      }
+      await Promise.all([loadConversations(), loadMemories()]);
+    }
+
+    window.addEventListener('DOMContentLoaded', initialize);
     console.log('[history-window] 主题系统已加载');
   </script>
 </body>

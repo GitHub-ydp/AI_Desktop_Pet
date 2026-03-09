@@ -330,6 +330,13 @@ class MemoryMainProcess {
     return context;
   }
 
+  // 获取对话列表
+  async getConversations(options = {}) {
+    await this._ensureInitialized();
+
+    return this.storage.getConversations(options);
+  }
+
   // 获取事实
   async getFacts(options = {}) {
     await this._ensureInitialized();
@@ -411,6 +418,21 @@ class MemoryMainProcess {
     if (!this.isInitialized) return;
 
     return this.storage.clearOldMemories(beforeDate);
+  }
+
+  async deleteConversation(id) {
+    await this._ensureInitialized();
+    return this.storage.deleteConversation(id);
+  }
+
+  async deleteFact(id) {
+    await this._ensureInitialized();
+    return this.storage.deleteFact(id);
+  }
+
+  async clearUserProfile() {
+    await this._ensureInitialized();
+    return this.storage.clearUserProfile();
   }
 
   // 清空所有数据

@@ -265,6 +265,11 @@ function initSettingsIpc() {
       saveData();
       stopTimers();
       if (state.settings.autoSpeak) startTimers();
+    } else if (data.type === 'mood') {
+      const nextMood = Number(data.mood);
+      state.mood = Number.isFinite(nextMood) ? Math.max(0, Math.min(100, Math.round(nextMood))) : state.mood;
+      saveData();
+      updateUI();
     } else if (data.type === 'reset') {
       window.PetStorage.resetAllData();
       loadData();
@@ -478,44 +483,29 @@ function updatePersonalitySelection() {
 }
 
 async function handlePetClick() {
-  // 不需要 stopPropagation，因为这是从 initDrag 内部调用的
+  // 优先使用独立菜单窗口（主窗口不 resize，避免位置闪烁）
   if (window.electron && window.electron.toggleMenuWindow) {
     const result = await window.electron.toggleMenuWindow();
     state.quickMenuVisible = !!(result && result.isOpen);
     return;
   }
+  // 降级：独立菜单窗口不可用时，使用内联旋转菜单
   if (window.PetMenu) {
     window.PetMenu.toggle();
     state.quickMenuVisible = window.PetMenu.isOpen;
-  } else {
-    // 降级到旧菜单
-    if (state.quickMenuVisible) {
-      closeQuickMenu();
-    } else {
-      const oldMenu = document.getElementById('quickMenu');
-      if (oldMenu) {
-        oldMenu.style.display = 'flex';
-        state.quickMenuVisible = true;
-      }
-    }
   }
 }
 
 function closeQuickMenu() {
+  // 优先关闭独立菜单窗口
   if (window.electron && window.electron.closeMenuWindow) {
     window.electron.closeMenuWindow();
     state.quickMenuVisible = false;
     return;
   }
+  // 降级：关闭内联旋转菜单
   if (window.PetMenu) {
     window.PetMenu.close();
-    state.quickMenuVisible = false;
-  } else {
-    // 降级到旧菜单
-    const oldMenu = document.getElementById('quickMenu');
-    if (oldMenu) {
-      oldMenu.style.display = 'none';
-    }
     state.quickMenuVisible = false;
   }
 }
@@ -869,8 +859,8 @@ function openSettings() {
     window.electron.createChildWindow({
       id: 'settings',
       title: '设置',
-      width: 500,
-      height: 600,
+      width: 910,
+      height: 640,
       html: 'windows/settings-window.html'
     });
   } else {
@@ -910,17 +900,17 @@ function openHistory() {
 function openTheme() {
   closeQuickMenu();
 
-  // 创建主题选择子窗口
+  // 主题已整合进设置窗口
   if (window.electron && window.electron.createChildWindow) {
     window.electron.createChildWindow({
-      id: 'theme',
-      title: '切换主题',
-      width: 360,
-      height: 380,
-      html: 'windows/theme-window.html'
+      id: 'settings',
+      title: '设置',
+      width: 910,
+      height: 640,
+      html: 'windows/settings-window.html'
     });
   } else {
-    console.error('[App] electron API 不可用，无法打开主题窗口');
+    console.error('[App] electron API 不可用，无法打开设置窗口');
   }
 }
 

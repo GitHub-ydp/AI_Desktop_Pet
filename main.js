@@ -1176,6 +1176,18 @@ app.whenReady().then(async () => {
   });
   // 先注册 IPC handlers，确保渲染进程的调用不会因初始化失败而无 handler
   memorySystem.registerIPCHandlers(ipcMain);
+  ipcMain.handle('memory:get-conversations', async (event, options) => {
+    return memorySystem.getConversations(options);
+  });
+  ipcMain.handle('memory:delete-conversation', async (event, id) => {
+    return memorySystem.deleteConversation(id);
+  });
+  ipcMain.handle('memory:delete-fact', async (event, id) => {
+    return memorySystem.deleteFact(id);
+  });
+  ipcMain.handle('memory:clear-user-profile', async () => {
+    return memorySystem.clearUserProfile();
+  });
   // 初始化模型路由器
   modelRouter = new ModelRouter();
   modelRouter.registerIPCHandlers(ipcMain);

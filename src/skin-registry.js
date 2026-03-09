@@ -167,36 +167,6 @@ class SkinRegistry {
       hasLottie: false,
       animations: {}
     });
-
-    // 兔子 - 暂无 Lottie 动画
-    this.register({
-      id: 'rabbit',
-      name: '兔子',
-      emoji: '🐰',
-      folder: 'rabbit',
-      hasLottie: false,
-      animations: {}
-    });
-
-    // 狐狸 - 暂无 Lottie 动画
-    this.register({
-      id: 'fox',
-      name: '狐狸',
-      emoji: '🦊',
-      folder: 'fox',
-      hasLottie: false,
-      animations: {}
-    });
-
-    // 熊 - 暂无 Lottie 动画
-    this.register({
-      id: 'bear',
-      name: '熊',
-      emoji: '🐻',
-      folder: 'bear',
-      hasLottie: false,
-      animations: {}
-    });
   }
 
   // 注册皮肤
