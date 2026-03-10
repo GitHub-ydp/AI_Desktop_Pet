@@ -3,7 +3,8 @@
 const STORAGE_KEYS = {
   PET_DATA: 'pet_data',
   CHAT_HISTORY: 'chat_history',
-  SETTINGS: 'settings'
+  SETTINGS: 'settings',
+  INTIMACY: 'pet_intimacy'
 };
 
 const DEFAULT_BUBBLE_STATE_OFFSETS = {
@@ -251,6 +252,15 @@ function resetAllData() {
     localStorage.removeItem(STORAGE_KEYS.PET_DATA);
     localStorage.removeItem(STORAGE_KEYS.CHAT_HISTORY);
     localStorage.removeItem(STORAGE_KEYS.SETTINGS);
+    localStorage.removeItem(STORAGE_KEYS.INTIMACY);
+    const dynamicKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (typeof key === 'string' && (key.startsWith('chat_points_') || key.startsWith('task_rewarded_'))) {
+        dynamicKeys.push(key);
+      }
+    }
+    dynamicKeys.forEach((key) => localStorage.removeItem(key));
     return true;
   } catch (error) {
     console.error('Error resetting data:', error);
@@ -280,6 +290,49 @@ function checkMoodDecay() {
 }
 
 // 导出所有功能
+// 读取亲密度数据
+function getIntimacy() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.INTIMACY);
+    const defaults = { points: 0, level: 1, lastLoginDate: '', totalDays: 0, lastChatTime: 0 };
+    return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+  } catch (error) {
+    console.error('Error reading intimacy data:', error);
+    return { points: 0, level: 1, lastLoginDate: '', totalDays: 0, lastChatTime: 0 };
+  }
+}
+
+// 保存亲密度数据
+function saveIntimacy(data) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.INTIMACY, JSON.stringify(data));
+    return true;
+  } catch (error) {
+    console.error('Error saving intimacy data:', error);
+    return false;
+  }
+}
+
+// 增加积分并计算等级，返回最新等级信息
+function addPoints(amount) {
+  const LEVELS = [0, 100, 300, 600, 1000, 1500];
+  const data = getIntimacy();
+  const oldLevel = data.level || 1;
+  data.points = Math.max(0, (data.points || 0) + amount);
+
+  let newLevel = 1;
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (data.points >= LEVELS[i]) {
+      newLevel = i + 1;
+      break;
+    }
+  }
+
+  data.level = newLevel;
+  saveIntimacy(data);
+  return { newPoints: data.points, newLevel, levelUp: newLevel > oldLevel };
+}
+
 window.PetStorage = {
   getPetData,
   savePetData,
@@ -299,6 +352,9 @@ window.PetStorage = {
   setBubblePreviewState,
   getLLMSceneConfig,
   saveLLMSceneConfig,
+  getIntimacy,
+  saveIntimacy,
+  addPoints,
   resetAllData,
   checkMoodDecay
 };

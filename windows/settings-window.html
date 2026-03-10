@@ -14,6 +14,10 @@
       --header-bg: rgba(0, 15, 30, 0.98); --input-area-bg: rgba(0, 12, 25, 0.98); --input-field-bg: rgba(0, 16, 32, 0.75);
       --accent-bg-dim: rgba(0, 255, 240, 0.08); --accent-bg-faint: rgba(0, 255, 240, 0.05); --accent-hover-bg: rgba(0, 255, 240, 0.1);
       --danger-border: rgba(255, 45, 120, 0.5); --danger-hover-bg: rgba(255, 45, 120, 0.08); --confirm-bg: rgba(0, 20, 45, 0.98);
+      --memory-divider: rgba(0, 255, 240, 0.06); --memory-tag-preference: #b46cff; --memory-tag-relationship: #ffb432;
+      --memory-tag-event: #32dc78; --memory-tag-routine: #ff6450; --memory-tag-preference-border: rgba(180, 100, 255, 0.4);
+      --memory-tag-relationship-border: rgba(255, 180, 50, 0.4); --memory-tag-event-border: rgba(50, 220, 120, 0.4);
+      --memory-tag-routine-border: rgba(255, 100, 80, 0.4);
       --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4); --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4); --radius: 10px;
     }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
@@ -114,6 +118,28 @@
     .confirm-dialog.show { display: block; animation: fadeIn 0.18s ease; }
     .confirm-text { font-size: 13px; line-height: 1.7; color: var(--text); margin-bottom: 12px; }
     .dialog-btns { display: flex; justify-content: flex-end; gap: 10px; }
+    .memory-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .stat-item { text-align: center; padding: 14px 8px; background: var(--accent-bg-faint); border: 1px solid var(--border); border-radius: 8px; }
+    .stat-num { font-size: 26px; font-weight: 700; color: var(--neon-cyan); line-height: 1; margin-bottom: 6px; }
+    .stat-label { font-size: 11px; color: var(--text-muted); }
+    .profile-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .profile-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--accent-bg-faint); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+    .profile-key { color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .profile-val { color: var(--text); font-weight: 500; word-break: break-all; }
+    .fact-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--memory-divider); font-size: 13px; transition: background 0.15s; }
+    .fact-item:last-child { border-bottom: none; }
+    .fact-item:hover { background: var(--accent-bg-faint); border-radius: 6px; }
+    .fact-type-tag { font-size: 10px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .fact-type-tag.personal { border-color: rgba(0, 255, 240, 0.4); color: var(--neon-cyan); }
+    .fact-type-tag.preference { border-color: var(--memory-tag-preference-border); color: var(--memory-tag-preference); }
+    .fact-type-tag.relationship { border-color: var(--memory-tag-relationship-border); color: var(--memory-tag-relationship); }
+    .fact-type-tag.event { border-color: var(--memory-tag-event-border); color: var(--memory-tag-event); }
+    .fact-type-tag.routine { border-color: var(--memory-tag-routine-border); color: var(--memory-tag-routine); }
+    .fact-content { flex: 1; min-width: 0; color: var(--text); }
+    .fact-confidence { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+    .fact-delete-btn { border: none; background: transparent; color: var(--text-muted); cursor: pointer; padding: 4px 6px; border-radius: 4px; font-size: 14px; line-height: 1; transition: color 0.15s, background 0.15s; flex-shrink: 0; }
+    .fact-delete-btn:hover { color: var(--neon-magenta); background: var(--danger-hover-bg); }
+    .memory-empty { text-align: center; color: var(--text-muted); font-size: 13px; padding: 24px 0; }
     .footer { background: var(--input-area-bg); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; }
     .message { opacity: 0; pointer-events: none; transform: translateY(6px); transition: opacity 0.2s ease, transform 0.2s ease; border-radius: 999px; padding: 7px 12px; border: 1px solid rgba(0, 255, 136, 0.25); background: rgba(0, 255, 136, 0.08); color: #00ff88; font-size: 12px; white-space: nowrap; }
     .message.show { opacity: 1; transform: translateY(0); }
@@ -131,7 +157,7 @@
       .sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; padding: 10px; border-right: none; border-bottom: 1px solid var(--border); }
       .sidebar-item { width: auto; border-left: none; border-bottom: 2px solid transparent; }
       .sidebar-item.active { border-left: none; border-bottom-color: var(--neon-cyan); }
-      .pet-grid, .personality-grid, .theme-cards, .bubble-debug-grid, .scene-panel-grid { grid-template-columns: 1fr; }
+      .pet-grid, .personality-grid, .theme-cards, .bubble-debug-grid, .scene-panel-grid, .memory-stats-grid, .profile-grid { grid-template-columns: 1fr; }
       .apikey-row { grid-template-columns: 1fr; }
       .apikey-models-hint { padding-left: 0; }
       .footer { flex-direction: column; align-items: stretch; }
@@ -148,6 +174,7 @@
       <button class="sidebar-item" type="button" data-section="weather" onclick="switchSection('weather')">天气</button>
       <button class="sidebar-item" type="button" data-section="bubble" onclick="switchSection('bubble')">提示框</button>
       <button class="sidebar-item" type="button" data-section="mood" onclick="switchSection('mood')">心情</button>
+      <button class="sidebar-item" type="button" data-section="memory" onclick="switchSection('memory')">我的记忆</button>
       <button class="sidebar-item" type="button" data-section="theme" onclick="switchSection('theme')">外观</button>
     </nav>
     <main class="content-area">
@@ -167,6 +194,68 @@
       </section>
       <section class="settings-panel" data-section="mood">
         <div class="panel-shell"><div class="panel-header"><div class="panel-title">心情值</div><div class="panel-desc">手动设置心情值，0 = 极度悲伤，100 = 超级开心。</div></div><div class="card mood-layout"><div class="mood-display" id="moodDisplay">💚 超级开心</div><div><div class="bubble-debug-row"><input id="moodRange" class="mood-range" type="range" min="0" max="100" value="80" oninput="onMoodRangeInput(this.value)"><span class="range-value" id="moodRangeValue">80</span></div><div class="range-hint">拖动滑块后，点击按钮写入当前心情。</div></div><div class="toolbar"><button class="btn btn-primary btn-small" type="button" onclick="setManualMood()">设置心情</button></div></div></div>
+      </section>
+      <section class="settings-panel" data-section="memory">
+        <div class="panel-shell">
+          <div class="panel-header">
+            <div class="panel-title">我的记忆</div>
+            <div class="panel-desc">宠物从对话中学到的关于你的信息。记忆越丰富，宠物越了解你。</div>
+          </div>
+          <div class="card">
+            <div class="section-subtitle">记忆概况</div>
+            <div class="memory-stats-grid">
+              <div class="stat-item">
+                <div class="stat-num" id="stat-conversations">—</div>
+                <div class="stat-label">累计对话</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-num" id="stat-active">—</div>
+                <div class="stat-label">活跃记忆</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-num" id="stat-facts">—</div>
+                <div class="stat-label">提取事实</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-num" id="stat-profile">—</div>
+                <div class="stat-label">画像条目</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="section-subtitle">宠物认识的你</div>
+            <div id="profile-content">
+              <div class="memory-empty">正在加载画像…</div>
+            </div>
+          </div>
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div class="section-subtitle" style="margin:0">记忆事实</div>
+              <div style="display:flex; gap:8px;">
+                <select id="fact-type-filter" class="text-input" style="width:auto; padding:6px 10px; font-size:12px;">
+                  <option value="">全部类型</option>
+                  <option value="personal">个人信息</option>
+                  <option value="preference">偏好</option>
+                  <option value="relationship">关系</option>
+                  <option value="event">事件</option>
+                  <option value="routine">习惯</option>
+                </select>
+              </div>
+            </div>
+            <div id="facts-list">
+              <div class="memory-empty">正在加载记忆…</div>
+            </div>
+          </div>
+          <div class="card" style="border-color: var(--danger-border);">
+            <div class="section-subtitle" style="color: var(--neon-magenta);">危险操作</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
+              <div style="font-size:13px; color:var(--text-muted); line-height:1.7;">
+                清除画像会删除宠物对你的所有基础认知（姓名、偏好等），但对话记录保留。
+              </div>
+              <button id="btn-clear-profile" class="btn-danger">清除画像</button>
+            </div>
+          </div>
+        </div>
       </section>
       <section class="settings-panel" data-section="theme">
         <div class="panel-shell"><div class="panel-header"><div class="panel-title">外观主题</div><div class="panel-desc">切换后会立即同步到其他窗口。主题卡片逻辑与原独立主题窗口保持一致。</div></div><div class="theme-cards" id="themeCards"><div class="theme-card" data-theme="cyberpunk" onclick="selectTheme('cyberpunk')"><span class="active-badge">当前主题</span><div class="theme-preview preview-cyberpunk"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff2d78; box-shadow:0 0 6px #ff2d78;"></div></div><div><div class="preview-text">CYBER PUNK</div><div class="preview-sub">霓虹 · 深夜 · 都市</div></div></div><div class="theme-info"><div class="theme-icon">🎨</div><div><div class="theme-name">赛博朋克</div><div class="theme-desc">冷色霓虹与深色背景，偏都市科技感。</div></div></div></div><div class="theme-card" data-theme="lazyCat" onclick="selectTheme('lazyCat')"><span class="active-badge">当前主题</span><div class="theme-preview preview-lazyCat"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff6b35; box-shadow:0 0 6px #ff6b35;"></div></div><div><div class="preview-text">Lazy Cat</div><div class="preview-sub">暖橘 · 午后 · 放松</div></div></div><div class="theme-info"><div class="theme-icon">🐱</div><div><div class="theme-name">懒猫橘</div><div class="theme-desc">暖色调更柔和，也更贴近宠物陪伴感。</div></div></div></div><div class="theme-card" data-theme="freshSpring" onclick="selectTheme('freshSpring')"><span class="active-badge">当前主题</span><div class="theme-preview preview-freshSpring"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#6fa7d8; box-shadow:0 0 6px rgba(111,167,216,.55);"></div></div><div><div class="preview-text">Fresh Spring</div><div class="preview-sub">浅青 · 清透 · 轻盈</div></div></div><div class="theme-info"><div class="theme-icon">🌿</div><div><div class="theme-name">小清新</div><div class="theme-desc">明亮、干净，适合白天使用和长时间停留。</div></div></div></div><div class="theme-card" data-theme="milkBlush" onclick="selectTheme('milkBlush')"><span class="active-badge">当前主题</span><div class="theme-preview preview-milkBlush"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#e8a0b7; box-shadow:0 0 6px rgba(232,160,183,.55);"></div></div><div><div class="preview-text">Milk Blush</div><div class="preview-sub">奶白 · 柔粉 · 温柔</div></div></div><div class="theme-info"><div class="theme-icon">🫧</div><div><div class="theme-name">奶白轻柔</div><div class="theme-desc">底色更轻，视觉压力小，柔和但不发灰。</div></div></div></div></div></div>
@@ -197,11 +286,12 @@
     ];
     const DEFAULT_SCENE_CONFIG = Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { provider: scene.defaultProvider, model: scene.defaultModel, apiKeyMode: 'provider-fallback' }]));
     const THEME_FALLBACK_ID = 'lazyCat';
+    let allFacts = [];
     let activeSectionId = 'pet'; let activeSceneTab = 'chat'; let bubbleOffsets = { idle: { x: 0, y: 8 } }; let currentBubbleState = 'idle';
     let bubblePreviewHideTimer = null; let llmSceneConfig = JSON.parse(JSON.stringify(DEFAULT_SCENE_CONFIG)); let providerKeyInfo = {}; let sceneKeyStatusMap = {}; let weatherDefaultCity = ''; let toastTimer = null; let bubbleDebugStates = [];
     function showToast(message, isError = false) { const toast = document.getElementById('messageToast'); if (!toast) return; toast.textContent = message; toast.classList.toggle('error', !!isError); toast.classList.add('show'); if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.classList.remove('show'); }, 2400); }
     function sendSettingsChange(payload) { if (window.electron && window.electron.sendSettingsChange) window.electron.sendSettingsChange(payload); }
-    function switchSection(sectionId) { activeSectionId = sectionId; document.querySelectorAll('.sidebar-item').forEach((item) => item.classList.toggle('active', item.dataset.section === sectionId)); document.querySelectorAll('.settings-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.section === sectionId)); }
+    function switchSection(sectionId) { activeSectionId = sectionId; document.querySelectorAll('.sidebar-item').forEach((item) => item.classList.toggle('active', item.dataset.section === sectionId)); document.querySelectorAll('.settings-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.section === sectionId)); if (sectionId === 'memory') onMemoryPanelOpen(); }
     function getSupportedPet() { return '🐱'; }
     function selectPet(pet) { if (pet !== '🐱') { showToast('狗狗形象暂未开放', true); return; } document.querySelectorAll('.pet-card').forEach((card) => card.classList.toggle('selected', card.dataset.pet === pet)); SettingsUtils.setPetSelection(window.PetStorage, pet); sendSettingsChange({ type: 'pet', pet }); showToast('已切换到猫咪'); }
     function selectPersonality(personality) { document.querySelectorAll('.personality-option').forEach((item) => item.classList.toggle('selected', item.dataset.personality === personality)); SettingsUtils.setPersonalitySelection(window.PetStorage, personality); sendSettingsChange({ type: 'personality', personality }); showToast('性格已更新，后续对话会使用新风格'); }
@@ -221,7 +311,20 @@
     function onBubbleOffsetInput(axis, value) { const offset = ensureBubbleOffsetState(currentBubbleState); offset[axis] = clampOffset(value); applyBubbleOffsetEditors(); persistBubbleOffsets(false); showStickyBubblePreview(); }
     function onBubbleOffsetRange(axis, value) { const offset = ensureBubbleOffsetState(currentBubbleState); offset[axis] = clampOffset(value); applyBubbleOffsetEditors(); persistBubbleOffsets(false); showStickyBubblePreview(); }
     function previewBubbleState() { persistBubbleOffsets(true); showStickyBubblePreview(); }
-    function resetCurrentBubbleOffset() { bubbleOffsets[currentBubbleState] = { x: 0, y: 8 }; applyBubbleOffsetEditors(); persistBubbleOffsets(true); showStickyBubblePreview(); showToast('当前状态偏移已重置'); }    function normalizeSceneConfig(config) { const source = config && typeof config === 'object' ? config : {}; const normalized = {}; for (const [sceneId, fallback] of Object.entries(DEFAULT_SCENE_CONFIG)) { const raw = source[sceneId] && typeof source[sceneId] === 'object' ? source[sceneId] : {}; normalized[sceneId] = { provider: typeof raw.provider === 'string' && raw.provider.trim() ? raw.provider.trim().toLowerCase() : fallback.provider, model: typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : fallback.model, apiKeyMode: raw.apiKeyMode === 'scene' ? 'scene' : 'provider-fallback' }; } return normalized; }
+    function resetCurrentBubbleOffset() { bubbleOffsets[currentBubbleState] = { x: 0, y: 8 }; applyBubbleOffsetEditors(); persistBubbleOffsets(true); showStickyBubblePreview(); showToast('当前状态偏移已重置'); }
+    // 记忆面板：进入面板时刷新所有数据
+    function onMemoryPanelOpen() { loadMemoryStats(); loadUserProfile(); loadMemoryFacts(); }
+    // 记忆面板：加载顶部统计卡片
+    async function loadMemoryStats() { try { const stats = await window.electron.getMemoryStats(); if (!stats) return; document.getElementById('stat-conversations').textContent = stats.totalConversations ?? '—'; document.getElementById('stat-active').textContent = stats.activeMemories ?? '—'; document.getElementById('stat-facts').textContent = stats.totalFacts ?? '—'; document.getElementById('stat-profile').textContent = stats.profileKeys ?? '—'; } catch (e) { console.error('加载记忆统计失败', e); } }
+    // 记忆面板：加载用户画像
+    async function loadUserProfile() { const container = document.getElementById('profile-content'); try { const profile = await window.electron.getPetProfile(); if (!profile) { container.innerHTML = '<div class="memory-empty">还没有画像信息，多和宠物聊聊吧~</div>'; return; } const TYPE_LABELS = { name: '姓名', gender: '性别', age: '年龄', birthday: '生日', occupation: '职业', location: '所在地' }; const items = []; Object.entries(TYPE_LABELS).forEach(([key, label]) => { if (profile[key]) items.push({ key: label, val: profile[key] }); }); if (profile.preferences?.length) items.push({ key: '喜欢', val: profile.preferences.join('、') }); if (profile.dislikes?.length) items.push({ key: '不喜欢', val: profile.dislikes.join('、') }); if (profile.relationships?.length) items.push({ key: '关系', val: profile.relationships.map((r) => `${r.relation}：${r.target}`).join('、') }); if (profile.other?.length) profile.other.slice(0, 4).forEach((o) => items.push({ key: o.key, val: o.value })); if (items.length === 0) { container.innerHTML = '<div class="memory-empty">还没有画像信息，多和宠物聊聊吧~</div>'; return; } container.innerHTML = `<div class="profile-grid">${items.map((i) => `<div class="profile-item"><span class="profile-key">${i.key}</span><span class="profile-val">${i.val}</span></div>`).join('')}</div>`; } catch (e) { console.error('加载用户画像失败', e); container.innerHTML = '<div class="memory-empty">加载失败</div>'; } }
+    // 记忆面板：拉取并缓存事实列表
+    async function loadMemoryFacts() { try { allFacts = await window.electron.getMemoryFacts() || []; renderFacts(allFacts); } catch (e) { console.error('加载记忆事实失败', e); document.getElementById('facts-list').innerHTML = '<div class="memory-empty">加载失败</div>'; } }
+    // 记忆面板：按当前列表渲染事实
+    function renderFacts(facts) { const container = document.getElementById('facts-list'); if (!facts || facts.length === 0) { container.innerHTML = '<div class="memory-empty">还没有提取到记忆事实，多和宠物聊聊吧~</div>'; return; } const TYPE_NAMES = { personal: '个人', preference: '偏好', relationship: '关系', event: '事件', routine: '习惯' }; container.innerHTML = facts.map((f) => `<div class="fact-item" data-id="${f.id}"><span class="fact-type-tag ${f.fact_type}">${TYPE_NAMES[f.fact_type] || f.fact_type}</span><span class="fact-content">${f.subject || '用户'}${f.predicate ? ` ${f.predicate}` : ''}${f.object ? `：${f.object}` : ''}</span><span class="fact-confidence">${Math.round((f.confidence || 0) * 100)}%</span><button class="fact-delete-btn" onclick="deleteFact('${f.id}')" title="删除这条记忆">×</button></div>`).join(''); }
+    // 记忆面板：删除单条事实后保持筛选状态
+    async function deleteFact(id) { try { await window.electron.deleteMemoryFact(id); allFacts = allFacts.filter((f) => String(f.id) !== String(id)); const filterEl = document.getElementById('fact-type-filter'); const filterVal = filterEl ? filterEl.value : ''; const filtered = filterVal ? allFacts.filter((f) => f.fact_type === filterVal) : allFacts; renderFacts(filtered); const statEl = document.getElementById('stat-facts'); if (statEl) statEl.textContent = allFacts.length; } catch (e) { console.error('删除记忆失败', e); } }
+    function normalizeSceneConfig(config) { const source = config && typeof config === 'object' ? config : {}; const normalized = {}; for (const [sceneId, fallback] of Object.entries(DEFAULT_SCENE_CONFIG)) { const raw = source[sceneId] && typeof source[sceneId] === 'object' ? source[sceneId] : {}; normalized[sceneId] = { provider: typeof raw.provider === 'string' && raw.provider.trim() ? raw.provider.trim().toLowerCase() : fallback.provider, model: typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : fallback.model, apiKeyMode: raw.apiKeyMode === 'scene' ? 'scene' : 'provider-fallback' }; } return normalized; }
     function persistSceneConfig() { llmSceneConfig = normalizeSceneConfig(llmSceneConfig); SettingsUtils.saveLLMSceneConfig(window.PetStorage, llmSceneConfig); sendSettingsChange({ type: 'llm-scene-config', config: llmSceneConfig }); refreshCredentialSettings().catch((error) => console.error('[Settings] refreshCredentialSettings failed:', error)); }
     function getSceneDefinition(sceneId) { return SCENE_DEFINITIONS.find((scene) => scene.id === sceneId) || SCENE_DEFINITIONS[0]; }
     function getProviderOptionsForScene(sceneId) { return sceneId === 'ocr' ? PROVIDER_OPTIONS : PROVIDER_OPTIONS.filter((provider) => provider.id !== 'tesseract'); }
@@ -255,6 +358,10 @@
     function confirmReset() { document.getElementById('resetConfirmDialog').classList.remove('show'); window.PetStorage.resetAllData(); sendSettingsChange({ type: 'reset' }); loadSettings(); showToast('数据已重置'); }
     function saveAndClose() { closeWindow(); }
     function closeWindow() { clearBubblePreviewHideTimer(); if (window.electron && window.electron.hideBubble) window.electron.hideBubble(); if (window.electron && window.electron.closeChildWindow) window.electron.closeChildWindow('settings'); }
+    const factTypeFilter = document.getElementById('fact-type-filter');
+    if (factTypeFilter) factTypeFilter.addEventListener('change', function() { const val = this.value; const filtered = val ? allFacts.filter((f) => f.fact_type === val) : allFacts; renderFacts(filtered); });
+    const clearProfileButton = document.getElementById('btn-clear-profile');
+    if (clearProfileButton) clearProfileButton.addEventListener('click', async () => { const btn = document.getElementById('btn-clear-profile'); if (btn.dataset.confirm === 'pending') { try { await window.electron.clearMemoryProfile(); btn.textContent = '清除画像'; btn.dataset.confirm = ''; loadUserProfile(); loadMemoryStats(); showToast('已清除画像'); } catch (e) { console.error('清除画像失败', e); showToast('清除画像失败', true); } } else { btn.textContent = '再点一次确认清除'; btn.dataset.confirm = 'pending'; setTimeout(() => { if (btn.dataset.confirm === 'pending') { btn.textContent = '清除画像'; btn.dataset.confirm = ''; } }, 3000); } });
     async function loadSettings() { const snapshot = SettingsUtils.getSettingsSnapshot(window.PetStorage); const supportedPet = getSupportedPet(snapshot.pet); if (snapshot.pet !== supportedPet) { SettingsUtils.setPetSelection(window.PetStorage, supportedPet); sendSettingsChange({ type: 'pet', pet: supportedPet }); } document.querySelectorAll('.pet-card').forEach((card) => card.classList.toggle('selected', card.dataset.pet === supportedPet)); document.querySelectorAll('.personality-option').forEach((item) => item.classList.toggle('selected', item.dataset.personality === snapshot.personality)); updateMoodDisplay(snapshot.mood); bubbleDebugStates = getBubbleDebugStates(); bubbleOffsets = snapshot.bubbleStateOffsets || { idle: { x: 0, y: 8 } }; currentBubbleState = snapshot.bubblePreviewState || 'idle'; if (!bubbleDebugStates.includes(currentBubbleState)) currentBubbleState = bubbleDebugStates[0] || 'idle'; const bubbleSelect = document.getElementById('bubbleStateSelect'); bubbleSelect.innerHTML = bubbleDebugStates.map((state) => `<option value="${state}">${state}</option>`).join(''); bubbleSelect.value = currentBubbleState; applyBubbleOffsetEditors(); llmSceneConfig = normalizeSceneConfig(snapshot.llmSceneConfig || DEFAULT_SCENE_CONFIG); if (!SCENE_DEFINITIONS.some((scene) => scene.id === activeSceneTab)) activeSceneTab = 'chat'; await refreshCredentialSettings(); updateThemeSelection(); await loadWeatherDefaultCity(); setLocationStatus(''); switchSection(activeSectionId); }
     window.addEventListener('DOMContentLoaded', () => { loadSettings().catch((error) => { console.error('[Settings] loadSettings failed:', error); showToast('设置加载失败', true); }); });
     window.addEventListener('storage', (event) => { if (event.key === 'pet_theme') updateThemeSelection(); if (event.key === 'pet_data') { const petData = window.PetStorage.getPetData ? window.PetStorage.getPetData() : null; if (petData) updateMoodDisplay(petData.mood); } });

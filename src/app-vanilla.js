@@ -16,6 +16,106 @@ let state = {
   suppressBubble: false
 };
 
+// 亲密度等级阈值
+const INTIMACY_LEVELS = [0, 100, 300, 600, 1000, 1500, 99999];
+
+// 亲密度等级称号
+function getLevelTitle(level) {
+  const titles = ['', '陌生人', '新朋友', '好朋友', '知心朋友', '灵魂伴侣', '命中注定'];
+  return titles[level] || `Lv${level}`;
+}
+
+// 统一使用本地日期，避免 UTC 跨天导致签到异常
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// 更新亲密度组件显示
+function updateIntimacyUI() {
+  const data = window.PetStorage.getIntimacy();
+  const level = data.level || 1;
+  const points = data.points || 0;
+
+  const bar = document.getElementById('intimacy-bar-fill');
+  const labelLevel = document.getElementById('intimacy-level');
+  const labelPoints = document.getElementById('intimacy-points');
+  if (!bar) return;
+
+  const currentThreshold = INTIMACY_LEVELS[level - 1] || 0;
+  const nextThreshold = INTIMACY_LEVELS[level] || INTIMACY_LEVELS[INTIMACY_LEVELS.length - 1];
+  const progress = nextThreshold > currentThreshold
+    ? Math.min(100, ((points - currentThreshold) / (nextThreshold - currentThreshold)) * 100)
+    : 100;
+
+  bar.style.width = `${progress}%`;
+  if (labelLevel) labelLevel.textContent = `Lv${level} ${getLevelTitle(level)}`;
+  if (labelPoints) labelPoints.textContent = `${points} / ${nextThreshold === 99999 ? '∞' : nextThreshold}`;
+}
+
+// 每日首次打开签到
+function checkDailyLogin() {
+  const today = getTodayDateString();
+  const intimacy = window.PetStorage.getIntimacy();
+  if (intimacy.lastLoginDate === today) return;
+
+  intimacy.lastLoginDate = today;
+  intimacy.totalDays = (intimacy.totalDays || 0) + 1;
+  window.PetStorage.saveIntimacy(intimacy);
+
+  const result = window.PetStorage.addPoints(20);
+  updateIntimacyUI();
+
+  setTimeout(() => {
+    const days = intimacy.totalDays;
+    const msg = days === 1 ? '第一次见面，好开心～ 亲密度 +20' : `连续第 ${days} 天来看我啦！亲密度 +20`;
+    if (result.levelUp) {
+      showBubbleMessage(`升级啦！现在是「${getLevelTitle(result.newLevel)}」🎉`);
+    } else {
+      showBubbleMessage(msg);
+    }
+  }, 2000);
+}
+
+// 聊天成功后增加亲密度
+function onChatMessageSent() {
+  const now = Date.now();
+  const intimacy = window.PetStorage.getIntimacy();
+  const today = getTodayDateString();
+  const todayChatKey = `chat_points_${today}`;
+  const todayChatPoints = parseInt(localStorage.getItem(todayChatKey) || '0', 10);
+  if (todayChatPoints >= 40) return;
+
+  intimacy.lastChatTime = now;
+  window.PetStorage.saveIntimacy(intimacy);
+
+  const result = window.PetStorage.addPoints(2);
+  localStorage.setItem(todayChatKey, String(todayChatPoints + 2));
+  updateIntimacyUI();
+  if (result.levelUp) {
+    setTimeout(() => showBubbleMessage(`升级啦！现在是「${getLevelTitle(result.newLevel)}」🎉`), 500);
+  }
+}
+
+// 任务完成后增加亲密度
+function onReminderTaskCompleted(task) {
+  const taskId = task && task.id;
+  if (!taskId) return;
+
+  const rewardedKey = `task_rewarded_${taskId}`;
+  if (localStorage.getItem(rewardedKey) === '1') return;
+
+  const result = window.PetStorage.addPoints(5);
+  localStorage.setItem(rewardedKey, '1');
+  updateIntimacyUI();
+  if (result.levelUp) {
+    setTimeout(() => showBubbleMessage(`升级啦！现在是「${getLevelTitle(result.newLevel)}」🎉`), 500);
+  }
+}
+
 // 初始化记忆系统
 async function initMemorySystem() {
   if (!window.PetMemory) {
@@ -220,6 +320,8 @@ async function init() {
 
   // 检查是否需要初始化
   await checkIfNeedsInit();
+  updateIntimacyUI();
+  checkDailyLogin();
 }
 
 // 聊天 IPC（子窗口 -> 主窗口）
@@ -443,6 +545,7 @@ function updateUI() {
   }
   
   updateMoodDisplay();
+  updateIntimacyUI();
   updatePetSelection();
   updatePersonalitySelection();
   
@@ -594,6 +697,7 @@ async function sendChat(message, options = {}) {
       state.chatHistory = window.PetStorage.getChatHistory();
       
       showBubbleMessage(result.message);
+      onChatMessageSent();
       if (closeChatWindow) closeChat();
       saveData();
       if (returnReply) return result.message;
@@ -685,6 +789,7 @@ async function sendChat(message, options = {}) {
     // 更新心情
     state.mood = window.PetStorage.updateMood(5);
     updateMoodDisplay();
+    onChatMessageSent();
     
     // 心情好时显示开心动画
     if (state.mood > 70 && window.PetAnimations) {
@@ -1429,6 +1534,9 @@ function initTaskListener() {
       if (window.PetAnimations) {
         window.PetAnimations.happy(2000);
       }
+    } else if ((data.action === 'updated' && data.task && data.task.status === 'completed') || data.action === 'completed' || data.action === 'done') {
+      // 任务完成：发放亲密度奖励
+      onReminderTaskCompleted(data.task);
     } else if (data.action === 'updated') {
       // 任务更新，可以在这里做一些处理
       console.log('[Task] Task updated:', data.task.title);

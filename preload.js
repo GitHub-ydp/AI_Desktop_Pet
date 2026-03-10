@@ -57,6 +57,10 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('child-window-message', callback);
   },
   getPetProfile: () => ipcRenderer.invoke('memory:get-user-profile'),
+  getMemoryStats: () => ipcRenderer.invoke('memory:get-stats'),
+  getMemoryFacts: () => ipcRenderer.invoke('memory:get-facts'),
+  deleteMemoryFact: (id) => ipcRenderer.invoke('memory:delete-fact', id),
+  clearMemoryProfile: () => ipcRenderer.invoke('memory:clear-user-profile'),
   searchConversations: (keyword, options) =>
     ipcRenderer.invoke('memory:search', keyword, options || {}),
   // 菜单窗口管理

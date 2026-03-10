@@ -1276,6 +1276,44 @@ app.whenReady().then(async () => {
       return null;
     }
   });
+  ipcMain.handle('memory:get-stats', async () => {
+    try {
+      if (!memorySystem || !memorySystem.storage || !memorySystem.storage.db) return null;
+      const db = memorySystem.storage.db;
+      const totalConversations = db.prepare('SELECT COUNT(*) as c FROM conversations').get().c;
+      const totalFacts = db.prepare('SELECT COUNT(*) as c FROM memory_facts').get().c;
+      const profileKeys = db.prepare('SELECT COUNT(*) as c FROM user_profile WHERE confidence >= 0.5').get().c;
+
+      let activeMemories = 0;
+      let dormantMemories = 0;
+      try {
+        activeMemories = db.prepare("SELECT COUNT(*) as c FROM memory_chunks WHERE (stability IS NULL OR stability > 0) AND (last_triggered_at IS NULL OR (julianday('now') - julianday(last_triggered_at / 1000, 'unixepoch')) * 24 < stability * 3)").get().c;
+        dormantMemories = db.prepare('SELECT COUNT(*) as c FROM memory_chunks').get().c - activeMemories;
+        if (dormantMemories < 0) dormantMemories = 0;
+      } catch (e) {
+        activeMemories = db.prepare('SELECT COUNT(*) as c FROM memory_chunks').get().c;
+      }
+
+      return { totalConversations, totalFacts, profileKeys, activeMemories, dormantMemories };
+    } catch (e) {
+      return null;
+    }
+  });
+  ipcMain.handle('memory:get-facts', async () => {
+    try {
+      if (!memorySystem || !memorySystem.storage || !memorySystem.storage.db) return [];
+      const db = memorySystem.storage.db;
+      const facts = db.prepare(`
+        SELECT id, fact_type, subject, predicate, object, confidence, created_at
+        FROM memory_facts
+        ORDER BY confidence DESC, created_at DESC
+        LIMIT 100
+      `).all();
+      return facts;
+    } catch (e) {
+      return [];
+    }
+  });
   // 初始化模型路由器
   modelRouter = new ModelRouter();
   modelRouter.registerIPCHandlers(ipcMain);
