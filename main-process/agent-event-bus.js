@@ -121,7 +121,17 @@ class AgentEventBus {
     if (run.status === 'completed') {
       return { ok: true, finalText: run.finalText || '' };
     }
-    return { ok: false, error: run.errorCode || run.status || 'run_failed' };
+
+    const events = this.store.getEvents(run.id, 0, this.maxEventsPerRun);
+    const finalEvent = [...events].reverse().find((event) =>
+      event.type === 'run.failed' || event.type === 'run.cancelled'
+    );
+
+    return {
+      ok: false,
+      error: run.errorCode || run.status || 'run_failed',
+      message: finalEvent?.payload?.message || finalEvent?.payload?.reason || ''
+    };
   }
 }
 

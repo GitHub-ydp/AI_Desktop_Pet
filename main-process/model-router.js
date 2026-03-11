@@ -267,7 +267,10 @@ class ModelRouter {
         provider,
         model: meta.defaultModel,
         endpoint: meta.endpoint,
-        scene
+        apiKey: credential.apiKey,
+        scene,
+        credentialSource: credential.source,
+        supportsTools: !!meta.supportsTools
       });
     }
 

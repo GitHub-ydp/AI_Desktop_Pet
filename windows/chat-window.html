@@ -31,19 +31,31 @@
       font-weight: 700;
       -webkit-app-region: drag;
     }
-    .close-btn {
-      width: 26px;
-      height: 26px;
-      border: 1px solid var(--border, rgba(0,255,240,0.3));
-      background: transparent;
-      color: var(--text-muted, rgba(160,220,240,0.6));
-      border-radius: 6px;
-      cursor: pointer;
+    .window-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       -webkit-app-region: no-drag;
     }
-    .close-btn:hover {
+    .window-btn {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: transparent;
+      color: var(--text-muted, rgba(160,220,240,0.7));
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+    }
+    .window-btn:hover {
+      border-color: var(--neon-cyan, #00fff0);
+      color: var(--neon-cyan, #00fff0);
+      background: var(--accent-bg-faint, rgba(0,255,240,0.06));
+    }
+    .window-btn.close:hover {
       border-color: var(--neon-magenta, #ff2d78);
       color: var(--neon-magenta, #ff2d78);
+      background: var(--danger-hover-bg, rgba(255,45,120,0.08));
     }
     .app-body { flex: 1; display: flex; overflow: hidden; }
     .pet-sidebar {
@@ -161,6 +173,53 @@
       font-size: 12px;
       padding-left: 2px;
     }
+    .typing::after {
+      content: '';
+      display: inline-block;
+      width: 1.2em;
+      animation: typingDots 1s steps(4, end) infinite;
+      vertical-align: bottom;
+      overflow: hidden;
+    }
+    .agent-status {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+      margin-left: 2px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: linear-gradient(180deg, var(--bg-card, rgba(0,30,55,0.6)), var(--bg-surface, rgba(2,10,20,0.98)));
+      color: var(--text, #cff0ff);
+      box-shadow: 0 10px 24px var(--bubble-shadow, rgba(0,255,240,0.12));
+      max-width: 360px;
+    }
+    .agent-status.show {
+      display: inline-flex;
+    }
+    .agent-status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--neon-cyan, #00fff0);
+      box-shadow: 0 0 0 0 rgba(0, 255, 240, 0.35);
+      animation: agentPulse 1.4s ease-out infinite;
+      flex-shrink: 0;
+    }
+    .agent-status--attention .agent-status-dot {
+      background: var(--neon-magenta, #ff2d78);
+      box-shadow: 0 0 0 0 rgba(255, 45, 120, 0.25);
+    }
+    .agent-status--success .agent-status-dot {
+      background: #4cff91;
+      box-shadow: 0 0 0 0 rgba(76, 255, 145, 0.22);
+    }
+    .agent-status-text {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text, #cff0ff);
+    }
     .composer {
       flex: 1;
       min-width: 0;
@@ -181,6 +240,7 @@
       display: flex;
     }
     .attachment-thumb {
+      display: none;
       width: 52px;
       height: 52px;
       object-fit: cover;
@@ -188,6 +248,27 @@
       border: 1px solid var(--border, rgba(0,255,240,0.3));
       background: var(--bg-surface, rgba(0,15,30,0.98));
       flex-shrink: 0;
+    }
+    .attachment-thumb.show {
+      display: block;
+    }
+    .attachment-file-badge {
+      display: none;
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: linear-gradient(160deg, var(--accent-bg-dim, rgba(0,255,240,0.08)), var(--bg-surface, rgba(0,15,30,0.98)));
+      color: var(--neon-cyan, #00fff0);
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    .attachment-file-badge.show {
+      display: flex;
     }
     .attachment-meta {
       flex: 1;
@@ -215,22 +296,55 @@
     .input-area {
       display: flex;
       gap: 12px;
-      padding: 14px 20px 18px;
+      padding: 16px 18px 18px;
       background: var(--input-area-bg, rgba(0,12,25,0.98));
       border-top: 1px solid var(--border, rgba(0,255,240,0.3));
-      align-items: flex-end;
+      align-items: stretch;
+    }
+    .input-card {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: linear-gradient(180deg, var(--bg-surface, rgba(2,10,20,0.98)), var(--bg-card, rgba(0,30,55,0.62)));
+      box-shadow: 0 18px 30px rgba(0, 0, 0, 0.12);
+    }
+    .input-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
     .tool-btn {
-      width: 40px;
-      height: 40px;
+      width: 38px;
+      height: 38px;
       border-radius: 12px;
       border: 1px solid var(--border, rgba(0,255,240,0.3));
       background: var(--bg-surface, rgba(2,10,20,0.98));
       color: var(--text, #cff0ff);
       cursor: pointer;
       flex-shrink: 0;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
     }
-    .tool-btn:hover { background: var(--accent-bg-faint, rgba(0,255,240,0.06)); }
+    .tool-btn:hover {
+      background: var(--accent-bg-faint, rgba(0,255,240,0.06));
+      border-color: var(--neon-cyan, #00fff0);
+      transform: translateY(-1px);
+    }
+    .tool-btn.is-disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .tool-btn.is-disabled:hover {
+      background: var(--bg-surface, rgba(2,10,20,0.98));
+      border-color: var(--border, rgba(0,255,240,0.3));
+      transform: none;
+    }
     textarea#chatInput {
       flex: 1;
       resize: none;
@@ -240,7 +354,7 @@
       overflow-y: auto;
       background: var(--input-field-bg, rgba(0,20,40,0.8));
       color: var(--text, #cff0ff);
-      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      border: 1px solid var(--border, rgba(0,255,240,0.22));
       border-radius: 16px;
       padding: 12px 14px;
       font-size: 14px;
@@ -254,16 +368,17 @@
     }
     textarea#chatInput::placeholder { color: var(--text-muted, rgba(160,220,240,0.75)); }
     .send-btn {
-      height: 40px;
-      padding: 0 22px;
-      border-radius: 12px;
-      background: var(--neon-cyan, #00fff0);
+      height: auto;
+      min-width: 104px;
+      padding: 0 24px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, var(--neon-cyan, #00fff0), color-mix(in srgb, var(--neon-cyan, #00fff0) 72%, #ffffff));
       color: #020810;
       border: none;
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 14px;
+      font-weight: 700;
       cursor: pointer;
-      transition: opacity 0.2s;
+      transition: opacity 0.2s ease, transform 0.2s ease;
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -293,7 +408,8 @@
     .confirm-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(2, 8, 16, 0.78);
+      background: rgba(8, 12, 18, 0.42);
+      backdrop-filter: blur(10px);
       display: none;
       align-items: center;
       justify-content: center;
@@ -303,43 +419,50 @@
     .confirm-overlay.show { display: flex; }
     .confirm-dialog {
       width: min(760px, 100%);
-      background: rgba(2, 10, 20, 0.98);
+      background: linear-gradient(180deg, var(--confirm-bg, rgba(240,252,249,0.98)), var(--bg-surface, rgba(245,253,251,0.98)));
       border: 1px solid var(--border-bright, rgba(0,255,240,0.7));
-      border-radius: 10px;
-      padding: 16px;
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
     }
-    .confirm-title { color: var(--neon-cyan, #00fff0); font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+    .confirm-title { color: var(--neon-cyan, #00fff0); font-size: 14px; font-weight: 700; margin-bottom: 10px; }
     .confirm-message {
       white-space: pre-wrap;
       word-break: break-word;
       font-size: 12px;
       line-height: 1.6;
       color: var(--text, #cff0ff);
-      background: rgba(255,255,255,0.02);
+      background: var(--accent-bg-faint, rgba(255,255,255,0.02));
       border: 1px solid var(--border, rgba(0,255,240,0.3));
-      border-radius: 8px;
-      padding: 10px;
+      border-radius: 12px;
+      padding: 12px;
     }
     .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
     .confirm-btn {
-      border-radius: 8px;
-      padding: 8px 14px;
+      border-radius: 10px;
+      padding: 9px 14px;
       font-size: 12px;
       cursor: pointer;
       border: 1px solid var(--border, rgba(0,255,240,0.3));
-      background: transparent;
+      background: var(--bg-surface, rgba(2,10,20,0.98));
       color: var(--text, #cff0ff);
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+    .confirm-btn:hover {
+      background: var(--accent-bg-faint, rgba(0,255,240,0.06));
+      transform: translateY(-1px);
     }
     .confirm-btn.danger {
       color: var(--neon-magenta, #ff2d78);
-      border-color: rgba(255,45,120,0.45);
+      border-color: var(--danger-border, rgba(255,45,120,0.45));
+      background: var(--danger-hover-bg, rgba(255,45,120,0.06));
     }
     .confirm-diff {
       margin-top: 12px;
       display: none;
       border: 1px solid var(--border, rgba(0,255,240,0.3));
-      border-radius: 8px;
-      background: rgba(0,10,20,0.72);
+      border-radius: 12px;
+      background: var(--bg-surface, rgba(0,10,20,0.72));
       overflow: hidden;
     }
     .confirm-diff.show { display: block; }
@@ -382,14 +505,26 @@
       pointer-events: none;
     }
     .toast.show { opacity: 1; }
+    @keyframes typingDots {
+      0% { width: 0; }
+      100% { width: 1.2em; }
+    }
+    @keyframes agentPulse {
+      0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(0, 255, 240, 0.35); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 255, 240, 0); }
+      100% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(0, 255, 240, 0); }
+    }
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-thumb { background: rgba(0,255,240,0.35); border-radius: 4px; }
   </style>
 </head>
 <body>
   <div class="window-header">
-    <span>宠物的小窝</span>
-    <button class="close-btn" onclick="closeWindow()">×</button>
+    <span>&#23456;&#29289;&#32842;&#22825;</span>
+    <div class="window-actions">
+      <button class="window-btn" type="button" onclick="minimizeWindow()">&#9472;</button>
+      <button class="window-btn close" type="button" onclick="closeWindow()">&#10005;</button>
+    </div>
   </div>
 
   <div class="app-body">
@@ -410,23 +545,37 @@
     <div class="chat-panel">
       <div class="messages-wrap" id="messagesWrap">
         <div class="empty-state" id="emptyState">和我说说今天发生了什么吧~</div>
-        <div class="typing" id="typingText">正在思考中...</div>
+        <div class="typing" id="typingText">&#27491;&#22312;&#24605;&#32771;&#20013;...</div>
+        <div class="agent-status" id="agentStatus">
+          <div class="agent-status-dot"></div>
+          <div class="agent-status-text" id="agentStatusText">&#27491;&#22312;&#20934;&#22791;&#20013;...</div>
+        </div>
       </div>
 
       <div class="input-area">
-        <button class="tool-btn" id="screenshotBtn" title="截图">📸</button>
-        <div class="composer">
-          <div class="attachment-tray" id="attachmentTray">
-            <img class="attachment-thumb" id="attachmentThumb" alt="attachment preview">
-            <div class="attachment-meta">
-              <div class="attachment-title" id="attachmentTitle">已粘贴截图</div>
-              <div class="attachment-desc" id="attachmentDesc">发送后会连同文字一起分析</div>
-            </div>
-            <button class="attachment-remove" id="attachmentRemoveBtn" type="button">移除</button>
+        <div class="input-card">
+          <div class="input-toolbar">
+            <button class="tool-btn" id="screenshotBtn" type="button" title="Screenshot">&#128247;</button>
+            <button class="tool-btn" id="uploadBtn" type="button" title="Upload">&#128206;</button>
+            <button class="tool-btn" id="voiceBtn" type="button" title="Voice">&#127908;</button>
+            <button class="tool-btn" id="videoBtn" type="button" title="Video">&#127909;</button>
+            <button class="tool-btn is-disabled" id="videoCallBtn" type="button" title="Video Call" disabled>&#128249;</button>
+            <input id="fileUploadInput" type="file" hidden accept="image/*,.txt,.md,.json,.csv,.log,.js,.ts,.py">
           </div>
-          <textarea id="chatInput" placeholder="和我说说话吧~" rows="1"></textarea>
+          <div class="composer">
+            <div class="attachment-tray" id="attachmentTray">
+              <div class="attachment-file-badge" id="attachmentBadge">FILE</div>
+              <img class="attachment-thumb" id="attachmentThumb" alt="attachment preview">
+              <div class="attachment-meta">
+                <div class="attachment-title" id="attachmentTitle">&#24050;&#28165;&#36148;&#38468;&#20214;</div>
+                <div class="attachment-desc" id="attachmentDesc">&#21457;&#36865;&#21518;&#20250;&#36830;&#21516;&#25991;&#23383;&#19968;&#36215;&#20998;&#26512;</div>
+              </div>
+              <button class="attachment-remove" id="attachmentRemoveBtn" type="button">&#31227;&#38500;</button>
+            </div>
+            <textarea id="chatInput" placeholder="&#21644;&#25105;&#35828;&#35828;&#35805;&#21543;~" rows="1"></textarea>
+          </div>
         </div>
-        <button class="send-btn" id="sendBtn">发送</button>
+        <button class="send-btn" id="sendBtn">&#21457;&#36865;</button>
       </div>
     </div>
   </div>
@@ -456,11 +605,103 @@
     let streamingAssistantMessage = null;
     let toastTimer = null;
     let pendingImageAttachment = null;
+    let agentSessionPersonality = sessionStorage.getItem('chatAgentPersonality') || null;
+    let agentStatusTimer = null;
+
+    function getStoredPetData() {
+      try {
+        return JSON.parse(localStorage.getItem('pet_data') || '{}');
+      } catch {
+        return {};
+      }
+    }
+
+    function getCurrentPersonality() {
+      const petData = getStoredPetData();
+      return typeof petData.personality === 'string' && petData.personality.trim()
+        ? petData.personality.trim()
+        : 'healing';
+    }
+
+    function resetAgentSession() {
+      agentSessionId = null;
+      agentSessionPersonality = null;
+      sessionStorage.removeItem('chatAgentSessionId');
+      sessionStorage.removeItem('chatAgentPersonality');
+    }
+
+    function setAgentStatus(message, tone = 'working', autoHideMs = 0) {
+      const status = document.getElementById('agentStatus');
+      const text = document.getElementById('agentStatusText');
+      if (!status || !text) return;
+      if (agentStatusTimer) {
+        clearTimeout(agentStatusTimer);
+        agentStatusTimer = null;
+      }
+      text.textContent = message || '\u6b63\u5728\u5904\u7406\u4e2d...';
+      status.classList.add('show');
+      status.classList.remove('agent-status--attention', 'agent-status--success');
+      if (tone === 'attention') {
+        status.classList.add('agent-status--attention');
+      } else if (tone === 'success') {
+        status.classList.add('agent-status--success');
+      }
+      const container = document.getElementById('messagesWrap');
+      if (container) container.scrollTop = container.scrollHeight;
+      if (autoHideMs > 0) {
+        agentStatusTimer = setTimeout(() => {
+          clearAgentStatus();
+        }, autoHideMs);
+      }
+    }
+
+    function clearAgentStatus() {
+      const status = document.getElementById('agentStatus');
+      if (!status) return;
+      if (agentStatusTimer) {
+        clearTimeout(agentStatusTimer);
+        agentStatusTimer = null;
+      }
+      status.classList.remove('show', 'agent-status--attention', 'agent-status--success');
+    }
+
+    function formatToolLabel(toolName) {
+      const labels = {
+        file_edit: '\u6587\u4ef6\u4fee\u6539',
+        file_write: '\u6587\u4ef6\u5199\u5165',
+        file_read: '\u6587\u4ef6\u8bfb\u53d6',
+        file_list: '\u6587\u4ef6\u5217\u8868',
+        file_search: '\u6587\u4ef6\u641c\u7d22',
+        bash_run: '\u547d\u4ee4\u6267\u884c',
+        web_search: '\u7f51\u7edc\u641c\u7d22',
+        web_fetch: '\u7f51\u9875\u8bfb\u53d6',
+        screenshot_ocr: '\u622a\u56fe\u8bc6\u522b',
+        reminder_create: '\u63d0\u9192\u521b\u5efa',
+        memory_search: '\u8bb0\u5fc6\u68c0\u7d22',
+        open_url: '\u6253\u5f00\u94fe\u63a5',
+        open_app: '\u6253\u5f00\u5e94\u7528'
+      };
+      return labels[toolName] || toolName || '\u64cd\u4f5c';
+    }
 
     function closeWindow() {
       if (window.electron && window.electron.closeChildWindow) {
         window.electron.closeChildWindow('chat');
       }
+    }
+
+    function minimizeWindow() {
+      if (window.electron && window.electron.minimizeCurrentWindow) {
+        window.electron.minimizeCurrentWindow();
+      }
+    }
+
+    function handleVoiceFeature() {
+      showToast('\u8bed\u97f3\u53d1\u9001\u5f00\u53d1\u4e2d');
+    }
+
+    function handleVideoFeature() {
+      showToast('\u89c6\u9891\u53d1\u9001\u5f00\u53d1\u4e2d');
     }
 
     function showToast(message) {
@@ -479,24 +720,41 @@
     function renderAttachmentPreview() {
       const tray = document.getElementById('attachmentTray');
       const thumb = document.getElementById('attachmentThumb');
+      const badge = document.getElementById('attachmentBadge');
       const title = document.getElementById('attachmentTitle');
       const desc = document.getElementById('attachmentDesc');
-      if (!tray || !thumb || !title || !desc) return;
+      if (!tray || !thumb || !badge || !title || !desc) return;
+
+      thumb.classList.remove('show');
+      badge.classList.remove('show');
+      thumb.removeAttribute('src');
 
       if (!pendingImageAttachment) {
         tray.classList.remove('show');
-        thumb.removeAttribute('src');
         return;
       }
 
-      thumb.src = pendingImageAttachment.dataURL;
-      title.textContent = pendingImageAttachment.name || '已粘贴截图';
-      desc.textContent = '发送后会连同文字一起分析';
+      if (pendingImageAttachment.type === 'image') {
+        thumb.src = pendingImageAttachment.dataURL;
+        thumb.classList.add('show');
+        title.textContent = pendingImageAttachment.name || '\u5df2\u7c98\u8d34\u622a\u56fe';
+        desc.textContent = '\u53d1\u9001\u540e\u4f1a\u8fde\u540c\u56fe\u7247\u4e00\u8d77\u5206\u6790';
+      } else {
+        badge.textContent = buildFileBadgeLabel(pendingImageAttachment.name || 'FILE');
+        badge.classList.add('show');
+        title.textContent = pendingImageAttachment.name || '\u5df2\u9009\u62e9\u6587\u4ef6';
+        desc.textContent = pendingImageAttachment.truncated
+          ? '\u53d1\u9001\u65f6\u4f1a\u9644\u5e26\u6587\u4ef6\u5185\u5bb9\uff08\u5df2\u622a\u65ad\uff09'
+          : '\u53d1\u9001\u65f6\u4f1a\u9644\u5e26\u6587\u4ef6\u5185\u5bb9';
+      }
+
       tray.classList.add('show');
     }
 
     function clearPendingImageAttachment() {
       pendingImageAttachment = null;
+      const fileInput = document.getElementById('fileUploadInput');
+      if (fileInput) fileInput.value = '';
       renderAttachmentPreview();
     }
 
@@ -509,6 +767,29 @@
       });
     }
 
+    function fileToText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('file_read_failed'));
+        reader.readAsText(file, 'utf-8');
+      });
+    }
+
+    function isTextLikeFile(file) {
+      const name = String(file && file.name ? file.name : '');
+      const type = String(file && file.type ? file.type : '').toLowerCase();
+      return type.startsWith('text/') || /\.(txt|md|json|csv|log|js|ts|py)$/i.test(name);
+    }
+
+    function buildFileBadgeLabel(name) {
+      const ext = String(name || '').split('.').pop().trim().toUpperCase();
+      if (!ext || ext === String(name || '').toUpperCase()) {
+        return 'FILE';
+      }
+      return ext.slice(0, 4);
+    }
+
     async function handleImagePaste(file) {
       const dataURL = await fileToDataURL(file);
       pendingImageAttachment = {
@@ -518,7 +799,54 @@
         dataURL
       };
       renderAttachmentPreview();
-      showToast('截图已粘贴');
+      showToast('\u622a\u56fe\u5df2\u7c98\u8d34');
+    }
+
+    async function handleFileSelection(file) {
+      if (!file) return;
+      if (file.type && file.type.startsWith('image/')) {
+        await handleImagePaste(file);
+        return;
+      }
+      if (!isTextLikeFile(file)) {
+        showToast('\u6682\u4ec5\u652f\u6301\u56fe\u7247\u548c\u6587\u672c\u7c7b\u6587\u4ef6');
+        return;
+      }
+      const rawText = await fileToText(file);
+      const textContent = rawText.trim();
+      if (!textContent) {
+        showToast('\u8fd9\u4e2a\u6587\u4ef6\u662f\u7a7a\u7684');
+        return;
+      }
+      pendingImageAttachment = {
+        type: 'text',
+        name: file.name || `attachment-${Date.now()}.txt`,
+        mimeType: file.type || 'text/plain',
+        text: textContent.slice(0, 6000),
+        truncated: textContent.length > 6000
+      };
+      renderAttachmentPreview();
+      showToast('\u6587\u4ef6\u5df2\u6dfb\u52a0');
+    }
+
+    function buildEffectiveMessage(message, attachment) {
+      if (!attachment || attachment.type === 'image') {
+        return message || (attachment ? '\u8bf7\u5e2e\u6211\u770b\u4e00\u4e0b\u8fd9\u5f20\u56fe\u7247\u3002' : '');
+      }
+
+      const base = message || '\u8bf7\u7ed3\u5408\u9644\u4ef6\u5185\u5bb9\u5904\u7406\u3002';
+      const suffix = attachment.truncated ? '\n...[\u9644\u4ef6\u5df2\u622a\u65ad]' : '';
+      return `${base}\n\n[\u9644\u4ef6\u6587\u4ef6: ${attachment.name}]\n${attachment.text}${suffix}`;
+    }
+
+    function buildOutgoingPreviewText(message, attachment) {
+      if (!attachment) {
+        return message;
+      }
+      if (attachment.type === 'image') {
+        return message || '\u53d1\u9001\u4e86\u4e00\u5f20\u56fe\u7247';
+      }
+      return message || `\u53d1\u9001\u4e86\u6587\u4ef6\uff1a${attachment.name}`;
     }
 
     function createMessageNode(role, content, attachments = null) {
@@ -585,23 +913,31 @@
       if (agentSessionId) {
         sessionStorage.setItem('chatAgentSessionId', agentSessionId);
       }
+      if (agentSessionPersonality) {
+        sessionStorage.setItem('chatAgentPersonality', agentSessionPersonality);
+      }
     }
 
     async function ensureAgentSession() {
-      if (agentSessionId) return agentSessionId;
+      const personality = getCurrentPersonality();
+      if (agentSessionId && agentSessionPersonality === personality) return agentSessionId;
+      if (agentSessionId && agentSessionPersonality !== personality) {
+        resetAgentSession();
+      }
       if (!window.PetAgent || !window.PetAgent.startSession) {
         throw new Error('PetAgent unavailable');
       }
       console.log('[chat-window] startSession begin');
       const started = await window.PetAgent.startSession({
         channel: 'chat-window',
-        metadata: { personality: 'healing' }
+        metadata: { personality }
       });
       console.log('[chat-window] startSession result:', started);
       if (!started || started.error || !started.sessionId) {
         throw new Error((started && started.error) || 'agent_start_session_failed');
       }
       agentSessionId = started.sessionId;
+      agentSessionPersonality = personality;
       persistAgentSession();
       return agentSessionId;
     }
@@ -623,12 +959,77 @@
 
     function appendAssistantDelta(delta) {
       hideTyping();
+      setAgentStatus('\u6b63\u5728\u56de\u590d\u4e2d...', 'working');
       if (!streamingAssistantMessage) {
         streamingAssistantMessage = addMessage('assistant', '');
       }
       streamingAssistantMessage.textContent += delta || '';
       const container = document.getElementById('messagesWrap');
       container.scrollTop = container.scrollHeight;
+    }
+
+    function finalizeStreamedAssistantMessage(finalText) {
+      const text = finalText || '\u597d\u7684~';
+      if (streamingAssistantMessage) {
+        const wrapper = streamingAssistantMessage.closest('.msg');
+        if (wrapper && wrapper.parentNode) {
+          wrapper.parentNode.removeChild(wrapper);
+        }
+        streamingAssistantMessage = null;
+      }
+      return addMessage('assistant', text);
+    }
+
+    async function openAgentStream(sessionId, runId) {
+      if (!window.PetAgent || !window.PetAgent.openStream || !runId) {
+        return;
+      }
+
+      if (activeAgentStream && typeof activeAgentStream.close === 'function') {
+        activeAgentStream.close();
+      }
+
+      activeAgentStream = await window.PetAgent.openStream({
+        sessionId,
+        runId,
+        afterSeq: 0
+      }, (event) => {
+        if (!event || !event.type) return;
+
+        switch (event.type) {
+          case 'message.delta':
+            appendAssistantDelta(event.payload && event.payload.delta ? event.payload.delta : '');
+            break;
+          case 'tool.started': {
+            const toolName = event.payload && event.payload.toolName ? event.payload.toolName : '';
+            setAgentStatus(`\u6b63\u5728\u6267\u884c${formatToolLabel(toolName)}...`, 'working');
+            break;
+          }
+          case 'tool.delta': {
+            const toolName = event.payload && event.payload.toolName ? event.payload.toolName : '';
+            setAgentStatus(`\u6b63\u5728\u5904\u7406${formatToolLabel(toolName)}\u7684\u8f93\u51fa...`, 'working');
+            break;
+          }
+          case 'tool.completed': {
+            const toolName = event.payload && event.payload.toolName ? event.payload.toolName : '';
+            const ok = !event.payload || event.payload.ok !== false;
+            setAgentStatus(ok ? `\u5df2\u5b8c\u6210${formatToolLabel(toolName)}` : `${formatToolLabel(toolName)}\u6267\u884c\u5931\u8d25`, ok ? 'success' : 'attention', ok ? 900 : 0);
+            break;
+          }
+          case 'approval.requested':
+            showAgentApproval(event.payload || null, runId);
+            break;
+          case 'run.failed':
+            console.error('[chat-window] agent run failed event:', event.payload || null);
+            setAgentStatus('\u8fd9\u6b21\u64cd\u4f5c\u6ca1\u6709\u5b8c\u6210', 'attention');
+            break;
+          case 'run.completed':
+            setAgentStatus('\u64cd\u4f5c\u5df2\u5b8c\u6210', 'success', 900);
+            break;
+          default:
+            break;
+        }
+      });
     }
 
     function finishAgentRun() {
@@ -640,28 +1041,29 @@
       isProcessing = false;
       document.getElementById('sendBtn').disabled = false;
       hideTyping();
+      clearAgentStatus();
     }
 
     async function sendMessage() {
       const input = document.getElementById('chatInput');
       const message = input.value.trim();
-      const attachments = pendingImageAttachment ? [pendingImageAttachment] : null;
+      const attachment = pendingImageAttachment;
+      const attachments = attachment && attachment.type === 'image' ? [attachment] : null;
       const previousAttachment = pendingImageAttachment;
-      const effectiveMessage = message || (attachments ? '请帮我看下这张截图。' : '');
+      const effectiveMessage = buildEffectiveMessage(message, attachment);
       if ((!effectiveMessage && !attachments) || isProcessing) return;
 
       isProcessing = true;
       document.getElementById('sendBtn').disabled = true;
-      addMessage('user', message || '发送了一张截图', attachments);
+      addMessage('user', buildOutgoingPreviewText(message, attachment), attachments);
       input.value = '';
       autoGrowTextarea();
       clearPendingImageAttachment();
       showTyping();
+      setAgentStatus('\u6b63\u5728\u601d\u8003\u4e2d...', 'working');
 
       try {
-        // 先快速检查 agentRuntime 是否就绪，避免 15 秒超时等待
-        const agentReady = window.PetAgent?.isReady ? await window.PetAgent.isReady() : false;
-        if (window.PetAgent && agentReady) {
+        if (window.PetAgent) {
           try {
             const sessionId = await ensureAgentSession();
             console.log('[chat-window] send begin:', {
@@ -681,6 +1083,12 @@
               throw new Error(result.reason || 'agent_send_failed');
             }
 
+            try {
+              await openAgentStream(sessionId, result.runId);
+            } catch (streamError) {
+              console.warn('[chat-window] open stream failed:', streamError);
+            }
+
             console.log('[chat-window] wait begin:', { runId: result.runId });
             const waited = await window.PetAgent.wait({
               runId: result.runId,
@@ -690,17 +1098,24 @@
             hideTyping();
 
             if (!waited || !waited.ok) {
-              throw new Error((waited && waited.error) || 'agent_wait_failed');
+              const waitError = waited && waited.message
+                ? `${waited.error || 'agent_wait_failed'}: ${waited.message}`
+                : ((waited && waited.error) || 'agent_wait_failed');
+              throw new Error(waitError);
             }
 
-            addMessage('assistant', waited.finalText || '好的~');
+            const finalText = waited.finalText || '\u597d\u7684~';
+            if (streamingAssistantMessage) {
+              finalizeStreamedAssistantMessage(finalText);
+            } else {
+              addMessage('assistant', finalText);
+            }
             finishAgentRun();
             return;
           } catch (agentError) {
             const errorText = String(agentError && agentError.message ? agentError.message : agentError || '');
             console.error('[chat-window] agent path failed:', agentError);
-            const canFallbackToBasicChat = !attachments &&
-              /agent_runtime_unavailable|agent_start_session_failed|agent_send_failed|agent_wait_failed|PetAgent unavailable/.test(errorText);
+            const canFallbackToBasicChat = !attachments && /PetAgent unavailable/.test(errorText);
 
             if (canFallbackToBasicChat) {
               finishAgentRun();
@@ -726,12 +1141,12 @@
         }
         if (window.PetAgent) finishAgentRun();
         hideTyping();
-        addMessage('assistant', '抱歉，聊天失败了...');
+        const errorText = String(error && error.message ? error.message : error || 'unknown_error').slice(0, 300);
+        addMessage('assistant', `\u804a\u5929\u5931\u8d25\uff1a${errorText}`);
       } finally {
-        if (!window.PetAgent) {
-          isProcessing = false;
-          document.getElementById('sendBtn').disabled = false;
-        }
+        // 无论走哪条路径都确保解锁，finishAgentRun 已提前调用时再次设置也是安全的
+        isProcessing = false;
+        document.getElementById('sendBtn').disabled = false;
       }
     }
 
@@ -775,6 +1190,7 @@
       document.getElementById('confirmMessage').textContent = message || '是否继续执行该操作？';
       renderApprovalDiff(preview);
       overlay.classList.add('show');
+      setAgentStatus('\u7b49\u5f85\u4f60\u786e\u8ba4\u64cd\u4f5c...', 'attention');
     }
 
     async function resolveApprovalDialog(approved) {
@@ -791,6 +1207,7 @@
             approvalId: current.approvalId,
             approved
           });
+          setAgentStatus(approved ? '\u5df2\u786e\u8ba4\uff0c\u7ee7\u7eed\u6267\u884c\u4e2d...' : '\u5df2\u53d6\u6d88\u8be5\u64cd\u4f5c', approved ? 'working' : 'attention');
         } catch (error) {
           addMessage('assistant', '审批提交失败，请重试。');
         }
@@ -896,6 +1313,10 @@
       const input = document.getElementById('chatInput');
       const sendBtn = document.getElementById('sendBtn');
       const screenshotBtn = document.getElementById('screenshotBtn');
+      const uploadBtn = document.getElementById('uploadBtn');
+      const voiceBtn = document.getElementById('voiceBtn');
+      const videoBtn = document.getElementById('videoBtn');
+      const fileUploadInput = document.getElementById('fileUploadInput');
       const attachmentRemoveBtn = document.getElementById('attachmentRemoveBtn');
 
       input.addEventListener('keydown', (event) => {
@@ -919,6 +1340,22 @@
       });
       sendBtn.addEventListener('click', () => void sendMessage());
       screenshotBtn.addEventListener('click', () => void handleScreenshot());
+      uploadBtn.addEventListener('click', () => {
+        if (fileUploadInput) fileUploadInput.click();
+      });
+      fileUploadInput.addEventListener('change', async (event) => {
+        const file = event.target && event.target.files ? event.target.files[0] : null;
+        if (!file) return;
+        try {
+          await handleFileSelection(file);
+        } catch (error) {
+          showToast('文件添加失败');
+        } finally {
+          fileUploadInput.value = '';
+        }
+      });
+      voiceBtn.addEventListener('click', handleVoiceFeature);
+      videoBtn.addEventListener('click', handleVideoFeature);
       attachmentRemoveBtn.addEventListener('click', clearPendingImageAttachment);
 
       document.addEventListener('keydown', (event) => {
@@ -961,6 +1398,30 @@
       } catch (e) {
         updateMoodDisplay(80);
       }
+
+      // 监听设置窗口的心情变更广播
+      if (window.electron && window.electron.onSettingsChange) {
+        window.electron.onSettingsChange((event, payload) => {
+          if (payload && payload.type === 'mood' && typeof payload.mood === 'number') {
+            updateMoodDisplay(payload.mood);
+          }
+          if (payload && payload.type === 'personality' && typeof payload.personality === 'string') {
+            resetAgentSession();
+            showToast('\u6027\u683c\u5df2\u66f4\u65b0\uff0c\u4e0b\u4e00\u8f6e\u5bf9\u8bdd\u751f\u6548');
+          }
+        });
+      }
+
+      // 同时监听 localStorage 变化（跨窗口 storage 事件）
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'pet_data') {
+          try {
+            const petData = JSON.parse(e.newValue || '{}');
+            if (typeof petData.mood === 'number') updateMoodDisplay(petData.mood);
+            if (typeof petData.personality === 'string') resetAgentSession();
+          } catch (_) {}
+        }
+      });
     });
   </script>
 </body>

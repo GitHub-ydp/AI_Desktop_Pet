@@ -11,8 +11,8 @@ function openChat() {
     window.electron.createChildWindow({
       id: 'chat',
       title: '宠物的小窝',
-      width: 1120,
-      height: 760,
+      width: 910,
+      height: 640,
       html: 'windows/chat-window.html'
     });
   }

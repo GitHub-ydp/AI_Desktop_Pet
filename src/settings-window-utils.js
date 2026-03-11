@@ -38,6 +38,25 @@ function setPersonalitySelection(storage, personality) {
   }
 }
 
+function setMoodValue(storage, mood) {
+  const numeric = Number(mood);
+  const normalizedMood = Number.isFinite(numeric)
+    ? Math.max(0, Math.min(100, Math.round(numeric)))
+    : 80;
+
+  if (storage.setMood) {
+    return storage.setMood(normalizedMood);
+  }
+
+  const petData = storage.getPetData ? storage.getPetData() : {};
+  petData.mood = normalizedMood;
+  petData.lastInteraction = Date.now();
+  if (storage.savePetData) {
+    storage.savePetData(petData);
+  }
+  return normalizedMood;
+}
+
 function setAutoSpeakEnabled(storage, enabled) {
   const settings = storage.getSettings ? storage.getSettings() : {};
   settings.autoSpeak = !!enabled;
@@ -86,6 +105,7 @@ const api = {
   getSettingsSnapshot,
   setPetSelection,
   setPersonalitySelection,
+  setMoodValue,
   setAutoSpeakEnabled,
   saveBubbleStateOffsets,
   setBubblePreviewState,

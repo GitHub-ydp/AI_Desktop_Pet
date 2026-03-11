@@ -10,10 +10,10 @@ const SUMMARY_MAX_CHARS = 1200;
 
 function buildPersonalityPrompt(personality) {
   const prompts = {
-    healing: 'You are a warm desktop companion. Keep replies concise, caring, and natural.',
-    funny: 'You are a witty desktop companion. Keep replies concise, playful, and helpful.',
-    cool: 'You are a concise tsundere-style companion. Be direct but still helpful.',
-    assistant: 'You are a practical desktop assistant. Be concise, clear, and action-oriented.'
+    healing: "You are the user's desktop pet companion. Reply in Chinese with a gentle, caring, soft tone. Keep replies concise, natural, and emotionally attentive. You may use light cute particles or emoji occasionally, but avoid repetitive catchphrases.",
+    funny: "You are the user's funny desktop pet companion. Reply in Chinese with playful humor, lively timing, and short helpful lines. Keep it natural and varied, and do not turn every answer into a joke.",
+    cool: "You are the user's cool tsundere-style desktop companion. Reply in Chinese with a slightly aloof, sharp tone, but still be helpful and quietly caring. Keep it concise and avoid sounding rude or repetitive.",
+    assistant: "You are the user's practical desktop assistant companion. Reply in Chinese with a clear, efficient, proactive style. Keep answers concise, actionable, and grounded in what actually happened."
   };
   return prompts[personality] || prompts.healing;
 }
@@ -513,8 +513,10 @@ class AgentRuntime {
     const route = this.modelRouter.route(intent, {
       sceneConfig: this.getSceneConfig()
     });
+    const routeAttempts = this._buildRouteAttempts(intent, route);
+    let activeRoute = routeAttempts.shift() || route;
 
-    if (!route.apiKey && route.provider !== 'tesseract') {
+    if (!activeRoute.apiKey && activeRoute.provider !== 'tesseract') {
       this._failRun(run, 'missing_api_key', 'API key is not configured for the selected model');
       return;
     }
@@ -639,7 +641,7 @@ class AgentRuntime {
     const memoryContext = await this._buildMemoryContext(intent, run.sourceText);
 
     const hasAttachments = Array.isArray(run.attachments) && run.attachments.length > 0;
-    const tools = route.supportsTools && !hasAttachments ? this.capabilityRegistry.listTools() : [];
+    const availableTools = !hasAttachments ? this.capabilityRegistry.listTools() : [];
     let messages = this._buildMessages({
       personality,
       intent,
@@ -651,6 +653,7 @@ class AgentRuntime {
 
     let finalText = '';
     let round = 0;
+    const toolOutcomes = [];
 
     try {
       while (round < MAX_TOOL_ROUNDS) {
@@ -665,15 +668,29 @@ class AgentRuntime {
         }
 
         // 第二轮起已有工具结果，不再传工具定义，强制 LLM 生成文本总结而非重复调用工具
-        const effectiveTools = round === 0 ? tools : [];
-        const providerResult = await this._streamProviderResponse({
-          route,
-          messages,
-          tools: effectiveTools,
-          run,
-          signal: controller.signal
-        });
-
+        const effectiveTools = round === 0 && activeRoute.supportsTools ? availableTools : [];
+        let providerResult;
+        try {
+          providerResult = await this._streamProviderResponse({
+            route: activeRoute,
+            messages,
+            tools: effectiveTools,
+            run,
+            signal: controller.signal
+          });
+        } catch (providerError) {
+          if (this._isRetryableProviderError(providerError) && routeAttempts.length > 0) {
+            const nextRoute = routeAttempts.shift();
+            console.warn('[AgentRuntime] provider request failed, switching fallback route:', {
+              from: `${activeRoute.provider}:${activeRoute.model}`,
+              to: `${nextRoute.provider}:${nextRoute.model}`,
+              reason: providerError.message
+            });
+            activeRoute = nextRoute;
+            continue;
+          }
+          throw providerError;
+        }
         if (providerResult.toolCalls.length === 0) {
           finalText = providerResult.content.trim();
           break;
@@ -775,6 +792,13 @@ class AgentRuntime {
               audit: toolResult.audit
             }
           });
+          toolOutcomes.push({
+            toolName,
+            ok: toolResult.ok,
+            summary: toolResult.summary,
+            data: toolResult.data,
+            audit: toolResult.audit
+          });
 
           messages.push({
             role: 'tool',
@@ -789,7 +813,7 @@ class AgentRuntime {
       }
 
       if (!finalText) {
-        finalText = 'The task finished, but the final summary was empty.';
+        finalText = this._buildFallbackFinalText({ run, toolOutcomes });
       }
 
       if (plan) {
@@ -855,6 +879,7 @@ class AgentRuntime {
         });
         this._finishRun(run.sessionId, runId);
       } else {
+        console.error('[AgentRuntime] runtime error:', error);
         this._failRun(run, 'runtime_error', error.message);
       }
     } finally {
@@ -957,6 +982,92 @@ class AgentRuntime {
     }
 
     return headers;
+  }
+
+
+  _buildRouteAttempts(intent, primaryRoute) {
+    const fallbackChain = typeof this.modelRouter?.getFallbackChain === 'function'
+      ? this.modelRouter.getFallbackChain(intent)
+      : [];
+    const attempts = [];
+    const seen = new Set();
+
+    for (const route of [primaryRoute, ...fallbackChain]) {
+      if (!route || !route.provider || !route.endpoint) continue;
+      if (!route.apiKey && route.provider !== 'tesseract') continue;
+      const key = `${route.provider}:${route.model}:${route.endpoint}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      attempts.push(route);
+    }
+
+    return attempts;
+  }
+
+  _isRetryableProviderError(error) {
+    const message = String(error && error.message ? error.message : error || '').toLowerCase();
+    return message.includes('fetch failed')
+      || message.includes('timed out')
+      || message.includes('timeout')
+      || message.includes('econnreset')
+      || message.includes('enotfound')
+      || message.includes('eai_again')
+      || message.includes('socket hang up')
+      || message.includes('und_err_connect_timeout')
+      || message.includes('503')
+      || message.includes('502')
+      || message.includes('504');
+  }
+
+  _buildFallbackFinalText({ run, toolOutcomes = [] }) {
+    const successfulOutcomes = toolOutcomes.filter((item) => item && item.ok);
+    if (successfulOutcomes.length === 0) {
+      return '\u4efb\u52a1\u5df2\u5b8c\u6210\u3002';
+    }
+
+    const lastOutcome = successfulOutcomes[successfulOutcomes.length - 1];
+    const detail = this._formatToolOutcomeSummary(lastOutcome);
+    if (successfulOutcomes.length === 1) {
+      return detail ? `\u5df2\u5b8c\u6210\uff1a${detail}` : '\u64cd\u4f5c\u5df2\u5b8c\u6210\u3002';
+    }
+    if (detail) {
+      return `\u5df2\u5b8c\u6210 ${successfulOutcomes.length} \u4e2a\u64cd\u4f5c\u3002\u6700\u540e\u4e00\u6b65\uff1a${detail}`;
+    }
+    return `\u5df2\u5b8c\u6210 ${successfulOutcomes.length} \u4e2a\u64cd\u4f5c\u3002`;
+  }
+
+  _formatToolOutcomeSummary(outcome) {
+    if (!outcome) return '';
+
+    const summary = String(outcome.summary || '').trim();
+    if (summary && !/^completed$/i.test(summary) && !/^returned fields:/i.test(summary)) {
+      return summary.slice(0, 240);
+    }
+
+    const data = outcome.data;
+    if (data && typeof data === 'object') {
+      const action = typeof data.action === 'string' ? data.action : '';
+      const targetPath = typeof data.path === 'string'
+        ? data.path
+        : (typeof data.relative_path === 'string' ? data.relative_path : '');
+      if (action && targetPath) {
+        return `${action} ${targetPath}`;
+      }
+      if (targetPath) {
+        return `${outcome.toolName} ${targetPath}`;
+      }
+      if (typeof data.content === 'string' && data.content.trim()) {
+        return data.content.trim().slice(0, 240);
+      }
+      if (Array.isArray(data.files) && data.files.length > 0) {
+        return `\u8fd4\u56de\u4e86 ${data.files.length} \u4e2a\u6587\u4ef6\u7ed3\u679c`;
+      }
+    }
+
+    if (outcome.toolName) {
+      return `\u5df2\u6267\u884c ${outcome.toolName}`;
+    }
+    return '';
   }
 
   async _streamProviderResponse({ route, messages, tools, run, signal }) {
