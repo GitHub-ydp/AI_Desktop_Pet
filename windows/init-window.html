@@ -3,303 +3,216 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>初始化设置</title>
+  <title>完善称呼</title>
   <script src="../src/theme-manager.js"></script>
   <style>
     * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-:root {
-  --bg: #020810;
-  --bg-card: rgba(0, 30, 55, 0.6);
-  --border: rgba(0, 255, 240, 0.3);
-  --border-bright: rgba(0, 255, 240, 0.7);
-  --neon-cyan: #00fff0;
-  --neon-magenta: #ff2d78;
-  --text: #cff0ff;
-  --text-muted: rgba(160, 220, 240, 0.55);
-  --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
-  --radius: 8px;
-  --header-bg: rgba(0, 15, 30, 0.98);
-  --input-area-bg: rgba(0, 12, 25, 0.98);
-  --input-field-bg: rgba(0, 15, 35, 0.8);
-  --close-icon: rgba(160, 220, 240, 0.6);
-  --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4);
-  --accent-hover-bg: rgba(0, 255, 240, 0.1);
-  --scrollbar: rgba(0, 255, 240, 0.35);
-  --scrollbar-hover: rgba(0, 255, 240, 0.6);
-}
+    :root {
+      --bg: #020810;
+      --panel: rgba(16, 24, 34, 0.96);
+      --panel-soft: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 179, 71, 0.24);
+      --border-strong: rgba(255, 179, 71, 0.42);
+      --text: #fff1de;
+      --muted: rgba(255, 231, 204, 0.68);
+      --accent: #ffb347;
+      --accent-strong: #ffd08e;
+      --danger: #ff7b7b;
+      --shadow: 0 20px 40px rgba(0, 0, 0, 0.28);
+    }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
+    body {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
 
-.window-header {
-  background: var(--header-bg);
-  padding: 12px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
-  flex-shrink: 0;
-}
+    .window-header {
+      height: 48px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(10, 14, 20, 0.98);
+      -webkit-app-region: drag;
+    }
 
-.window-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--neon-cyan);
-  text-shadow: var(--glow-sm);
-}
+    .window-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent-strong);
+    }
 
-.close-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  position: relative;
-}
+    .close-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
 
-.close-btn::before,
-.close-btn::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 11px;
-  height: 1.5px;
-  background: var(--close-icon);
-  border-radius: 2px;
-  transform-origin: center;
-  transition: background 0.2s;
-}
+    .shell {
+      flex: 1;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+    }
 
-.close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
-.close-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
+    .hero {
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255, 179, 71, 0.12), rgba(255, 179, 71, 0.03));
+      box-shadow: var(--shadow);
+    }
 
-.close-btn:hover {
-  border-color: var(--neon-magenta);
-  box-shadow: var(--danger-glow);
-}
+    .hero h1 {
+      font-size: 22px;
+      line-height: 1.15;
+      color: var(--accent-strong);
+    }
 
-.close-btn:hover::before,
-.close-btn:hover::after {
-  background: var(--neon-magenta);
-}
+    .hero p {
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--muted);
+    }
 
-.init-container {
-  flex: 1;
-  padding: 24px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
+    .card {
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--panel-soft);
+    }
 
-.welcome-text {
-  color: var(--text-muted);
-  text-align: center;
-  font-size: 13px;
-  margin-bottom: 4px;
-}
+    .label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-strong);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
 
-.form-group {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-}
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
 
-.form-label {
-  display: block;
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--neon-cyan);
-  margin-bottom: 8px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
+    .text-input,
+    .text-area {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      padding: 11px 12px;
+      outline: none;
+      font: inherit;
+    }
 
-.form-input {
-  width: 100%;
-  padding: 10px 13px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 13px;
-  outline: none;
-  background: var(--input-field-bg);
-  color: var(--text);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
+    .text-input:focus,
+    .text-area:focus {
+      border-color: var(--border-strong);
+    }
 
-.form-input::placeholder {
-  color: var(--text-muted);
-}
+    .text-area {
+      min-height: 88px;
+      resize: vertical;
+    }
 
-.form-input:focus {
-  border-color: var(--border-bright);
-  box-shadow: var(--glow-sm);
-}
+    .optional-grid {
+      display: grid;
+      gap: 12px;
+    }
 
-.form-textarea {
-  width: 100%;
-  padding: 10px 13px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 13px;
-  outline: none;
-  resize: vertical;
-  font-family: inherit;
-  background: var(--input-field-bg);
-  color: var(--text);
-  transition: border-color 0.2s, box-shadow 0.2s;
-  min-height: 72px;
-}
+    .error {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--danger);
+    }
 
-.form-textarea::placeholder {
-  color: var(--text-muted);
-}
+    .footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      background: rgba(10, 14, 20, 0.98);
+    }
 
-.form-textarea:focus {
-  border-color: var(--border-bright);
-  box-shadow: var(--glow-sm);
-}
+    .btn {
+      min-width: 96px;
+      height: 38px;
+      padding: 0 16px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+    }
 
-.form-radio-group {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.form-radio {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-  color: var(--text);
-  font-size: 13px;
-}
-
-.form-radio input[type="radio"] {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--neon-cyan);
-  cursor: pointer;
-}
-
-.error-msg {
-  color: var(--neon-magenta);
-  font-size: 12px;
-  margin-top: 6px;
-  text-shadow: var(--danger-glow);
-}
-
-.footer-buttons {
-  background: var(--input-area-bg);
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  flex-shrink: 0;
-}
-
-.btn {
-  padding: 9px 20px;
-  border-radius: var(--radius);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, box-shadow 0.2s;
-}
-
-.btn-primary {
-  background: transparent;
-  color: var(--neon-cyan);
-  border: 1px solid var(--border-bright);
-}
-
-.btn-primary:hover {
-  background: var(--accent-hover-bg);
-  box-shadow: var(--glow-sm);
-}
-
-.btn-secondary {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.btn-secondary:hover {
-  background: var(--accent-hover-bg);
-  border-color: var(--border-bright);
-}
-
-::-webkit-scrollbar { width: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+    .btn-primary {
+      background: linear-gradient(135deg, #ffd08e, #ffb347);
+      border-color: transparent;
+      color: #261608;
+    }
   </style>
 </head>
 <body>
   <div class="window-header">
-    <div class="window-title">👋 嗨，很高兴认识你！</div>
-    <button class="close-btn" onclick="skipInit()"></button>
+    <div class="window-title">完善称呼</div>
+    <button class="close-btn" type="button" aria-label="关闭" onclick="skipInit()">×</button>
   </div>
 
-  <div class="init-container">
-    <p class="welcome-text">让我更了解你，这样我们可以更好地相处~</p>
+  <div class="shell">
+    <section class="hero">
+      <h1>先告诉我怎么称呼你吧</h1>
+      <p>这样我会叫得更自然。其他信息都可以稍后再补充，不会影响你继续使用。</p>
+    </section>
 
-    <div class="form-group" id="nameGroup">
-      <label class="form-label">你的名字</label>
-      <input type="text" id="initName" class="form-input" placeholder="怎么称呼你？" autofocus>
-    </div>
+    <section class="card" id="nameGroup">
+      <label class="label" for="initName">昵称</label>
+      <input id="initName" class="text-input" type="text" placeholder="比如：小张、阿林、Mia" autofocus>
+      <div class="hint">这是唯一建议现在填写的内容。</div>
+    </section>
 
-    <div class="form-group">
-      <label class="form-label">你的性别</label>
-      <div class="form-radio-group">
-        <label class="form-radio">
-          <input type="radio" name="initGender" value="男">
-          <span>男生</span>
-        </label>
-        <label class="form-radio">
-          <input type="radio" name="initGender" value="女">
-          <span>女生</span>
-        </label>
-        <label class="form-radio">
-          <input type="radio" name="initGender" value="其他" checked>
-          <span>保密</span>
-        </label>
+    <section class="card optional-grid">
+      <div>
+        <label class="label" for="initBirthday">生日（可选）</label>
+        <input id="initBirthday" class="text-input" type="date">
       </div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">你的生日（可选）</label>
-      <input type="date" id="initBirthday" class="form-input">
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">兴趣爱好（可选）</label>
-      <textarea id="initInterests" class="form-textarea" placeholder="比如：玩游戏、看书、听音乐..." rows="3"></textarea>
-    </div>
+      <div>
+        <label class="label" for="initInterests">兴趣或偏好（可选）</label>
+        <textarea id="initInterests" class="text-area" placeholder="比如：看书、游戏、咖啡、写作、跑步"></textarea>
+      </div>
+    </section>
   </div>
 
-  <div class="footer-buttons">
-    <button class="btn btn-secondary" onclick="skipInit()">跳过</button>
-    <button class="btn btn-primary" onclick="submitInit()">完成设置</button>
+  <div class="footer">
+    <button class="btn" type="button" onclick="skipInit()">稍后再说</button>
+    <button class="btn btn-primary" type="button" onclick="submitInit()">保存</button>
   </div>
 
   <script>
@@ -310,49 +223,44 @@ body {
       }
     }
 
-    async function submitInit() {
+    function submitInit() {
       const name = document.getElementById('initName').value.trim();
-      const gender = document.querySelector('input[name="initGender"]:checked')?.value;
       const birthday = document.getElementById('initBirthday').value;
       const interests = document.getElementById('initInterests').value.trim();
 
       if (!name) {
         const nameGroup = document.getElementById('nameGroup');
-        let errMsg = nameGroup.querySelector('.error-msg');
-        if (!errMsg) {
-          errMsg = document.createElement('div');
-          errMsg.className = 'error-msg';
-          nameGroup.appendChild(errMsg);
+        let error = nameGroup.querySelector('.error');
+        if (!error) {
+          error = document.createElement('div');
+          error.className = 'error';
+          nameGroup.appendChild(error);
         }
-        errMsg.textContent = '至少告诉我你的名字嘛~';
+        error.textContent = '先告诉我怎么称呼你吧。';
         document.getElementById('initName').focus();
         return;
       }
 
-      // 构建用户信息
-      const userInfo = {
-        name,
-        gender,
-        birthday,
-        interests
-      };
+      window.dispatchEvent(new CustomEvent('init-completed', {
+        detail: {
+          name,
+          gender: '',
+          birthday,
+          interests
+        }
+      }));
 
-      // 发送事件到主窗口
-      window.dispatchEvent(new CustomEvent('init-completed', { detail: userInfo }));
-
-      // 关闭窗口
       if (window.electron && window.electron.closeChildWindow) {
         window.electron.closeChildWindow('init');
       }
     }
 
-    // Enter 键提交
-    document.getElementById('initName').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
+    document.getElementById('initName').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
         submitInit();
       }
     });
-    console.log('[init-window] 赛博朋克风格已加载');
   </script>
 </body>
 </html>

@@ -1,5 +1,3 @@
-// 本地存储管理模块
-
 const STORAGE_KEYS = {
   PET_DATA: 'pet_data',
   CHAT_HISTORY: 'chat_history',
@@ -24,7 +22,6 @@ const DEFAULT_LLM_SCENE_CONFIG = {
   ocr: { provider: 'tesseract', model: 'tesseract', apiKeyMode: 'provider-fallback' }
 };
 
-// 默认值
 const DEFAULTS = {
   pet: {
     emoji: '🐱',
@@ -38,7 +35,10 @@ const DEFAULTS = {
     bubbleStateOffsets: DEFAULT_BUBBLE_STATE_OFFSETS,
     bubblePreviewState: 'idle',
     intimacyWidgetOffset: DEFAULT_INTIMACY_WIDGET_OFFSET,
-    llmSceneConfig: DEFAULT_LLM_SCENE_CONFIG
+    llmSceneConfig: DEFAULT_LLM_SCENE_CONFIG,
+    welcomeOverlayDismissed: false,
+    profileSetupCompleted: false,
+    profilePromptDeferred: false
   }
 };
 
@@ -98,7 +98,6 @@ function normalizeIntimacyWidgetOffset(offset) {
   };
 }
 
-// 获取宠物数据
 function getPetData() {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.PET_DATA);
@@ -112,7 +111,6 @@ function getPetData() {
   }
 }
 
-// 保存宠物数据
 function savePetData(data) {
   try {
     localStorage.setItem(STORAGE_KEYS.PET_DATA, JSON.stringify(data));
@@ -123,7 +121,6 @@ function savePetData(data) {
   }
 }
 
-// 更新心情值
 function updateMood(delta) {
   const petData = getPetData();
   petData.mood = Math.max(0, Math.min(100, petData.mood + delta));
@@ -132,12 +129,10 @@ function updateMood(delta) {
   return petData.mood;
 }
 
-// 获取心情值
 function getMood() {
   return getPetData().mood;
 }
 
-// 设置心情值
 function setMood(value) {
   const petData = getPetData();
   petData.mood = Math.max(0, Math.min(100, value));
@@ -146,7 +141,6 @@ function setMood(value) {
   return petData.mood;
 }
 
-// 获取对话历史
 function getChatHistory() {
   try {
     const history = localStorage.getItem(STORAGE_KEYS.CHAT_HISTORY);
@@ -157,7 +151,6 @@ function getChatHistory() {
   }
 }
 
-// 保存对话历史
 function saveChatHistory(history) {
   try {
     localStorage.setItem(STORAGE_KEYS.CHAT_HISTORY, JSON.stringify(history));
@@ -168,7 +161,6 @@ function saveChatHistory(history) {
   }
 }
 
-// 添加一条对话记录
 function addChatMessage(role, content) {
   const history = getChatHistory();
   history.push({
@@ -177,7 +169,6 @@ function addChatMessage(role, content) {
     timestamp: Date.now()
   });
 
-  // 限制历史记录数量（最多保存500条）
   if (history.length > 500) {
     history.splice(0, history.length - 500);
   }
@@ -186,7 +177,6 @@ function addChatMessage(role, content) {
   return history;
 }
 
-// 清空对话历史
 function clearChatHistory() {
   try {
     localStorage.removeItem(STORAGE_KEYS.CHAT_HISTORY);
@@ -197,7 +187,6 @@ function clearChatHistory() {
   }
 }
 
-// 获取设置
 function getSettings() {
   try {
     const settings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
@@ -211,6 +200,9 @@ function getSettings() {
     }
     merged.intimacyWidgetOffset = normalizeIntimacyWidgetOffset(parsed.intimacyWidgetOffset);
     merged.llmSceneConfig = normalizeLLMSceneConfig(parsed.llmSceneConfig);
+    merged.welcomeOverlayDismissed = !!merged.welcomeOverlayDismissed;
+    merged.profileSetupCompleted = !!merged.profileSetupCompleted;
+    merged.profilePromptDeferred = !!merged.profilePromptDeferred;
     return merged;
   } catch (error) {
     console.error('Error reading settings:', error);
@@ -218,7 +210,6 @@ function getSettings() {
   }
 }
 
-// 保存设置
 function saveSettings(settings) {
   try {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
@@ -229,7 +220,6 @@ function saveSettings(settings) {
   }
 }
 
-// 更新单个设置项
 function updateSetting(key, value) {
   const settings = getSettings();
   settings[key] = value;
@@ -277,7 +267,6 @@ function saveLLMSceneConfig(sceneConfig) {
   return saveSettings(settings);
 }
 
-// 重置所有数据
 function resetAllData() {
   try {
     localStorage.removeItem(STORAGE_KEYS.PET_DATA);
@@ -299,18 +288,14 @@ function resetAllData() {
   }
 }
 
-// 检查并更新心情值（定时调用）
 function checkMoodDecay() {
   const petData = getPetData();
   const now = Date.now();
   const hoursSinceLastInteraction = (now - petData.lastInteraction) / (1000 * 60 * 60);
 
-  // 每2小时无互动，心情值降低10分
   if (hoursSinceLastInteraction >= 2) {
-    // 计算本次应衰减的量（每满2小时衰减10分）
     const decayPeriods = Math.floor(hoursSinceLastInteraction / 2);
     const decay = decayPeriods * 10;
-    // 更新 lastInteraction 为已消耗的衰减周期结束时间，避免重复衰减
     petData.lastInteraction = petData.lastInteraction + decayPeriods * 2 * 60 * 60 * 1000;
     petData.mood = Math.max(0, Math.min(100, petData.mood - decay));
     savePetData(petData);
@@ -320,8 +305,6 @@ function checkMoodDecay() {
   return petData.mood;
 }
 
-// 导出所有功能
-// 读取亲密度数据
 function getIntimacy() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.INTIMACY);
@@ -333,7 +316,6 @@ function getIntimacy() {
   }
 }
 
-// 保存亲密度数据
 function saveIntimacy(data) {
   try {
     localStorage.setItem(STORAGE_KEYS.INTIMACY, JSON.stringify(data));
@@ -344,7 +326,6 @@ function saveIntimacy(data) {
   }
 }
 
-// 增加积分并计算等级，返回最新等级信息
 function addPoints(amount) {
   const LEVELS = [0, 100, 300, 600, 1000, 1500];
   const data = getIntimacy();

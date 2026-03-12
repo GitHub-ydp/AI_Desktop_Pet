@@ -8,17 +8,46 @@
 </head>
 <body>
   <div id="app">
-    <!-- 对话气泡 -->
     <div class="chat-bubble" id="chatBubble" style="display: none;">
       <div class="bubble-content" id="bubbleMessage"></div>
       <div class="bubble-arrow"></div>
     </div>
 
-    <!-- 宠物 -->
+    <section class="welcome-overlay" id="welcomeOverlay" hidden>
+      <div class="welcome-panel">
+        <div class="welcome-kicker">AI Desktop Pet</div>
+        <h1 class="welcome-title">你的 AI 桌面搭子</h1>
+        <p class="welcome-subtitle">会陪你聊天，会记住你，还能帮你处理电脑上的日常小任务。</p>
+        <div class="welcome-value-list">
+          <article class="welcome-value-card">
+            <h2>陪你聊天</h2>
+            <p>像一个会回应你的桌面搭子一样陪你聊天。</p>
+          </article>
+          <article class="welcome-value-card">
+            <h2>慢慢记住你</h2>
+            <p>它会记住你的习惯、偏好和你们聊过的事。</p>
+          </article>
+          <article class="welcome-value-card">
+            <h2>随手帮你做事</h2>
+            <p>截图问它、设提醒、处理轻量任务，都可以直接开口。</p>
+          </article>
+        </div>
+        <div class="welcome-actions">
+          <button class="welcome-action primary" id="welcomeChatAction" type="button">和我聊一句</button>
+          <button class="welcome-action" id="welcomeReminderAction" type="button">帮我设个提醒</button>
+          <button class="welcome-action" id="welcomeScreenshotAction" type="button">截图问我</button>
+        </div>
+        <div class="welcome-footer">
+          <button class="welcome-link" id="welcomeLaterAction" type="button">稍后再看</button>
+        </div>
+      </div>
+    </section>
+
     <div class="pet-wrapper" id="petWrapper">
       <div class="pet-lottie" id="petLottie"></div>
       <div class="pet-emoji" id="petEmoji" style="display: none;">🐱</div>
     </div>
+
     <div id="intimacy-widget">
       <div id="intimacy-level">Lv1 陌生人</div>
       <div id="intimacy-bar-track">
@@ -26,12 +55,9 @@
       </div>
       <div id="intimacy-points">0 / 100</div>
     </div>
-
   </div>
 
-  <!-- Lottie 动画库 -->
   <script src="assets/lib/lottie.min.js"></script>
-  
   <script src="src/storage.js"></script>
   <script src="src/prompts.js"></script>
   <script src="src/api.js"></script>
@@ -45,7 +71,7 @@
   <script src="src/rotary-menu.js"></script>
   <script src="src/file-drop-handler.js"></script>
   <script src="src/plan-manager.js"></script>
+  <script src="src/first-run.js"></script>
   <script src="src/app-vanilla.js"></script>
-
 </body>
 </html>

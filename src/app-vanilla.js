@@ -174,9 +174,9 @@ function checkDailyLogin() {
 
   setTimeout(() => {
     const days = intimacy.totalDays;
-    const msg = days === 1 ? '第一次见面，好开心～ 亲密度 +20' : `连续第 ${days} 天来看我啦！亲密度 +20`;
+    const msg = days === 1 ? '第一次见面，好开心~ 亲密度 +20' : `连续第 ${days} 天来看我啦！亲密度 +20`;
     if (result.levelUp) {
-      showBubbleMessage(`升级啦！现在是「${getLevelTitle(result.newLevel)}」🎉`);
+      showBubbleMessage(`升级啦！现在是「${getLevelTitle(result.newLevel)}」`);
     } else {
       showBubbleMessage(msg);
     }
@@ -199,7 +199,7 @@ function onChatMessageSent() {
   localStorage.setItem(todayChatKey, String(todayChatPoints + 2));
   updateIntimacyUI();
   if (result.levelUp) {
-    setTimeout(() => showBubbleMessage(`升级啦！现在是「${getLevelTitle(result.newLevel)}」🎉`), 500);
+    setTimeout(() => showBubbleMessage(`升级啦！现在是「${getLevelTitle(result.newLevel)}」`), 500);
   }
 }
 
@@ -215,7 +215,7 @@ function onReminderTaskCompleted(task) {
   localStorage.setItem(rewardedKey, '1');
   updateIntimacyUI();
   if (result.levelUp) {
-    setTimeout(() => showBubbleMessage(`升级啦！现在是「${getLevelTitle(result.newLevel)}」🎉`), 500);
+    setTimeout(() => showBubbleMessage(`升级啦！现在是「${getLevelTitle(result.newLevel)}」`), 500);
   }
 }
 
@@ -891,7 +891,7 @@ async function sendChat(message, options = {}) {
         `好的！我会在${timeStr}提醒你${reminderCreated.content}~`,
         `记住啦！${timeStr}我会叫你的~`,
         `没问题，${timeStr}准时提醒你哦！`,
-        `设置好啦，${timeStr}见！`
+        `设置好啦！${timeStr}见！`
       ];
       reply = responses[Math.floor(Math.random() * responses.length)];
     } else {

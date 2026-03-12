@@ -24,6 +24,62 @@ class ReminderScheduler {
     this.overdueStrategy = OVERDUE_STRATEGY.MISS;
   }
 
+  async getNotificationTitle(reminder) {
+    const metadata = this.parseReminderMetadata(reminder && reminder.metadata);
+    const explicitTitle = typeof metadata.title === 'string' ? metadata.title.trim() : '';
+    if (explicitTitle) return explicitTitle;
+
+    const petName = await this.getCurrentPetName();
+    return petName ? `${petName}提醒你` : '宠物提醒';
+  }
+
+  parseReminderMetadata(metadata) {
+    if (!metadata) return {};
+    if (typeof metadata === 'object') return metadata;
+
+    try {
+      return JSON.parse(metadata);
+    } catch (error) {
+      console.warn('[Reminder] Failed to parse reminder metadata:', error);
+      return {};
+    }
+  }
+
+  async getCurrentPetName() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return '宠物';
+    }
+
+    try {
+      const selectedPet = await this.mainWindow.webContents.executeJavaScript(
+        `(() => {
+          try {
+            const raw = localStorage.getItem('pet_data');
+            if (!raw) return null;
+            const petData = JSON.parse(raw);
+            return petData.basePet || petData.emoji || petData.selectedPet || null;
+          } catch (error) {
+            return null;
+          }
+        })()`,
+        true
+      );
+
+      const petNames = {
+        '🐱': '猫咪',
+        '🐶': '狗狗',
+        '🐰': '兔兔',
+        '🦊': '小狐',
+        '🐻': '小熊'
+      };
+
+      return petNames[selectedPet] || '宠物';
+    } catch (error) {
+      console.warn('[Reminder] Failed to read current pet from renderer:', error);
+      return '宠物';
+    }
+  }
+
   // 设置存储引用
   setStorage(storage) {
     this.storage = storage;
@@ -306,7 +362,7 @@ class ReminderScheduler {
       this.completeReminder(reminder.id, now);
 
       // 2. 发送系统通知
-      this.showNotification(reminder);
+      await this.showNotification(reminder);
 
       // 3. 通知渲染进程（让宠物"说话"）
       this.notifyRenderer(reminder);
@@ -325,10 +381,11 @@ class ReminderScheduler {
   }
 
   // 显示系统通知
-  showNotification(reminder) {
+  async showNotification(reminder) {
     try {
+      const title = await this.getNotificationTitle(reminder);
       const notification = new Notification({
-        title: '🐱 宠物提醒你',
+        title,
         body: reminder.content,
         icon: './assets/icon.png',
         silent: false
