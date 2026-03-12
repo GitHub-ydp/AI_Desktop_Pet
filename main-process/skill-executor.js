@@ -4,6 +4,7 @@
 
 const { exec } = require('child_process');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const os = require('os');
 const http = require('http');
@@ -31,6 +32,8 @@ class SkillExecutor {
     this.workflowManager = options.workflowManager || null;
     this.weatherService = options.weatherService || new WeatherService();
     this.screenshotOCR = typeof options.screenshotOCR === 'function' ? options.screenshotOCR : null;
+    this.historyFilePath = typeof options.historyFilePath === 'string' ? options.historyFilePath : '';
+    this.executionHistory = this._readExecutionHistory();
     if (options.weatherDefaultCity) {
       this.weatherService.setPreferredCity(options.weatherDefaultCity);
     }
@@ -94,13 +97,28 @@ class SkillExecutor {
     }
 
     try {
-      const result = await this._route(toolName, args, skill, options);
+      const resolvedToolName = this._resolveToolName(toolName);
+      const result = await this._route(resolvedToolName, args, skill, options);
       const duration = Date.now() - startTime;
-      return { ...result, duration };
+      const finalResult = { ...result, duration };
+      this._recordExecution(toolName, args, finalResult, options);
+      return finalResult;
     } catch (error) {
       const duration = Date.now() - startTime;
-      return { success: false, error: error.message, duration };
+      const finalResult = { success: false, error: error.message, duration };
+      this._recordExecution(toolName, args, finalResult, options);
+      return finalResult;
     }
+  }
+
+  getExecutionHistory(limit = 50) {
+    return this.executionHistory.slice(0, Math.max(1, Math.min(Number(limit) || 50, 200)));
+  }
+
+  clearExecutionHistory() {
+    this.executionHistory = [];
+    this._writeExecutionHistory();
+    return true;
   }
 
   // 路由逻辑
@@ -122,6 +140,54 @@ class SkillExecutor {
     }
 
     return { success: false, error: `无可用执行器: ${toolName}` };
+  }
+
+  _resolveToolName(toolName) {
+    if (!this.registry || typeof this.registry.getResolvedHandlerName !== 'function') {
+      return toolName;
+    }
+    return this.registry.getResolvedHandlerName(toolName);
+  }
+
+  _readExecutionHistory() {
+    if (!this.historyFilePath || !fsSync.existsSync(this.historyFilePath)) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(fsSync.readFileSync(this.historyFilePath, 'utf8'));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.warn('[SkillExecutor] 读取执行历史失败:', error.message);
+      return [];
+    }
+  }
+
+  _writeExecutionHistory() {
+    if (!this.historyFilePath) return;
+    fsSync.writeFileSync(this.historyFilePath, JSON.stringify(this.executionHistory, null, 2), 'utf8');
+  }
+
+  _recordExecution(toolName, args, result, options = {}) {
+    const entry = {
+      id: `skill_exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      toolName,
+      resolvedToolName: this._resolveToolName(toolName),
+      success: result?.success !== false,
+      error: result?.error || null,
+      duration: result?.duration || null,
+      args: args || {},
+      result: Object.prototype.hasOwnProperty.call(result || {}, 'result') ? result.result : result,
+      createdAt: Date.now(),
+      origin: options.origin || (options?.context?.sessionId ? 'agent' : 'direct'),
+      sessionId: options?.context?.sessionId || null
+    };
+
+    this.executionHistory.unshift(entry);
+    if (this.executionHistory.length > 200) {
+      this.executionHistory = this.executionHistory.slice(0, 200);
+    }
+    this._writeExecutionHistory();
   }
 
   // ==================== 内置处理器 ====================

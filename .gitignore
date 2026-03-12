@@ -25,3 +25,7 @@ Thumbs.db
 
 # Debug
 *.map
+
+# Python cache
+__pycache__/
+*.pyc

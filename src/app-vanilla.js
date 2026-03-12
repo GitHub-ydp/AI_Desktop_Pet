@@ -13,11 +13,17 @@ let state = {
   reminders: [],
   pendingReminder: null,  // 待确认的模糊时间提醒
   childWindowCount: 0,
-  suppressBubble: false
+  suppressBubble: false,
+  isPetHovered: false,
+  intimacyFeedbackActive: false,
+  intimacyFeedbackTimer: null,
+  lastIntimacySnapshot: null,
+  currentIntimacyDisplay: null
 };
 
 // 亲密度等级阈值
 const INTIMACY_LEVELS = [0, 100, 300, 600, 1000, 1500, 99999];
+const DEFAULT_MAIN_INTIMACY_WIDGET_OFFSET = { x: 0, y: 0 };
 
 // 亲密度等级称号
 function getLevelTitle(level) {
@@ -34,26 +40,123 @@ function getTodayDateString() {
   return `${year}-${month}-${day}`;
 }
 
-// 更新亲密度组件显示
-function updateIntimacyUI() {
+function normalizeIntimacyWidgetOffset(offset) {
+  if (!offset || typeof offset !== 'object') {
+    return { ...DEFAULT_MAIN_INTIMACY_WIDGET_OFFSET };
+  }
+
+  const x = Number(offset.x);
+  const y = Number(offset.y);
+
+  return {
+    x: Number.isFinite(x) ? Math.max(-200, Math.min(200, Math.round(x))) : 0,
+    y: Number.isFinite(y) ? Math.max(-200, Math.min(200, Math.round(y))) : 0
+  };
+}
+
+function applyIntimacyWidgetOffset() {
+  const offset = normalizeIntimacyWidgetOffset(state.settings && state.settings.intimacyWidgetOffset);
+  state.settings.intimacyWidgetOffset = offset;
+  document.documentElement.style.setProperty('--intimacy-offset-x', `${offset.x}px`);
+  document.documentElement.style.setProperty('--intimacy-offset-y', `${offset.y}px`);
+}
+
+function buildIntimacyDisplayData() {
   const data = window.PetStorage.getIntimacy();
   const level = data.level || 1;
   const points = data.points || 0;
+  const currentThreshold = INTIMACY_LEVELS[level - 1] || 0;
+  const nextThreshold = INTIMACY_LEVELS[level] || INTIMACY_LEVELS[INTIMACY_LEVELS.length - 1];
 
+  let progress = 0;
+  if (nextThreshold > currentThreshold) {
+    progress = Math.min(100, ((points - currentThreshold) / (nextThreshold - currentThreshold)) * 100);
+  } else {
+    progress = 100;
+  }
+
+  const progressText = `${progress.toFixed(1)}%`;
+  return {
+    level,
+    points,
+    progressText,
+    levelText: `Lv${level} ${getLevelTitle(level)}`,
+    pointsText: nextThreshold === 99999 ? 'MAX' : progressText
+  };
+}
+
+function syncIntimacyWidget(forcePayload = null) {
+  const payload = forcePayload || state.currentIntimacyDisplay || buildIntimacyDisplayData();
+  state.currentIntimacyDisplay = payload;
+
+  const shouldShow = !state.quickMenuVisible &&
+    state.childWindowCount === 0 &&
+    (state.isPetHovered || state.intimacyFeedbackActive);
+
+  if (window.electron && window.electron.showIntimacyWidget && window.electron.hideIntimacyWidget) {
+    if (shouldShow) {
+      window.electron.showIntimacyWidget(payload);
+    } else {
+      window.electron.hideIntimacyWidget();
+    }
+  }
+}
+
+function setQuickMenuVisible(isVisible) {
+  state.quickMenuVisible = !!isVisible;
+  document.body.classList.toggle('menu-active', state.quickMenuVisible);
+  syncIntimacyWidget();
+}
+
+function triggerIntimacyFeedback() {
+  if (state.intimacyFeedbackTimer) {
+    clearTimeout(state.intimacyFeedbackTimer);
+  }
+
+  state.intimacyFeedbackActive = true;
+  syncIntimacyWidget({
+    ...(state.currentIntimacyDisplay || buildIntimacyDisplayData()),
+    highlight: true
+  });
+
+  state.intimacyFeedbackTimer = setTimeout(() => {
+    state.intimacyFeedbackActive = false;
+    state.intimacyFeedbackTimer = null;
+    syncIntimacyWidget();
+  }, 3000);
+}
+
+// 更新亲密度组件显示
+function updateIntimacyUI() {
+  const displayData = buildIntimacyDisplayData();
+  const { level, points, progressText, levelText, pointsText } = displayData;
+  state.currentIntimacyDisplay = displayData;
+
+  const widget = document.getElementById('intimacy-widget');
   const bar = document.getElementById('intimacy-bar-fill');
   const labelLevel = document.getElementById('intimacy-level');
   const labelPoints = document.getElementById('intimacy-points');
-  if (!bar) return;
+  if (bar) {
+    bar.style.width = progressText;
+  }
+  if (labelLevel) labelLevel.textContent = levelText;
+  if (labelPoints) labelPoints.textContent = pointsText;
 
-  const currentThreshold = INTIMACY_LEVELS[level - 1] || 0;
-  const nextThreshold = INTIMACY_LEVELS[level] || INTIMACY_LEVELS[INTIMACY_LEVELS.length - 1];
-  const progress = nextThreshold > currentThreshold
-    ? Math.min(100, ((points - currentThreshold) / (nextThreshold - currentThreshold)) * 100)
-    : 100;
+  const previous = state.lastIntimacySnapshot;
+  const pointsIncreased = !!previous && (
+    level > previous.level ||
+    points > previous.points
+  );
 
-  bar.style.width = `${progress}%`;
-  if (labelLevel) labelLevel.textContent = `Lv${level} ${getLevelTitle(level)}`;
-  if (labelPoints) labelPoints.textContent = `${points} / ${nextThreshold === 99999 ? '∞' : nextThreshold}`;
+  state.lastIntimacySnapshot = { level, points };
+
+  if (pointsIncreased) {
+    triggerIntimacyFeedback();
+  }
+
+  if (!pointsIncreased) {
+    syncIntimacyWidget(widget ? { ...displayData, highlight: false } : displayData);
+  }
 }
 
 // 每日首次打开签到
@@ -295,6 +398,8 @@ async function init() {
   initChatIpc();
   // 初始化设置 IPC 监听
   initSettingsIpc();
+  // 初始化菜单开关状态同步
+  initMenuWindowStateIpc();
   // 初始化宠物状态 IPC 监听（菜单窗口 -> 主窗口）
   initPetStateIpc();
   // 初始化宠物状态同步（主窗口 -> 主进程）
@@ -307,6 +412,7 @@ async function init() {
   initScreenshot();
   // 初始化文件拖拽处理
   initFileDropHandler();
+  initIntimacyHover();
 
   // 启动自动状态检查
   if (window.PetAnimations) {
@@ -385,8 +491,27 @@ function initSettingsIpc() {
       state.settings.bubblePreviewState = data.state || 'idle';
     } else if (data.type === 'bubble-offset-preview') {
       state.settings.bubblePreviewState = data.state || state.settings.bubblePreviewState || 'idle';
+    } else if (data.type === 'intimacy-widget-offset-update') {
+      state.settings.intimacyWidgetOffset = normalizeIntimacyWidgetOffset(data.offset);
+      applyIntimacyWidgetOffset();
     }
   });
+}
+
+function initMenuWindowStateIpc() {
+  if (!window.electron) return;
+
+  if (window.electron.onMenuWindowState) {
+    window.electron.onMenuWindowState((event, data) => {
+      setQuickMenuVisible(!!(data && data.isOpen));
+    });
+  }
+
+  if (window.electron.isMenuWindowOpen) {
+    window.electron.isMenuWindowOpen()
+      .then((isOpen) => setQuickMenuVisible(!!isOpen))
+      .catch(() => {});
+  }
 }
 
 // 宠物状态 IPC（菜单窗口 -> 主窗口）
@@ -517,6 +642,7 @@ function loadData() {
   state.currentPersonality = petData.personality;
   state.mood = petData.mood;
   state.settings = settings;
+  state.settings.intimacyWidgetOffset = normalizeIntimacyWidgetOffset(settings.intimacyWidgetOffset);
   state.chatHistory = history;
   state.lastInteraction = petData.lastInteraction || Date.now();  // 读取最后互动时间
 }
@@ -543,6 +669,8 @@ function updateUI() {
     window.PetAnimations.setBasePet(state.currentPet);
     window.PetAnimations.updateByMood(state.mood);
   }
+
+  applyIntimacyWidgetOffset();
   
   updateMoodDisplay();
   updateIntimacyUI();
@@ -591,13 +719,13 @@ async function handlePetClick() {
   // 优先使用独立菜单窗口（主窗口不 resize，避免位置闪烁）
   if (window.electron && window.electron.toggleMenuWindow) {
     const result = await window.electron.toggleMenuWindow();
-    state.quickMenuVisible = !!(result && result.isOpen);
+    setQuickMenuVisible(!!(result && result.isOpen));
     return;
   }
   // 降级：独立菜单窗口不可用时，使用内联旋转菜单
   if (window.PetMenu) {
     window.PetMenu.toggle();
-    state.quickMenuVisible = window.PetMenu.isOpen;
+    setQuickMenuVisible(window.PetMenu.isOpen);
   }
 }
 
@@ -605,13 +733,13 @@ function closeQuickMenu() {
   // 优先关闭独立菜单窗口
   if (window.electron && window.electron.closeMenuWindow) {
     window.electron.closeMenuWindow();
-    state.quickMenuVisible = false;
+    setQuickMenuVisible(false);
     return;
   }
   // 降级：关闭内联旋转菜单
   if (window.PetMenu) {
     window.PetMenu.close();
-    state.quickMenuVisible = false;
+    setQuickMenuVisible(false);
   }
 }
 
@@ -1275,6 +1403,21 @@ function scheduleAutoSpeak() {
   }, delay);
 }
 
+function initIntimacyHover() {
+  const petWrapper = document.getElementById('petWrapper');
+  if (!petWrapper) return;
+
+  petWrapper.addEventListener('mouseenter', () => {
+    state.isPetHovered = true;
+    syncIntimacyWidget();
+  });
+
+  petWrapper.addEventListener('mouseleave', () => {
+    state.isPetHovered = false;
+    syncIntimacyWidget();
+  });
+}
+
 // 拖拽与点击分离
 function initDrag() {
   console.log('[Init] 初始化拖动功能...');
@@ -1386,6 +1529,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (action === 'opened') {
         state.childWindowCount++;
         state.suppressBubble = true;
+        setQuickMenuVisible(false);
         if (state.autoSpeakTimer) clearTimeout(state.autoSpeakTimer);
         if (window.electron.hideToPetTray) window.electron.hideToPetTray();
       } else if (action === 'closed') {
@@ -1395,6 +1539,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if (window.electron.showFromTray) window.electron.showFromTray();
           scheduleAutoSpeak();
         }
+        // 子窗口关闭时，确保恢复亲密度显示能力
+        setQuickMenuVisible(false);
       }
     });
   }

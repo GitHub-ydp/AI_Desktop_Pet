@@ -15,6 +15,7 @@ function getSettingsSnapshot(storage) {
     autoSpeak: settings.autoSpeak !== false,
     bubbleStateOffsets: settings.bubbleStateOffsets || { idle: { x: 0, y: 8 } },
     bubblePreviewState: settings.bubblePreviewState || 'idle',
+    intimacyWidgetOffset: settings.intimacyWidgetOffset || { x: 0, y: 0 },
     llmSceneConfig
   };
 }
@@ -89,6 +90,18 @@ function setBubblePreviewState(storage, state) {
   }
 }
 
+function saveIntimacyWidgetOffset(storage, offset) {
+  if (storage.saveIntimacyWidgetOffset) {
+    storage.saveIntimacyWidgetOffset(offset);
+    return;
+  }
+  const settings = storage.getSettings ? storage.getSettings() : {};
+  settings.intimacyWidgetOffset = offset;
+  if (storage.saveSettings) {
+    storage.saveSettings(settings);
+  }
+}
+
 function saveLLMSceneConfig(storage, sceneConfig) {
   if (storage.saveLLMSceneConfig) {
     storage.saveLLMSceneConfig(sceneConfig);
@@ -109,6 +122,7 @@ const api = {
   setAutoSpeakEnabled,
   saveBubbleStateOffsets,
   setBubblePreviewState,
+  saveIntimacyWidgetOffset,
   saveLLMSceneConfig
 };
 

@@ -59,10 +59,10 @@ class RotaryMenuController {
         angle: 0
       },
       {
-        id: 'theme',
-        icon: '🎨',
-        label: '主题',
-        action: () => window.openSettings && window.openSettings(),
+        id: 'tech',
+        icon: '🛠️',
+        label: '技术',
+        action: () => window.openTechPanel && window.openTechPanel(),
         angle: 72
       },
       {

@@ -84,12 +84,26 @@ function openTasks() {
   closeMenuWindow();
 }
 
+function openTechPanel() {
+  if (window.electron && window.electron.createChildWindow) {
+    window.electron.createChildWindow({
+      id: 'skills-panel',
+      title: '技术面板',
+      width: 1180,
+      height: 760,
+      html: 'windows/skills-panel.html'
+    });
+  }
+  closeMenuWindow();
+}
+
 window.openChat = openChat;
 window.openSettings = openSettings;
 window.openHistory = openHistory;
 window.openTheme = openTheme;
 window.openHealthSettings = openHealthSettings;
 window.openTasks = openTasks;
+window.openTechPanel = openTechPanel;
 
 const MenuWindowUtils = window.MenuWindowUtils || {
   shouldCloseMenuOnTarget: (target) => {

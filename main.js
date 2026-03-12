@@ -7,6 +7,8 @@ const WorkflowManager = require('./main-process/workflow-manager');
 const ModelRouter = require('./main-process/model-router');
 const SkillRegistry = require('./main-process/skill-registry');
 const SkillExecutor = require('./main-process/skill-executor');
+const McpRegistry = require('./main-process/mcp-registry');
+const McpRuntime = require('./main-process/mcp-runtime');
 const AgentSessionStore = require('./main-process/agent-session-store');
 const AgentEventBus = require('./main-process/agent-event-bus');
 const CapabilityRegistry = require('./main-process/capability-registry');
@@ -14,7 +16,10 @@ const ChannelRegistry = require('./main-process/channel-registry');
 const AgentRuntime = require('./main-process/agent-runtime');
 const AgentHttpServer = require('./main-process/agent-http-server');
 const { createChatRequestId } = require('./src/chat-ipc-utils');
-const { getBubbleWindowBoundsFromMain } = require('./src/bubble-window-utils');
+const {
+  getBubbleWindowBoundsFromMain,
+  getIntimacyWindowBoundsFromMain
+} = require('./src/bubble-window-utils');
 
 // 忽略 stdout/stderr 管道断开错误（npm start 关闭终端后常见，无需弹窗提示）
 process.stdout.on('error', (err) => { if (err.code === 'EPIPE') return; });
@@ -34,6 +39,8 @@ let workflowManager = null;
 let modelRouter = null;
 let skillRegistry = null;
 let skillExecutor = null;
+let mcpRegistry = null;
+let mcpRuntime = null;
 let agentSessionStore = null;
 let agentEventBus = null;
 let capabilityRegistry = null;
@@ -57,6 +64,10 @@ let menuWindow = null;
 let bubbleWindow = null;
 let bubbleWindowReady = false;
 let pendingBubblePayload = null;
+let intimacyWindow = null;
+let intimacyWindowReady = false;
+let pendingIntimacyPayload = null;
+let intimacyWidgetVisible = false;
 let legacyChatSessionId = null;
 let screenshotIPCHandlersRegistered = false;
 const SCREENSHOT_SHORTCUT = 'CommandOrControl+Shift+A';
@@ -68,12 +79,15 @@ const WINDOW_SIZES = {
 };
 const MENU_WINDOW_SIZE = { width: 340, height: 340 };
 const BUBBLE_WINDOW_SIZE = { width: 260, height: 110 };
+const INTIMACY_WINDOW_SIZE = { width: 140, height: 58 };
 const DEFAULT_BUBBLE_OFFSET = { x: 0, y: 8 };
+const DEFAULT_INTIMACY_OFFSET = { x: 0, y: 0 };
 let currentPetAnimationState = 'idle';
 let currentPetVisualState = null;
 let bubbleOffsetByState = {
   idle: { ...DEFAULT_BUBBLE_OFFSET }
 };
+let intimacyWidgetOffset = { ...DEFAULT_INTIMACY_OFFSET };
 const SCENE_METADATA = {
   chat: {
     label: '聊天',
@@ -902,6 +916,9 @@ function createWindow() {
     if (!app.isQuitting) {
       event.preventDefault();
       mainWindow.hide();
+      if (intimacyWindow && !intimacyWindow.isDestroyed()) {
+        intimacyWindow.hide();
+      }
     }
   });
 
@@ -913,6 +930,9 @@ function createWindow() {
     if (bubbleWindow && bubbleWindow.isVisible()) {
       const bounds = getBubbleWindowBounds();
       bubbleWindow.setBounds(bounds, false);
+    }
+    if (intimacyWindow && intimacyWidgetVisible && intimacyWindow.isVisible()) {
+      intimacyWindow.setBounds(getIntimacyWindowBounds(), false);
     }
   });
 
@@ -962,8 +982,14 @@ function createMenuWindow() {
   });
 
   menuWindow.on('closed', () => {
+    notifyMainMenuState(false);
     menuWindow = null;
   });
+}
+
+function notifyMainMenuState(isOpen) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('menu:state', { isOpen: !!isOpen });
 }
 
 function getBubbleWindowBounds() {
@@ -975,6 +1001,18 @@ function getBubbleWindowBounds() {
     bounds,
     BUBBLE_WINDOW_SIZE,
     getBubbleOffsetForState(currentPetAnimationState)
+  );
+}
+
+function getIntimacyWindowBounds() {
+  if (!mainWindow) {
+    return { x: 0, y: 0, width: INTIMACY_WINDOW_SIZE.width, height: INTIMACY_WINDOW_SIZE.height };
+  }
+
+  return getIntimacyWindowBoundsFromMain(
+    mainWindow.getBounds(),
+    INTIMACY_WINDOW_SIZE,
+    intimacyWidgetOffset
   );
 }
 
@@ -1016,6 +1054,45 @@ function createBubbleWindow() {
   });
 }
 
+function createIntimacyWindow() {
+  intimacyWindowReady = false;
+  intimacyWindow = new BrowserWindow({
+    width: INTIMACY_WINDOW_SIZE.width,
+    height: INTIMACY_WINDOW_SIZE.height,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: false,
+    skipTaskbar: true,
+    resizable: false,
+    focusable: false,
+    hasShadow: false,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+
+  intimacyWindow.loadFile('windows/intimacy-window.html');
+  intimacyWindow.setIgnoreMouseEvents(true, { forward: true });
+
+  intimacyWindow.webContents.on('did-finish-load', () => {
+    intimacyWindowReady = true;
+    if (pendingIntimacyPayload && intimacyWindow && !intimacyWindow.isDestroyed()) {
+      intimacyWindow.webContents.send('intimacy-widget:show', pendingIntimacyPayload);
+      pendingIntimacyPayload = null;
+    }
+  });
+
+  intimacyWindow.on('closed', () => {
+    intimacyWindow = null;
+    intimacyWindowReady = false;
+    intimacyWidgetVisible = false;
+    pendingIntimacyPayload = null;
+  });
+}
+
 function normalizeBubblePayload(payloadOrMessage, duration) {
   if (payloadOrMessage && typeof payloadOrMessage === 'object') {
     return {
@@ -1031,6 +1108,18 @@ function normalizeBubblePayload(payloadOrMessage, duration) {
     message: String(payloadOrMessage || ''),
     duration: Number.isFinite(Number(duration)) ? Number(duration) : 5000,
     sticky: false
+  };
+}
+
+function normalizeIntimacyPayload(payload) {
+  const source = (payload && typeof payload === 'object') ? payload : {};
+  return {
+    levelText: String(source.levelText || 'Lv1 陌生人'),
+    pointsText: String(source.pointsText || '0.0%'),
+    progressText: typeof source.progressText === 'string' && source.progressText
+      ? source.progressText
+      : '0.0%',
+    highlight: !!source.highlight
   };
 }
 
@@ -1053,6 +1142,33 @@ function showBubbleWindow(payloadOrMessage, duration) {
 function hideBubbleWindow() {
   if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
   bubbleWindow.hide();
+}
+
+function showIntimacyWidgetWindow(payload) {
+  if (isPetHidden) return;
+  if (!intimacyWindow || intimacyWindow.isDestroyed()) {
+    createIntimacyWindow();
+  }
+
+  const normalized = normalizeIntimacyPayload(payload);
+  intimacyWindow.setBounds(getIntimacyWindowBounds(), false);
+  intimacyWidgetVisible = true;
+  intimacyWindow.showInactive();
+
+  if (!intimacyWindowReady || intimacyWindow.webContents.isLoading()) {
+    pendingIntimacyPayload = normalized;
+    return;
+  }
+
+  intimacyWindow.webContents.send('intimacy-widget:show', normalized);
+}
+
+function hideIntimacyWidgetWindow() {
+  intimacyWidgetVisible = false;
+  pendingIntimacyPayload = null;
+  if (!intimacyWindow || intimacyWindow.isDestroyed()) return;
+  intimacyWindow.webContents.send('intimacy-widget:hide');
+  intimacyWindow.hide();
 }
 
 function registerScreenshotShortcut() {
@@ -1086,12 +1202,17 @@ function openMenuWindow() {
   menuWindow.show();
   menuWindow.focus();
   menuWindow.webContents.send('menu:command', { type: 'open' });
+  notifyMainMenuState(true);
 }
 
 function closeMenuWindow() {
-  if (!menuWindow || menuWindow.isDestroyed()) return;
+  if (!menuWindow || menuWindow.isDestroyed()) {
+    notifyMainMenuState(false);
+    return;
+  }
   menuWindow.webContents.send('menu:command', { type: 'close' });
   menuWindow.hide();
+  notifyMainMenuState(false);
 }
 
 function toggleMenuWindow() {
@@ -1207,15 +1328,27 @@ function refreshAgentCapabilities() {
 
   capabilityRegistry.skillRegistry = skillRegistry;
   capabilityRegistry.skillExecutor = skillExecutor;
+  capabilityRegistry.mcpRuntime = mcpRuntime;
   capabilityRegistry.workflowManager = workflowManager;
   capabilityRegistry.toolSystem = toolSystem;
   capabilityRegistry.refresh();
   console.log('[AgentRuntime] capabilities refreshed:', {
     hasSkillRegistry: Boolean(skillRegistry),
     hasSkillExecutor: Boolean(skillExecutor),
+    hasMcpRuntime: Boolean(mcpRuntime),
     hasWorkflowManager: Boolean(workflowManager),
     hasToolSystem: Boolean(toolSystem)
   });
+}
+
+function reloadSkillsRegistry() {
+  if (!skillRegistry) {
+    throw new Error('Skills 系统未初始化');
+  }
+
+  skillRegistry.loadSkills();
+  refreshAgentCapabilities();
+  return skillRegistry.listDetailedSkills();
 }
 
 // 创建系统托盘
@@ -1239,6 +1372,18 @@ function createTray() {
       label: '隐藏宠物',
       click: () => {
         if (mainWindow) mainWindow.hide();
+      }
+    },
+    {
+      label: '技术面板',
+      click: () => {
+        createChildWindow({
+          id: 'skills-panel',
+          title: '技术面板',
+          width: 1180,
+          height: 760,
+          html: 'windows/skills-panel.html'
+        });
       }
     },
     { type: 'separator' },
@@ -1292,6 +1437,9 @@ app.whenReady().then(async () => {
   });
   // 先注册 IPC handlers，确保渲染进程的调用不会因初始化失败而无 handler
   memorySystem.registerIPCHandlers(ipcMain);
+  ['memory:get-user-profile', 'memory:get-stats', 'memory:get-facts'].forEach((channel) => {
+    ipcMain.removeHandler(channel);
+  });
   ipcMain.handle('memory:get-conversations', async (event, options) => {
     return memorySystem.getConversations(options);
   });
@@ -1376,6 +1524,7 @@ app.whenReady().then(async () => {
     capabilityRegistry = new CapabilityRegistry({
       skillRegistry,
       skillExecutor,
+      mcpRuntime,
       workflowManager,
       toolSystem
     });
@@ -1475,6 +1624,7 @@ app.whenReady().then(async () => {
       registry: skillRegistry,
       memorySystem: memorySystem,
       workflowManager: workflowManager,
+      historyFilePath: path.join(app.getPath('userData'), 'skill-execution-history.json'),
       screenshotOCR: async ({ imageId, dataURL }) => {
         let resolvedDataURL = dataURL;
 
@@ -1518,9 +1668,31 @@ app.whenReady().then(async () => {
     console.error('Failed to initialize skills system:', error);
   }
 
+  console.log('Initializing MCP registry...');
+  try {
+    mcpRegistry = new McpRegistry(app);
+    mcpRuntime = new McpRuntime({
+      registry: mcpRegistry,
+      clientInfo: {
+        name: 'ai-desktop-pet',
+        version: app.getVersion()
+      }
+    });
+    await mcpRuntime.initialize();
+    refreshAgentCapabilities();
+    console.log('MCP registry initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize MCP registry:', error);
+  }
+
   ipcMain.handle('skill:list', () => {
     if (!skillRegistry) return [];
     return skillRegistry.getEligibleSkills();
+  });
+
+  ipcMain.handle('skill:list-detailed', () => {
+    if (!skillRegistry) return [];
+    return skillRegistry.listDetailedSkills();
   });
 
   ipcMain.handle('skill:get-tools-array', () => {
@@ -1533,11 +1705,177 @@ app.whenReady().then(async () => {
     return skillRegistry.formatForPrompt();
   });
 
+  ipcMain.handle('skill:get-storage-info', () => {
+    if (!skillRegistry) {
+      return {
+        bundledDir: '',
+        userDir: '',
+        stateFilePath: '',
+        historyFilePath: ''
+      };
+    }
+    return {
+      ...skillRegistry.getStorageInfo(),
+      historyFilePath: skillExecutor?.historyFilePath || ''
+    };
+  });
+
+  ipcMain.handle('skill:get-document', async (event, name) => {
+    if (!skillRegistry) {
+      throw new Error('Skills 系统未初始化');
+    }
+    return skillRegistry.getSkillDocument(name);
+  });
+
+  ipcMain.handle('skill:get-history', () => {
+    if (!skillExecutor) return [];
+    return skillExecutor.getExecutionHistory(80);
+  });
+
+  ipcMain.handle('skill:clear-history', () => {
+    if (!skillExecutor) return false;
+    return skillExecutor.clearExecutionHistory();
+  });
+
+  ipcMain.handle('skill:get-approval-history', () => {
+    if (!agentSessionStore) return [];
+    return agentSessionStore.getRecentApprovals(80);
+  });
+
   ipcMain.handle('skill:execute', async (event, name, args) => {
     if (!skillExecutor) {
       return { success: false, error: 'Skills 系统未初始化' };
     }
     return await skillExecutor.execute(name, args);
+  });
+
+  ipcMain.handle('skill:set-enabled', async (event, name, enabled) => {
+    if (!skillRegistry) {
+      throw new Error('Skills 系统未初始化');
+    }
+    const result = skillRegistry.setSkillEnabled(name, enabled);
+    refreshAgentCapabilities();
+    return result;
+  });
+
+  ipcMain.handle('skill:create', async (event, payload) => {
+    if (!skillRegistry) {
+      throw new Error('Skills 系统未初始化');
+    }
+    const createdSkill = skillRegistry.createUserSkill(payload || {});
+    refreshAgentCapabilities();
+    return createdSkill;
+  });
+
+  ipcMain.handle('skill:remove', async (event, name) => {
+    if (!skillRegistry) {
+      throw new Error('Skills 系统未初始化');
+    }
+    skillRegistry.removeSkill(name);
+    refreshAgentCapabilities();
+    return true;
+  });
+
+  ipcMain.handle('skill:save-document', async (event, name, content) => {
+    if (!skillRegistry) {
+      throw new Error('Skills 系统未初始化');
+    }
+    const result = skillRegistry.saveUserSkillDocument(name, content);
+    refreshAgentCapabilities();
+    return result;
+  });
+
+  ipcMain.handle('skill:reload', () => reloadSkillsRegistry());
+
+  ipcMain.handle('mcp:list', () => {
+    if (mcpRuntime) return mcpRuntime.listServers();
+    if (mcpRegistry) return mcpRegistry.listServers();
+    return [];
+  });
+
+  ipcMain.handle('mcp:get-storage-info', () => {
+    if (!mcpRegistry) {
+      return { filePath: '' };
+    }
+    return mcpRegistry.getStorageInfo();
+  });
+
+  ipcMain.handle('mcp:create', async (event, payload) => {
+    if (!mcpRegistry) {
+      throw new Error('MCP 系统未初始化');
+    }
+    const created = mcpRegistry.createServer(payload || {});
+    if (mcpRuntime) {
+      await mcpRuntime.syncServers();
+      refreshAgentCapabilities();
+      return mcpRuntime.listServers().find((item) => item.id === created.id) || created;
+    }
+    return created;
+  });
+
+  ipcMain.handle('mcp:update', async (event, id, payload) => {
+    if (!mcpRegistry) {
+      throw new Error('MCP 系统未初始化');
+    }
+    const updated = mcpRegistry.updateServer(id, payload || {});
+    if (mcpRuntime) {
+      await mcpRuntime.syncServers();
+      refreshAgentCapabilities();
+      return mcpRuntime.listServers().find((item) => item.id === updated.id) || updated;
+    }
+    return updated;
+  });
+
+  ipcMain.handle('mcp:set-enabled', async (event, id, enabled) => {
+    if (!mcpRegistry) {
+      throw new Error('MCP 系统未初始化');
+    }
+    const updated = mcpRegistry.setEnabled(id, enabled);
+    if (mcpRuntime) {
+      await mcpRuntime.syncServers();
+      refreshAgentCapabilities();
+      return mcpRuntime.listServers().find((item) => item.id === updated.id) || updated;
+    }
+    return updated;
+  });
+
+  ipcMain.handle('mcp:remove', async (event, id) => {
+    if (!mcpRegistry) {
+      throw new Error('MCP 系统未初始化');
+    }
+    const result = mcpRegistry.removeServer(id);
+    if (mcpRuntime) {
+      await mcpRuntime.syncServers();
+      refreshAgentCapabilities();
+    }
+    return result;
+  });
+
+  ipcMain.handle('mcp:start', async (event, id) => {
+    if (!mcpRuntime) {
+      throw new Error('MCP 运行时未初始化');
+    }
+    const result = await mcpRuntime.startServer(id);
+    refreshAgentCapabilities();
+    return result;
+  });
+
+  ipcMain.handle('mcp:stop', async (event, id) => {
+    if (!mcpRuntime) {
+      throw new Error('MCP 运行时未初始化');
+    }
+    const result = await mcpRuntime.stopServer(id);
+    refreshAgentCapabilities();
+    return result;
+  });
+
+  ipcMain.handle('mcp:restart', async (event, id) => {
+    if (!mcpRuntime) {
+      throw new Error('MCP 运行时未初始化');
+    }
+    const result = await mcpRuntime.restartServer(id);
+    refreshAgentCapabilities();
+    return result;
   });
 
   // 注册工作流 IPC handlers
@@ -1665,6 +2003,9 @@ app.on('before-quit', () => {
   }
   if (toolSystem && typeof toolSystem.shutdown === 'function') {
     toolSystem.shutdown();
+  }
+  if (mcpRuntime && typeof mcpRuntime.shutdown === 'function') {
+    void mcpRuntime.shutdown();
   }
 });
 
@@ -1929,6 +2270,16 @@ ipcMain.handle('bubble:hide', () => {
   return { success: true };
 });
 
+ipcMain.handle('intimacy-widget:show', (event, payload) => {
+  showIntimacyWidgetWindow(payload);
+  return { success: true };
+});
+
+ipcMain.handle('intimacy-widget:hide', () => {
+  hideIntimacyWidgetWindow();
+  return { success: true };
+});
+
 // 快速检查 agentRuntime 是否已就绪（不等待）
 ipcMain.handle('agent:is-ready', () => !!agentRuntime);
 
@@ -2083,6 +2434,15 @@ ipcMain.on('settings:change', (event, payload) => {
         bubbleWindow.setBounds(getBubbleWindowBounds(), false);
       }
     }
+  } else if (payload && payload.type === 'intimacy-widget-offset-update') {
+    const offset = payload.offset && typeof payload.offset === 'object' ? payload.offset : {};
+    intimacyWidgetOffset = {
+      x: Number.isFinite(Number(offset.x)) ? Math.max(-200, Math.min(200, Math.round(Number(offset.x)))) : 0,
+      y: Number.isFinite(Number(offset.y)) ? Math.max(-200, Math.min(200, Math.round(Number(offset.y)))) : 0
+    };
+    if (intimacyWindow && !intimacyWindow.isDestroyed() && intimacyWidgetVisible && intimacyWindow.isVisible()) {
+      intimacyWindow.setBounds(getIntimacyWindowBounds(), false);
+    }
   } else if (payload && payload.type === 'llm-scene-config') {
     llmSceneConfig = normalizeLLMSceneConfig(payload.config);
     syncMemoryApiKey();
@@ -2108,12 +2468,16 @@ ipcMain.on('pet:state-updated', (event, payload) => {
   if (bubbleWindow && !bubbleWindow.isDestroyed() && bubbleWindow.isVisible()) {
     bubbleWindow.setBounds(getBubbleWindowBounds(), false);
   }
+  if (intimacyWindow && !intimacyWindow.isDestroyed() && intimacyWidgetVisible && intimacyWindow.isVisible()) {
+    intimacyWindow.setBounds(getIntimacyWindowBounds(), false);
+  }
 });
 
 ipcMain.on('hide-to-pet-tray', () => {
   isPetHidden = true;
   if (mainWindow) mainWindow.hide();
   if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.hide();
+  if (intimacyWindow && !intimacyWindow.isDestroyed()) intimacyWindow.hide();
 });
 
 ipcMain.on('show-from-tray', () => {
@@ -2121,6 +2485,10 @@ ipcMain.on('show-from-tray', () => {
   if (mainWindow) {
     mainWindow.show();
     mainWindow.setSkipTaskbar(true);
+  }
+  if (intimacyWindow && !intimacyWindow.isDestroyed() && intimacyWidgetVisible) {
+    intimacyWindow.setBounds(getIntimacyWindowBounds(), false);
+    intimacyWindow.showInactive();
   }
 });
 
@@ -2536,6 +2904,7 @@ async function startScreenshotCapture() {
     mainWasVisible: !!(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !isPetHidden),
     menuWasVisible: !!(menuWindow && !menuWindow.isDestroyed() && menuWindow.isVisible()),
     bubbleWasVisible: !!(bubbleWindow && !bubbleWindow.isDestroyed() && bubbleWindow.isVisible() && !isPetHidden),
+    intimacyWasVisible: !!(intimacyWindow && !intimacyWindow.isDestroyed() && intimacyWindow.isVisible() && intimacyWidgetVisible && !isPetHidden),
     visibleChildWindows: Array.from(childWindows.entries())
       .filter(([, win]) => win && !win.isDestroyed() && win.isVisible())
       .map(([id]) => id)
@@ -2549,6 +2918,9 @@ async function startScreenshotCapture() {
   }
   if (bubbleWindow && !bubbleWindow.isDestroyed()) {
     bubbleWindow.hide();
+  }
+  if (intimacyWindow && !intimacyWindow.isDestroyed()) {
+    intimacyWindow.hide();
   }
   childWindows.forEach((win) => {
     if (win && !win.isDestroyed()) win.hide();
@@ -2747,6 +3119,14 @@ function showMainWindow(restoreState = null) {
     const shouldShowBubble = state ? (!!state.bubbleWasVisible && !isPetHidden) : false;
     if (shouldShowBubble) {
       bubbleWindow.showInactive();
+    }
+  }
+
+  if (intimacyWindow && !intimacyWindow.isDestroyed()) {
+    const shouldShowIntimacy = state ? (!!state.intimacyWasVisible && !isPetHidden && intimacyWidgetVisible) : false;
+    if (shouldShowIntimacy) {
+      intimacyWindow.setBounds(getIntimacyWindowBounds(), false);
+      intimacyWindow.showInactive();
     }
   }
 

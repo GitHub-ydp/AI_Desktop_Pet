@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>技术面板</title>
+  <script src="../src/theme-manager.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #020810; --bg-surface: rgba(0, 15, 30, 0.98); --bg-card: rgba(0, 30, 55, 0.6);
+      --border: rgba(0, 255, 240, 0.3); --border-bright: rgba(0, 255, 240, 0.7); --neon-cyan: #00fff0;
+      --neon-magenta: #ff2d78; --text: #cff0ff; --text-muted: rgba(160, 220, 240, 0.6);
+      --header-bg: rgba(0, 15, 30, 0.98); --input-area-bg: rgba(0, 12, 25, 0.98); --input-field-bg: rgba(0, 16, 32, 0.75);
+      --accent-bg-dim: rgba(0, 255, 240, 0.08); --accent-bg-faint: rgba(0, 255, 240, 0.05); --accent-hover-bg: rgba(0, 255, 240, 0.1);
+      --danger-border: rgba(255, 45, 120, 0.5); --danger-hover-bg: rgba(255, 45, 120, 0.08); --radius: 10px; --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4);
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+    .window-header { height: 50px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; background: var(--header-bg); border-bottom: 1px solid var(--border); -webkit-app-region: drag; flex-shrink: 0; }
+    .window-title { font-size: 14px; font-weight: 600; color: var(--neon-cyan); letter-spacing: .5px; }
+    .close-btn { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; -webkit-app-region: no-drag; position: relative; transition: border-color .2s ease, color .2s ease; }
+    .close-btn::before, .close-btn::after { content: ''; position: absolute; left: 50%; top: 50%; width: 12px; height: 1.5px; border-radius: 999px; background: currentColor; transform-origin: center; }
+    .close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .close-btn::after { transform: translate(-50%, -50%) rotate(-45deg); }
+    .app-body { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+    .sidebar { width: 210px; flex-shrink: 0; background: var(--header-bg); border-right: 1px solid var(--border); padding: 14px 0; display: flex; flex-direction: column; gap: 2px; }
+    .sidebar-item { width: 100%; border: none; border-left: 3px solid transparent; background: transparent; color: var(--text-muted); padding: 12px 20px; text-align: left; font-size: 13px; cursor: pointer; transition: background .2s ease, color .2s ease, border-color .2s ease; }
+    .sidebar-item:hover { color: var(--text); background: rgba(255,255,255,.02); }
+    .sidebar-item.active { color: var(--text); border-left-color: var(--neon-cyan); background: var(--accent-bg-dim); box-shadow: inset 0 0 0 1px rgba(0,255,240,.06); }
+    .content-area { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding: 20px 22px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .stat-item { text-align: center; padding: 14px 10px; background: var(--accent-bg-faint); border: 1px solid var(--border); border-radius: 8px; }
+    .stat-num { font-size: 24px; font-weight: 700; color: var(--neon-cyan); line-height: 1; margin-bottom: 6px; }
+    .stat-label { font-size: 11px; color: var(--text-muted); }
+    .tech-panel { display: none; }
+    .tech-panel.active { display: block; }
+    .panel-shell { display: flex; flex-direction: column; gap: 16px; }
+    .panel-header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+    .panel-title { font-size: 20px; font-weight: 700; color: var(--text); }
+    .panel-desc { font-size: 13px; line-height: 1.7; color: var(--text-muted); max-width: 760px; }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+    .card:hover { border-color: rgba(0,255,240,.38); box-shadow: var(--glow-sm); }
+    .stack { display: flex; flex-direction: column; gap: 14px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; }
+    .filters { display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(120px, .55fr)); gap: 12px; }
+    .input-label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; display: block; }
+    .text-input, .text-area, .select-input { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--input-field-bg); color: var(--text); padding: 10px 12px; font-size: 13px; outline: none; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+    .text-input:focus, .text-area:focus, .select-input:focus { border-color: var(--border-bright); box-shadow: var(--glow-sm); }
+    .select-input option { background: var(--bg-surface); color: var(--text); }
+    .text-area { min-height: 96px; resize: vertical; }
+    .editor-area { min-height: 240px; font-family: Consolas, monospace; }
+    .code-box, .path-box, .result-box { border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: rgba(255,255,255,.02); font-family: Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
+    .path-grid, .skill-list, .history-list, .approval-list, .mcp-list { display: grid; gap: 10px; }
+    .skill-card, .event-card, .mcp-card { padding: 14px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,.02); transition: border-color .2s ease, box-shadow .2s ease, background .2s ease, transform .15s ease; }
+    .skill-card:hover, .event-card:hover, .mcp-card:hover { border-color: var(--border-bright); box-shadow: var(--glow-sm); background: var(--accent-bg-faint); transform: translateY(-1px); }
+    .skill-card.disabled, .mcp-card.disabled { opacity: .56; }
+    .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .card-name { font-size: 15px; font-weight: 600; color: var(--text); }
+    .card-desc, .editor-meta, .helper-text, .run-status { margin-top: 5px; font-size: 12px; line-height: 1.7; color: var(--text-muted); white-space: pre-wrap; word-break: break-word; }
+    .section-subtitle { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--neon-cyan); text-transform: uppercase; margin-bottom: 12px; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .pill { border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font-size: 11px; color: var(--text-muted); background: var(--accent-bg-faint); }
+    .pill.ok, .run-status.ok { color: #00ff88; } .pill.warn { color: #ffd166; } .pill.bad, .run-status.fail { color: var(--neon-magenta); border-color: var(--danger-border); background: var(--danger-hover-bg); }
+    .empty { text-align: center; color: var(--text-muted); padding: 20px 0; }
+    .footer { background: var(--input-area-bg); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; }
+    .message { opacity: 0; transform: translateY(6px); transition: opacity .2s ease, transform .2s ease; border-radius: 999px; padding: 7px 12px; border: 1px solid rgba(0,255,136,.25); background: rgba(0,255,136,.08); color: #00ff88; font-size: 12px; white-space: nowrap; }
+    .message.show { opacity: 1; transform: translateY(0); } .message.error { border-color: rgba(255,45,120,.25); background: rgba(255,45,120,.08); color: var(--neon-magenta); }
+    .btn { border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text); transition: border-color .2s ease, color .2s ease, background .2s ease, box-shadow .2s ease; }
+    .btn:hover { border-color: var(--border-bright); background: var(--accent-hover-bg); box-shadow: var(--glow-sm); }
+    .btn-primary { color: var(--neon-cyan); border-color: var(--border-bright); }
+    .btn-danger { color: var(--neon-magenta); border-color: var(--danger-border); }
+    .btn-danger:hover { background: var(--danger-hover-bg); box-shadow: 0 0 8px rgba(255, 45, 120, 0.25); }
+    .btn-small { padding: 8px 12px; font-size: 12px; }
+    @media (max-width: 980px) { .app-body { flex-direction: column; } .sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; padding: 10px; border-right: none; border-bottom: 1px solid var(--border); } .sidebar-item { width: auto; border-left: none; border-bottom: 2px solid transparent; } .sidebar-item.active { border-left: none; border-bottom-color: var(--neon-cyan); } .summary-grid, .filters { grid-template-columns: 1fr; } .footer { flex-direction: column; align-items: stretch; } }
+  </style>
+</head>
+<body>
+  <div class="window-header">
+    <div class="window-title">技术面板</div>
+    <button class="close-btn" type="button" aria-label="Close" onclick="closeWindow()"></button>
+  </div>
+  <div class="app-body">
+    <nav class="sidebar">
+      <button class="sidebar-item active" type="button" data-section="skills" onclick="switchSection('skills')">技能</button>
+      <button class="sidebar-item" type="button" data-section="run" onclick="switchSection('run')">试运行</button>
+      <button class="sidebar-item" type="button" data-section="docs" onclick="switchSection('docs')">文档</button>
+      <button class="sidebar-item" type="button" data-section="history" onclick="switchSection('history')">历史</button>
+      <button class="sidebar-item" type="button" data-section="approvals" onclick="switchSection('approvals')">审批</button>
+      <button class="sidebar-item" type="button" data-section="mcp" onclick="switchSection('mcp')">MCP</button>
+    </nav>
+    <main class="content-area">
+      <div id="stats" class="summary-grid"></div>
+      <section class="tech-panel active" data-section="skills"><div class="panel-shell"><div class="panel-header"><div class="panel-title">技能管理</div><div class="panel-desc">集中管理 skills 的启停、派生创建和存储路径，入口与设置面板保持一致。</div></div><div class="card stack"><div class="section-subtitle">筛选与状态</div><div class="filters"><div><label class="input-label" for="searchInput">搜索</label><input id="searchInput" class="text-input" type="text" placeholder="名称、描述、handler"></div><div><label class="input-label" for="sourceFilter">来源</label><select id="sourceFilter" class="select-input"><option value="all">全部</option><option value="bundled">内置</option><option value="user">用户</option></select></div><div><label class="input-label" for="statusFilter">状态</label><select id="statusFilter" class="select-input"><option value="all">全部</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></div></div><div id="skillList" class="skill-list"></div></div><div class="card"><div class="section-subtitle">创建派生技能</div><form id="createForm" class="stack"><div><label class="input-label" for="skillName">技能名称</label><input id="skillName" name="name" class="text-input" maxlength="64"></div><div><label class="input-label" for="skillDescription">描述</label><input id="skillDescription" name="description" class="text-input" maxlength="120"></div><div><label class="input-label" for="skillHandler">基础技能 / 执行器</label><select id="skillHandler" name="handler" class="select-input"></select></div><div><label class="input-label" for="skillWhenToUse">何时调用</label><textarea id="skillWhenToUse" name="whenToUse" class="text-area"></textarea></div><div><label class="input-label" for="skillNotes">补充说明</label><textarea id="skillNotes" name="notes" class="text-area"></textarea></div><div class="toolbar"><label class="helper-text"><input id="skillUserInvocable" name="userInvocable" type="checkbox"> 允许手动触发</label><label class="helper-text"><input id="skillEnabled" name="enabled" type="checkbox" checked> 创建后立即启用</label></div><div class="toolbar"><button class="btn btn-primary" type="submit">创建技能</button></div></form></div><div class="card"><div class="section-subtitle">存储位置</div><div class="path-grid"><div id="userDirBox" class="path-box"></div><div id="stateFileBox" class="path-box"></div><div id="historyFileBox" class="path-box"></div></div></div></div></section>
+      <section class="tech-panel" data-section="run"><div class="panel-shell"><div class="panel-header"><div class="panel-title">技能试运行</div><div class="panel-desc">直接执行 skill，查看参数和返回结果，适合联调与验证。</div></div><div class="card stack"><div><label class="input-label" for="testSkillSelect">选择技能</label><select id="testSkillSelect" class="select-input"></select></div><div><label class="input-label" for="testArgs">参数 JSON</label><textarea id="testArgs" class="text-area editor-area"></textarea></div><div class="toolbar"><button id="fillSampleBtn" class="btn btn-small" type="button">填充示例</button><button id="runSkillBtn" class="btn btn-primary btn-small" type="button">运行技能</button></div><div id="runStatus" class="run-status">尚未开始。</div><pre id="runResult" class="result-box">等待执行...</pre></div></div></section>
+      <section class="tech-panel" data-section="docs"><div class="panel-shell"><div class="panel-header"><div class="panel-title">技能文档</div><div class="panel-desc">查看 `SKILL.md`、编辑用户技能，并检查当前注入给模型的 prompt 片段。</div></div><div class="card stack"><div><label class="input-label" for="editorSkillSelect">选择技能</label><select id="editorSkillSelect" class="select-input"></select></div><div id="editorMeta" class="editor-meta">请选择一个技能。</div><textarea id="editorContent" class="text-area editor-area" spellcheck="false"></textarea><div class="toolbar"><button id="loadDocBtn" class="btn btn-small" type="button">重新加载</button><button id="saveDocBtn" class="btn btn-primary btn-small" type="button">保存用户技能</button></div><pre id="promptPreview" class="code-box">这里会显示当前 prompt 片段。</pre></div></div></section>
+      <section class="tech-panel" data-section="history"><div class="panel-shell"><div class="panel-header"><div class="panel-title">执行历史</div><div class="panel-desc">查看最近的 direct skill 执行结果，便于快速排障。</div></div><div class="card stack"><div class="toolbar"><button id="clearHistoryBtn" class="btn btn-small" type="button">清空历史</button></div><div id="executionList" class="history-list"></div></div></div></section>
+      <section class="tech-panel" data-section="approvals"><div class="panel-shell"><div class="panel-header"><div class="panel-title">审批记录</div><div class="panel-desc">查看最近的 agent 审批结果，确认高风险动作的治理链路。</div></div><div class="card"><div id="approvalList" class="approval-list"></div></div></div></section>
+      <section class="tech-panel" data-section="mcp"><div class="panel-shell"><div class="panel-header"><div class="panel-title">MCP 运行时</div><div class="panel-desc">新增配置、启动进程、查看状态和注入工具，让能力接入路径更可见。</div></div><div class="card"><div class="section-subtitle">新增 MCP</div><form id="mcpForm" class="stack"><div><label class="input-label" for="mcpName">名称</label><input id="mcpName" name="name" class="text-input" maxlength="60"></div><div><label class="input-label" for="mcpCommand">命令</label><input id="mcpCommand" name="command" class="text-input"></div><div><label class="input-label" for="mcpArgs">参数，每行一个</label><textarea id="mcpArgs" name="args" class="text-area"></textarea></div><div><label class="input-label" for="mcpEnv">环境变量，每行一个 `KEY=VALUE`</label><textarea id="mcpEnv" name="env" class="text-area"></textarea></div><div class="toolbar"><label class="helper-text"><input id="mcpEnabled" name="enabled" type="checkbox" checked> 创建后立即启用</label></div><div class="toolbar"><button class="btn btn-primary" type="submit">创建 MCP</button></div></form></div><div class="card"><div class="section-subtitle">配置文件</div><div class="path-grid"><div id="mcpStorageBox" class="path-box"></div></div></div><div class="card"><div class="section-subtitle">MCP 列表</div><div id="mcpList" class="mcp-list"></div></div></div></section>
+    </main>
+  </div>
+  <div class="footer"><div id="message" class="message"></div><div class="toolbar"><button id="reloadBtn" class="btn btn-small" type="button">重新扫描</button><button class="btn btn-primary btn-small" type="button" onclick="switchSection('run')">前往试运行</button></div></div>
+  <script>
+    const state = { skills: [], storage: {}, toolsArray: [], promptSnippet: '', currentDocumentName: '', executionHistory: [], approvalHistory: [], mcpServers: [], mcpStorage: {} };
+    const $ = (id) => document.getElementById(id);
+    const escapeHtml = (value) => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const formatJson = (value) => { try { return JSON.stringify(value, null, 2); } catch { return String(value); } };
+    const formatTime = (value) => { if (!value) return '未知'; const date = new Date(value); return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('zh-CN', { hour12: false }); };
+    function showMessage(text, isError) { const node = $('message'); node.textContent = text; node.classList.add('show'); node.classList.toggle('error', !!isError); clearTimeout(showMessage.timer); showMessage.timer = setTimeout(() => node.classList.remove('show'), 2600); }
+    function closeWindow() { if (window.electron && window.electron.closeChildWindow) window.electron.closeChildWindow('skills-panel'); else window.close(); }
+    function switchSection(sectionId) { document.querySelectorAll('.sidebar-item').forEach((item) => item.classList.toggle('active', item.dataset.section === sectionId)); document.querySelectorAll('.tech-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.section === sectionId)); }
+    function getToolSchema(name) { const tool = state.toolsArray.find((item) => item && item.function && item.function.name === name); return tool && tool.function ? tool.function.parameters : null; }
+    function sampleFromSchema(schema) { if (!schema || typeof schema !== 'object') return {}; if (schema.type === 'array') return []; const result = {}; const properties = schema.properties && typeof schema.properties === 'object' ? schema.properties : {}; Object.entries(properties).forEach(([key, def]) => { if (Array.isArray(def.enum) && def.enum.length) result[key] = def.enum[0]; else if (def.type === 'boolean') result[key] = false; else if (def.type === 'number' || def.type === 'integer') result[key] = 0; else if (def.type === 'array') result[key] = []; else if (def.type === 'object') result[key] = sampleFromSchema(def); else result[key] = ''; }); return result; }
+    function renderStats() { const items = [['技能总数', state.skills.length], ['已启用', state.skills.filter((item) => item.enabled).length], ['用户技能', state.skills.filter((item) => item.source === 'user').length], ['注入工具', state.toolsArray.length], ['MCP 运行中', state.mcpServers.filter((item) => item.status === 'running').length], ['执行历史', state.executionHistory.length]]; $('stats').innerHTML = items.map(([label, value]) => `<div class="stat-item"><div class="stat-num">${escapeHtml(value)}</div><div class="stat-label">${escapeHtml(label)}</div></div>`).join(''); }
+    function renderSelectors() { const options = state.skills.length ? state.skills.map((skill) => `<option value="${escapeHtml(skill.name)}">${escapeHtml(`${skill.name} | ${skill.source === 'user' ? '用户' : '内置'} | ${skill.enabled ? '启用' : '停用'}`)}</option>`).join('') : '<option value="">暂无技能</option>'; $('skillHandler').innerHTML = options; $('testSkillSelect').innerHTML = options; $('editorSkillSelect').innerHTML = options; }
+    function filteredSkills() { const keyword = $('searchInput').value.trim().toLowerCase(); const source = $('sourceFilter').value; const status = $('statusFilter').value; return state.skills.filter((skill) => { if (source !== 'all' && skill.source !== source) return false; if (status === 'enabled' && !skill.enabled) return false; if (status === 'disabled' && skill.enabled) return false; if (!keyword) return true; return [skill.name, skill.description, skill.category, skill.handlerName, skill.source].filter(Boolean).join(' ').toLowerCase().includes(keyword); }); }
+    function renderSkillList() {
+      const list = $('skillList');
+      const skills = filteredSkills();
+      if (!skills.length) { list.innerHTML = '<div class="empty">没有匹配的技能。</div>'; return; }
+      list.innerHTML = skills.map((skill) => {
+        const pills = [`<span class="pill">${escapeHtml(skill.source === 'user' ? '用户' : '内置')}</span>`, `<span class="pill ${skill.enabled ? 'ok' : 'warn'}">${escapeHtml(skill.enabled ? '已启用' : '已停用')}</span>`];
+        if (skill.confirm) pills.push('<span class="pill warn">需确认</span>');
+        if (skill.dangerous) pills.push('<span class="pill bad">高风险</span>');
+        if (skill.handlerName) pills.push(`<span class="pill">handler ${escapeHtml(skill.handlerName)}</span>`);
+        return `<article class="skill-card ${skill.enabled ? '' : 'disabled'}"><div class="card-top"><div><div class="card-name">${escapeHtml(skill.name)}</div><div class="card-desc">${escapeHtml(skill.description || '暂无描述')}</div></div><div class="toolbar"><button class="btn btn-small" data-action="test" data-name="${escapeHtml(skill.name)}">试运行</button><button class="btn btn-small" data-action="doc" data-name="${escapeHtml(skill.name)}">文档</button><button class="btn btn-small" data-action="toggle" data-name="${escapeHtml(skill.name)}">${skill.enabled ? '停用' : '启用'}</button>${skill.source === 'user' ? `<button class="btn btn-danger btn-small" data-action="remove" data-name="${escapeHtml(skill.name)}">删除</button>` : ''}</div></div><div class="pill-row">${pills.join('')}</div></article>`;
+      }).join('');
+    }
+    function renderPaths() { $('userDirBox').textContent = `用户技能目录：${state.storage.userSkillDir || '未提供'}`; $('stateFileBox').textContent = `技能状态文件：${state.storage.stateFilePath || '未提供'}`; $('historyFileBox').textContent = `执行历史文件：${state.storage.historyFilePath || '未提供'}`; $('mcpStorageBox').textContent = `MCP 配置文件：${state.mcpStorage.filePath || '未提供'}`; $('promptPreview').textContent = state.promptSnippet || '暂无可用的 prompt 片段。'; }
+    function renderExecutionHistory() { const list = $('executionList'); if (!state.executionHistory.length) { list.innerHTML = '<div class="empty">暂无执行历史。</div>'; return; } list.innerHTML = state.executionHistory.map((entry) => `<article class="event-card"><div class="card-top"><div><div class="card-name">${escapeHtml(entry.toolName || 'unknown')}</div><div class="card-desc">${escapeHtml(entry.error || entry.summary || '执行完成')}</div></div><div class="pill-row" style="margin-top:0"><span class="pill ${entry.success ? 'ok' : 'bad'}">${entry.success ? '成功' : '失败'}</span></div></div><div class="pill-row"><span class="pill">${escapeHtml(formatTime(entry.createdAt))}</span><span class="pill">${escapeHtml(entry.origin || 'direct')}</span><span class="pill">${escapeHtml(entry.duration || 0)}ms</span></div></article>`).join(''); }
+    function renderApprovals() { const list = $('approvalList'); if (!state.approvalHistory.length) { list.innerHTML = '<div class="empty">暂无审批记录。</div>'; return; } list.innerHTML = state.approvalHistory.map((entry) => { const cls = entry.status === 'approved' ? 'ok' : entry.status === 'pending' ? 'warn' : 'bad'; return `<article class="event-card"><div class="card-top"><div><div class="card-name">${escapeHtml(entry.toolName || 'unknown')}</div><div class="card-desc">${escapeHtml(entry.summary || '暂无摘要')}</div></div><div class="pill-row" style="margin-top:0"><span class="pill ${cls}">${escapeHtml(entry.status || 'unknown')}</span></div></div><div class="pill-row"><span class="pill">run ${escapeHtml(entry.runId || 'unknown')}</span><span class="pill">session ${escapeHtml(entry.sessionId || 'unknown')}</span><span class="pill">${escapeHtml(formatTime(entry.resolvedAt || entry.expiresAt || entry.createdAt))}</span></div></article>`; }).join(''); }
+    function renderMcpServers() {
+      const list = $('mcpList');
+      if (!state.mcpServers.length) { list.innerHTML = '<div class="empty">暂无 MCP 配置。</div>'; return; }
+      list.innerHTML = state.mcpServers.map((server) => {
+        const cls = server.status === 'running' ? 'ok' : server.status === 'error' ? 'bad' : 'warn';
+        const detail = [server.description || server.command, server.lastError ? `错误：${server.lastError}` : '', Array.isArray(server.logs) && server.logs.length ? `日志：${server.logs.slice(-2).join(' | ')}` : '', Array.isArray(server.tools) && server.tools.length ? `工具：${server.tools.join(', ')}` : ''].filter(Boolean).join('\n');
+        return `<article class="mcp-card ${server.enabled ? '' : 'disabled'}"><div class="card-top"><div><div class="card-name">${escapeHtml(server.name)}</div><div class="card-desc">${escapeHtml(detail || '暂无详细信息')}</div></div><div class="toolbar"><button class="btn btn-small" data-action="start-mcp" data-id="${escapeHtml(server.id)}">启动</button><button class="btn btn-small" data-action="restart-mcp" data-id="${escapeHtml(server.id)}">重启</button><button class="btn btn-small" data-action="stop-mcp" data-id="${escapeHtml(server.id)}">停止</button><button class="btn btn-small" data-action="toggle-mcp" data-id="${escapeHtml(server.id)}">${server.enabled ? '停用' : '启用'}</button><button class="btn btn-danger btn-small" data-action="remove-mcp" data-id="${escapeHtml(server.id)}">删除</button></div></div><div class="pill-row"><span class="pill">${escapeHtml(server.transport || 'stdio')}</span><span class="pill ${cls}">${escapeHtml(server.status || 'configured')}</span><span class="pill">tools ${escapeHtml(server.toolCount || 0)}</span><span class="pill">pid ${escapeHtml(server.pid || '-')}</span></div></article>`;
+      }).join('');
+    }
+    async function loadData(preserveSelection) {
+      const previousRunner = preserveSelection ? $('testSkillSelect').value : '';
+      const previousEditor = preserveSelection ? $('editorSkillSelect').value : '';
+      const [skills, storage, toolsArray, promptSnippet, history, approvals, mcpServers, mcpStorage] = await Promise.all([
+        window.PetSkills ? window.PetSkills.listDetailed() : Promise.resolve([]),
+        window.PetSkills ? window.PetSkills.getStorageInfo() : Promise.resolve({}),
+        window.PetSkills ? window.PetSkills.getToolsArray() : Promise.resolve([]),
+        window.PetSkills ? window.PetSkills.getPromptSnippet() : Promise.resolve(''),
+        window.PetSkills ? window.PetSkills.getHistory() : Promise.resolve([]),
+        window.PetSkills ? window.PetSkills.getApprovalHistory() : Promise.resolve([]),
+        window.PetMcp ? window.PetMcp.list() : Promise.resolve([]),
+        window.PetMcp ? window.PetMcp.getStorageInfo() : Promise.resolve({})
+      ]);
+      state.skills = Array.isArray(skills) ? skills : [];
+      state.storage = storage || {};
+      state.toolsArray = Array.isArray(toolsArray) ? toolsArray : [];
+      state.promptSnippet = typeof promptSnippet === 'string' ? promptSnippet : '';
+      state.executionHistory = Array.isArray(history) ? history : [];
+      state.approvalHistory = Array.isArray(approvals) ? approvals : [];
+      state.mcpServers = Array.isArray(mcpServers) ? mcpServers : [];
+      state.mcpStorage = mcpStorage || {};
+      renderStats(); renderSelectors(); renderSkillList(); renderPaths(); renderExecutionHistory(); renderApprovals(); renderMcpServers();
+      if (previousRunner && state.skills.some((item) => item.name === previousRunner)) $('testSkillSelect').value = previousRunner;
+      if (previousEditor && state.skills.some((item) => item.name === previousEditor)) $('editorSkillSelect').value = previousEditor;
+    }
+    async function loadDocument(name) { if (!window.PetSkills || !name) return; const doc = await window.PetSkills.getDocument(name); const skill = state.skills.find((item) => item.name === name); state.currentDocumentName = name; $('editorSkillSelect').value = name; $('editorContent').value = doc.content || ''; $('editorMeta').textContent = `${skill && skill.source === 'user' ? '用户技能' : '内置技能'} | ${doc.filePath || ''}`; $('saveDocBtn').disabled = !(skill && skill.source === 'user'); }
+    function prepareTester(name) { $('testSkillSelect').value = name; $('testArgs').value = formatJson(sampleFromSchema(getToolSchema(name))); $('runStatus').textContent = `已准备运行 ${name}。`; $('runStatus').className = 'run-status'; switchSection('run'); }
+    async function handleSkillToggle(name) { const skill = state.skills.find((item) => item.name === name); if (!skill || !window.PetSkills) return; await window.PetSkills.setEnabled(name, !skill.enabled); showMessage(`${name} 已${skill.enabled ? '停用' : '启用'}`); await loadData(true); }
+    async function handleSkillRemove(name) { if (!window.PetSkills || !window.confirm(`确定删除用户技能 ${name} 吗？`)) return; await window.PetSkills.remove(name); if (state.currentDocumentName === name) { state.currentDocumentName = ''; $('editorContent').value = ''; $('editorMeta').textContent = '请选择一个技能。'; $('saveDocBtn').disabled = true; } showMessage(`${name} 已删除`); await loadData(true); }
+    async function handleSkillCreate(event) { event.preventDefault(); if (!window.PetSkills) return; const form = event.currentTarget; const payload = { name: form.name.value.trim(), description: form.description.value.trim(), handler: form.handler.value.trim(), whenToUse: form.whenToUse.value.trim(), notes: form.notes.value.trim(), userInvocable: form.userInvocable.checked, enabled: form.enabled.checked }; if (!payload.name || !payload.description || !payload.handler) { showMessage('技能名称、描述和基础技能不能为空。', true); return; } await window.PetSkills.create(payload); form.reset(); $('skillEnabled').checked = true; showMessage(`已创建技能 ${payload.name}`); await loadData(true); await loadDocument(payload.name); switchSection('docs'); }
+    async function handleSkillRun() { if (!window.PetSkills) return; const name = $('testSkillSelect').value; const skill = state.skills.find((item) => item.name === name); if (!name || !skill) { showMessage('请先选择一个技能。', true); return; } let args = {}; const rawArgs = $('testArgs').value.trim(); if (rawArgs) { try { args = JSON.parse(rawArgs); } catch { showMessage('参数 JSON 格式无效。', true); return; } } if ((skill.confirm || skill.dangerous) && !window.confirm(`技能 ${name} 可能执行高风险动作，确认继续吗？`)) return; $('runStatus').textContent = `正在运行 ${name}...`; $('runStatus').className = 'run-status'; $('runResult').textContent = '运行中...'; const result = await window.PetSkills.execute(name, args); const ok = !result || typeof result !== 'object' ? true : result.success !== false; $('runStatus').textContent = ok ? `${name} 运行完成` : `${name} 运行失败`; $('runStatus').className = `run-status ${ok ? 'ok' : 'fail'}`; $('runResult').textContent = formatJson(result); await loadData(true); }
+    async function handleDocSave() { if (!window.PetSkills || !state.currentDocumentName) return; await window.PetSkills.saveDocument(state.currentDocumentName, $('editorContent').value); showMessage(`已保存 ${state.currentDocumentName}`); await loadData(true); await loadDocument(state.currentDocumentName); }
+    async function handleMcpCreate(event) { event.preventDefault(); if (!window.PetMcp) return; const form = event.currentTarget; await window.PetMcp.create({ name: form.name.value.trim(), command: form.command.value.trim(), args: form.args.value, env: form.env.value, enabled: form.enabled.checked }); form.reset(); $('mcpEnabled').checked = true; showMessage('已创建 MCP 配置'); await loadData(true); }
+    async function handleMcpToggle(id) { const server = state.mcpServers.find((item) => item.id === id); if (!server || !window.PetMcp) return; await window.PetMcp.setEnabled(id, !server.enabled); showMessage(`${server.name} 已${server.enabled ? '停用' : '启用'}`); await loadData(true); }
+    async function handleMcpStart(id) { if (!window.PetMcp) return; await window.PetMcp.start(id); showMessage('MCP 已启动'); await loadData(true); }
+    async function handleMcpStop(id) { if (!window.PetMcp) return; await window.PetMcp.stop(id); showMessage('MCP 已停止'); await loadData(true); }
+    async function handleMcpRestart(id) { if (!window.PetMcp) return; await window.PetMcp.restart(id); showMessage('MCP 已重启'); await loadData(true); }
+    async function handleMcpRemove(id) { const server = state.mcpServers.find((item) => item.id === id); if (!server || !window.PetMcp || !window.confirm(`确定删除 MCP 配置 ${server.name} 吗？`)) return; await window.PetMcp.remove(id); showMessage(`${server.name} 已删除`); await loadData(true); }
+    $('reloadBtn').addEventListener('click', async () => { try { if (window.PetSkills) await window.PetSkills.reload(); await loadData(true); if (state.currentDocumentName) await loadDocument(state.currentDocumentName); showMessage('已重新扫描技能注册表'); } catch (error) { showMessage(error.message || '重新扫描失败', true); } });
+    $('clearHistoryBtn').addEventListener('click', async () => { try { if (!window.PetSkills) return; await window.PetSkills.clearHistory(); await loadData(true); showMessage('已清空执行历史'); } catch (error) { showMessage(error.message || '清空失败', true); } });
+    ['searchInput', 'sourceFilter', 'statusFilter'].forEach((id) => { $(id).addEventListener('input', renderSkillList); $(id).addEventListener('change', renderSkillList); });
+    $('createForm').addEventListener('submit', async (event) => { try { await handleSkillCreate(event); } catch (error) { showMessage(error.message || '创建失败', true); } });
+    $('mcpForm').addEventListener('submit', async (event) => { try { await handleMcpCreate(event); } catch (error) { showMessage(error.message || '创建 MCP 失败', true); } });
+    $('skillList').addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-action]');
+      if (!button) return;
+      try {
+        if (button.dataset.action === 'toggle') return await handleSkillToggle(button.dataset.name);
+        if (button.dataset.action === 'remove') return await handleSkillRemove(button.dataset.name);
+        if (button.dataset.action === 'test') return prepareTester(button.dataset.name);
+        if (button.dataset.action === 'doc') { await loadDocument(button.dataset.name); switchSection('docs'); return; }
+      } catch (error) {
+        showMessage(error.message || '技能操作失败', true);
+      }
+    });
+    $('mcpList').addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-action]');
+      if (!button) return;
+      try {
+        if (button.dataset.action === 'start-mcp') return await handleMcpStart(button.dataset.id);
+        if (button.dataset.action === 'stop-mcp') return await handleMcpStop(button.dataset.id);
+        if (button.dataset.action === 'restart-mcp') return await handleMcpRestart(button.dataset.id);
+        if (button.dataset.action === 'toggle-mcp') return await handleMcpToggle(button.dataset.id);
+        if (button.dataset.action === 'remove-mcp') return await handleMcpRemove(button.dataset.id);
+      } catch (error) {
+        showMessage(error.message || 'MCP 操作失败', true);
+      }
+    });
+    $('fillSampleBtn').addEventListener('click', () => { $('testArgs').value = formatJson(sampleFromSchema(getToolSchema($('testSkillSelect').value))); });
+    $('runSkillBtn').addEventListener('click', async () => { try { await handleSkillRun(); } catch (error) { $('runStatus').textContent = error.message || '运行失败'; $('runStatus').className = 'run-status fail'; $('runResult').textContent = formatJson({ error: error.message || 'execute_failed' }); } });
+    $('testSkillSelect').addEventListener('change', (event) => { $('testArgs').value = formatJson(sampleFromSchema(getToolSchema(event.target.value))); $('runStatus').textContent = `已准备运行 ${event.target.value}。`; $('runStatus').className = 'run-status'; });
+    $('editorSkillSelect').addEventListener('change', async (event) => { try { await loadDocument(event.target.value); } catch (error) { showMessage(error.message || '加载文档失败', true); } });
+    $('loadDocBtn').addEventListener('click', async () => { try { await loadDocument($('editorSkillSelect').value); } catch (error) { showMessage(error.message || '加载文档失败', true); } });
+    $('saveDocBtn').addEventListener('click', async () => { try { await handleDocSave(); } catch (error) { showMessage(error.message || '保存失败', true); } });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeWindow(); if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && document.activeElement && document.activeElement.id === 'editorContent') { event.preventDefault(); void handleDocSave().catch((error) => showMessage(error.message || '保存失败', true)); } });
+    loadData(false).then(async () => { if (state.skills.length > 0) { const first = state.skills[0].name; $('testSkillSelect').value = first; $('editorSkillSelect').value = first; $('testArgs').value = formatJson(sampleFromSchema(getToolSchema(first))); $('runStatus').textContent = `已准备运行 ${first}。`; await loadDocument(first); } else { $('saveDocBtn').disabled = true; } }).catch((error) => showMessage(error.message || '加载技术面板失败', true));
+  </script>
+</body>
+</html>

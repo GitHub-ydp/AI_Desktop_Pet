@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Intimacy Widget</title>
+  <script src="../src/theme-manager.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      background: transparent;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+      padding-top: 6px;
+    }
+
+    .widget {
+      width: 112px;
+      padding: 4px 7px;
+      border-radius: 8px;
+      background: linear-gradient(
+        180deg,
+        var(--bubble-bg, var(--bg-card, rgba(0, 30, 55, 0.82))),
+        var(--bg-surface, rgba(2, 10, 20, 0.96))
+      );
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--bubble-border, var(--border, rgba(0, 255, 240, 0.32)));
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.16),
+        0 0 6px color-mix(in srgb, var(--neon-cyan, #00fff0) 12%, transparent);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .widget.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .widget.flash {
+      box-shadow:
+        0 0 0 1px var(--border-bright, rgba(0, 255, 240, 0.45)),
+        0 6px 14px color-mix(in srgb, var(--neon-cyan, #00fff0) 14%, transparent);
+    }
+
+    .level {
+      font-size: 10px;
+      font-weight: 900;
+      color: var(--neon-cyan, #00fff0);
+      text-shadow: var(--glow-sm, 0 0 6px rgba(0, 255, 240, 0.35));
+      margin-bottom: 3px;
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    .track {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--accent-bg-dim, rgba(0, 255, 240, 0.12));
+      overflow: hidden;
+    }
+
+    .fill {
+      width: 0%;
+      height: 100%;
+      border-radius: 2px;
+      background: var(--neon-cyan, #00fff0);
+      box-shadow: 0 0 5px var(--neon-cyan, #00fff0);
+      transition: width 0.25s ease-out, filter 0.2s ease;
+    }
+
+    .points {
+      margin-top: 2px;
+      font-size: 8px;
+      color: var(--text-muted, rgba(160, 220, 240, 0.75));
+      font-family: Consolas, monospace;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="widget" id="widget">
+    <div class="level" id="level">Lv1 陌生人</div>
+    <div class="track">
+      <div class="fill" id="fill"></div>
+    </div>
+    <div class="points" id="points">0.0%</div>
+  </div>
+
+  <script>
+    const widget = document.getElementById('widget');
+    const level = document.getElementById('level');
+    const fill = document.getElementById('fill');
+    const points = document.getElementById('points');
+    let flashTimer = null;
+
+    function showWidget(payload) {
+      if (!payload) return;
+      level.textContent = payload.levelText || 'Lv1 陌生人';
+      fill.style.width = payload.progressText || '0.0%';
+      points.textContent = payload.pointsText || '0.0%';
+      widget.classList.add('show');
+
+      if (payload.highlight) {
+        widget.classList.add('flash');
+        fill.style.filter = 'brightness(1.7) contrast(1.15)';
+        if (flashTimer) clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => {
+          widget.classList.remove('flash');
+          fill.style.filter = '';
+          flashTimer = null;
+        }, 420);
+      }
+    }
+
+    function hideWidget() {
+      widget.classList.remove('show');
+      widget.classList.remove('flash');
+      fill.style.filter = '';
+      if (flashTimer) {
+        clearTimeout(flashTimer);
+        flashTimer = null;
+      }
+    }
+
+    if (window.electron && window.electron.onIntimacyWidgetShow) {
+      window.electron.onIntimacyWidgetShow((event, payload) => {
+        showWidget(payload);
+      });
+    }
+
+    if (window.electron && window.electron.onIntimacyWidgetHide) {
+      window.electron.onIntimacyWidgetHide(() => {
+        hideWidget();
+      });
+    }
+  </script>
+</body>
+</html>

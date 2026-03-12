@@ -65,6 +65,7 @@ class CapabilityRegistry {
   constructor(options = {}) {
     this.skillRegistry = options.skillRegistry || null;
     this.skillExecutor = options.skillExecutor || null;
+    this.mcpRuntime = options.mcpRuntime || null;
     this.workflowManager = options.workflowManager || null;
     this.toolSystem = options.toolSystem || null;
     this.aliasToActual = new Map();
@@ -105,6 +106,22 @@ class CapabilityRegistry {
           requiresApproval: this._looksMutating(name),
           safe: !this._looksMutating(name),
           source: 'workflow'
+        });
+        this.toolDefinitions.push(tool);
+      }
+    }
+
+    if (this.mcpRuntime && typeof this.mcpRuntime.listTools === 'function') {
+      for (const tool of this.mcpRuntime.listTools()) {
+        const name = tool.function.name;
+        if (seen.has(name)) continue;
+        seen.add(name);
+        const metadata = this.mcpRuntime.getToolMetadata(name) || {};
+        this.aliasToActual.set(name, name);
+        this.toolMetadata.set(name, {
+          requiresApproval: metadata.readOnlyHint === true ? false : this._looksMutating(name),
+          safe: metadata.readOnlyHint === true,
+          source: 'mcp'
         });
         this.toolDefinitions.push(tool);
       }
@@ -153,6 +170,10 @@ class CapabilityRegistry {
       }
     }
 
+    if (this.mcpRuntime && typeof this.mcpRuntime.hasTool === 'function' && this.mcpRuntime.hasTool(actualName)) {
+      return true;
+    }
+
     const registry = this._getToolRegistry();
     return !!(registry && registry.hasTool && registry.hasTool(actualName));
   }
@@ -187,6 +208,11 @@ class CapabilityRegistry {
         const result = await this.workflowManager.execute(actualName, args);
         return normalizeToolResult(result, 'workflow', actualName);
       }
+    }
+
+    if (this.mcpRuntime && typeof this.mcpRuntime.hasTool === 'function' && this.mcpRuntime.hasTool(actualName)) {
+      const result = await this.mcpRuntime.executeTool(actualName, args, options);
+      return normalizeToolResult(result, 'mcp', actualName);
     }
 
     if (this.toolSystem) {

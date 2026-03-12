@@ -69,6 +69,9 @@ contextBridge.exposeInMainWorld('electron', {
   closeMenuWindow: () => ipcRenderer.invoke('menu:close'),
   toggleMenuWindow: () => ipcRenderer.invoke('menu:toggle'),
   isMenuWindowOpen: () => ipcRenderer.invoke('menu:is-open'),
+  onMenuWindowState: (callback) => {
+    ipcRenderer.on('menu:state', callback);
+  },
   onMenuCommand: (callback) => {
     ipcRenderer.on('menu:command', callback);
   },
@@ -100,6 +103,14 @@ contextBridge.exposeInMainWorld('electron', {
   hideBubble: () => ipcRenderer.invoke('bubble:hide'),
   onBubbleShow: (callback) => {
     ipcRenderer.on('bubble:show', callback);
+  },
+  showIntimacyWidget: (payload) => ipcRenderer.invoke('intimacy-widget:show', payload || {}),
+  hideIntimacyWidget: () => ipcRenderer.invoke('intimacy-widget:hide'),
+  onIntimacyWidgetShow: (callback) => {
+    ipcRenderer.on('intimacy-widget:show', callback);
+  },
+  onIntimacyWidgetHide: (callback) => {
+    ipcRenderer.on('intimacy-widget:hide', callback);
   }
 });
 
@@ -549,19 +560,64 @@ contextBridge.exposeInMainWorld('PetSkills', {
   // 获取可用技能列表
   list: () => ipcRenderer.invoke('skill:list'),
 
+  // 获取技能详细列表（包含已停用技能）
+  listDetailed: () => ipcRenderer.invoke('skill:list-detailed'),
+
   // 获取 function calling tools 数组
   getToolsArray: () => ipcRenderer.invoke('skill:get-tools-array'),
 
   // 获取系统提示词片段
   getPromptSnippet: () => ipcRenderer.invoke('skill:get-prompt-snippet'),
 
+  // 获取技能存储信息
+  getStorageInfo: () => ipcRenderer.invoke('skill:get-storage-info'),
+
+  // 获取技能文档内容
+  getDocument: (name) => ipcRenderer.invoke('skill:get-document', name),
+
+  // 获取技能执行历史
+  getHistory: () => ipcRenderer.invoke('skill:get-history'),
+
+  // 清空技能执行历史
+  clearHistory: () => ipcRenderer.invoke('skill:clear-history'),
+
+  // 获取审批记录
+  getApprovalHistory: () => ipcRenderer.invoke('skill:get-approval-history'),
+
   // 执行技能
   execute: (name, args) => ipcRenderer.invoke('skill:execute', name, args),
+
+  // 设置技能启停
+  setEnabled: (name, enabled) => ipcRenderer.invoke('skill:set-enabled', name, enabled),
+
+  // 创建用户自定义技能
+  create: (payload) => ipcRenderer.invoke('skill:create', payload),
+
+  // 删除用户自定义技能
+  remove: (name) => ipcRenderer.invoke('skill:remove', name),
+
+  // 保存用户技能文档
+  saveDocument: (name, content) => ipcRenderer.invoke('skill:save-document', name, content),
+
+  // 重新扫描技能目录
+  reload: () => ipcRenderer.invoke('skill:reload'),
 
   // 响应确认
   respondConfirm: (requestId, approved) => {
     ipcRenderer.send('skill:confirm-response', { requestId, approved });
   }
+});
+
+contextBridge.exposeInMainWorld('PetMcp', {
+  list: () => ipcRenderer.invoke('mcp:list'),
+  getStorageInfo: () => ipcRenderer.invoke('mcp:get-storage-info'),
+  create: (payload) => ipcRenderer.invoke('mcp:create', payload),
+  update: (id, payload) => ipcRenderer.invoke('mcp:update', id, payload),
+  setEnabled: (id, enabled) => ipcRenderer.invoke('mcp:set-enabled', id, enabled),
+  remove: (id) => ipcRenderer.invoke('mcp:remove', id),
+  start: (id) => ipcRenderer.invoke('mcp:start', id),
+  stop: (id) => ipcRenderer.invoke('mcp:stop', id),
+  restart: (id) => ipcRenderer.invoke('mcp:restart', id)
 });
 
 // 工作流系统 API（Python 工具调用）

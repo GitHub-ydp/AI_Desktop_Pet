@@ -228,6 +228,21 @@ class AgentSessionStore {
     return rows.map((row) => this._mapApproval(row));
   }
 
+  getRecentApprovals(limit = 50) {
+    const rows = this.db.prepare(`
+      SELECT a.*, r.session_id
+      FROM agent_approvals a
+      INNER JOIN agent_runs r ON r.id = a.run_id
+      ORDER BY COALESCE(a.resolved_at, a.expires_at, r.created_at) DESC, a.id DESC
+      LIMIT ?
+    `).all(limit);
+
+    return rows.map((row) => ({
+      ...this._mapApproval(row),
+      sessionId: row.session_id
+    }));
+  }
+
   resolveApproval(approvalId, { status, decision = null, resolvedAt = Date.now() }) {
     this.db.prepare(`
       UPDATE agent_approvals

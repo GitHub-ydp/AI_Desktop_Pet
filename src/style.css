@@ -6,52 +6,73 @@
 
 /* 亲密度组件 */
 #intimacy-widget {
+  display: none;
   position: absolute;
-  bottom: 12px;
+  top: calc(50% + (var(--pet-size) * 0.5) - 6px);
   left: 50%;
-  transform: translateX(-50%);
-  width: 140px;
+  transform: translate(calc(-50% + var(--intimacy-offset-x, 0px)), calc(12px + var(--intimacy-offset-y, 0px)));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  width: 112px;
+  padding: 4px 7px;
+  background: color-mix(in srgb, var(--bg, #020810) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgb(from var(--neon-cyan) r g b / 0.45);
+  border-radius: 8px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45);
+  opacity: 0;
   pointer-events: none;
-  opacity: 0.85;
-  transition: opacity 0.3s;
-  z-index: 12;
+  z-index: 6;
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-#intimacy-widget:hover {
+/* Hover 和反馈都可以显示 */
+#intimacy-widget.hover-visible,
+#intimacy-widget.expanding-feedback {
   opacity: 1;
+  transform: translate(calc(-50% + var(--intimacy-offset-x, 0px)), var(--intimacy-offset-y, 0px));
+}
+
+/* 菜单打开时强制隐藏 */
+body.menu-active #intimacy-widget {
+  opacity: 0 !important;
+  transform: translate(calc(-50% + var(--intimacy-offset-x, 0px)), calc(14px + var(--intimacy-offset-y, 0px))) !important;
+  pointer-events: none !important;
 }
 
 #intimacy-level {
-  font-size: 10px;
-  color: rgba(0, 255, 240, 0.8);
-  letter-spacing: 0.3px;
+  font-size: 10px; /* 字体微调 */
+  font-weight: 900;
+  color: var(--neon-cyan, #00fff0);
+  text-shadow: 0 0 5px rgb(from var(--neon-cyan) r g b / 0.6);
+  margin-bottom: 3px;
   white-space: nowrap;
 }
 
 #intimacy-bar-track {
   width: 100%;
-  height: 3px;
-  background: rgba(0, 255, 240, 0.15);
-  border-radius: 999px;
+  height: 4px; /* 更细更精致 */
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 #intimacy-bar-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #00fff0, #00b8ff);
-  border-radius: 999px;
-  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-  box-shadow: 0 0 6px rgba(0, 255, 240, 0.5);
+  background: var(--neon-cyan, #00fff0);
+  border-radius: 2px;
+  transition: width 1s ease-out;
+  box-shadow: 0 0 5px var(--neon-cyan);
 }
 
 #intimacy-points {
-  font-size: 9px;
-  color: rgba(160, 220, 240, 0.5);
+  margin-top: 2px;
+  font-size: 8px;
+  color: rgb(from var(--neon-cyan) r g b / 0.8);
+  font-family: monospace;
 }
 
 body {
@@ -75,8 +96,11 @@ body {
   --cyber-gradient: linear-gradient(135deg, rgba(232, 248, 255, 0.96), rgba(210, 236, 255, 0.9));
   --pet-bottom: 0px;  /* 兼容旧逻辑，当前不用于定位 */
   --pet-size: 150px;  /* 匹配 150x150 主窗口 */
+  --pet-anchor-y: 50%;
   --menu-size: 300px;
   --pet-lottie-scale: 0.72;
+  --intimacy-offset-x: 0px;
+  --intimacy-offset-y: 0px;
   /* 主题 CSS 变量默认值（懒猫橘），由 theme-manager.js 在运行时覆盖 */
   --bg: #1a0e05;
   --neon-cyan: #ffb347;
@@ -106,7 +130,7 @@ body {
 .pet-wrapper {
   position: absolute;
   /* 始终以窗口中心为基准，避免菜单打开时位置跳动 */
-  top: 50%;
+  top: var(--pet-anchor-y);
   left: 50%;
   transform: translate(-50%, -50%);
   /* 增加高度和宽度以便于居中对齐 */

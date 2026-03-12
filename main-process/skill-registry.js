@@ -1,169 +1,81 @@
-// 技能注册中心
-// 扫描并加载所有 SKILL.md 文件，管理技能生命周期
-// 支持内置技能目录和用户自定义技能目录
-
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+
+function coerceScalar(value) {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"'))
+    || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
+  }
+
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  if (trimmed === 'null') return null;
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
+
+  return trimmed;
+}
 
 class SkillRegistry {
   constructor(app) {
-    // 内置技能目录（项目 skills/）
+    this.app = app || null;
     this.bundledDir = path.join(__dirname, '..', 'skills');
-    // 用户自定义技能目录（userData/skills/）
     this.userDir = app ? path.join(app.getPath('userData'), 'skills') : null;
-    // name → skill 对象
+    this.stateFilePath = app ? path.join(app.getPath('userData'), 'skill-state.json') : null;
     this.skills = new Map();
+    this.skillState = { skills: {} };
   }
 
-  // 扫描并加载所有技能
   loadSkills() {
     this.skills.clear();
+    this._ensureUserDirectory();
+    this.skillState = this._readState();
 
-    // 1. 加载内置技能
     this._scanDirectory(this.bundledDir, 'bundled');
-
-    // 2. 加载用户技能（同名覆盖内置）
     if (this.userDir && fs.existsSync(this.userDir)) {
       this._scanDirectory(this.userDir, 'user');
     }
+
+    this._cleanupState();
+    this._writeState();
 
     console.log(`[SkillRegistry] 已加载 ${this.skills.size} 个技能`);
     return this.skills.size;
   }
 
-  // 扫描目录下所有子目录中的 SKILL.md
-  _scanDirectory(dir, source) {
-    if (!fs.existsSync(dir)) {
-      console.log(`[SkillRegistry] 目录不存在，跳过: ${dir}`);
-      return;
-    }
-
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-
-      const skillMdPath = path.join(dir, entry.name, 'SKILL.md');
-      if (!fs.existsSync(skillMdPath)) continue;
-
-      try {
-        const skill = this._parseSkillMd(skillMdPath);
-        if (skill) {
-          skill.source = source;
-          skill.directory = path.join(dir, entry.name);
-          this.skills.set(skill.name, skill);
-          console.log(`[SkillRegistry] 已加载技能: ${skill.name} (${source})`);
-        }
-      } catch (error) {
-        console.error(`[SkillRegistry] 解析失败: ${skillMdPath}`, error.message);
-      }
-    }
+  reloadSkills() {
+    return this.loadSkills();
   }
 
-  // 解析单个 SKILL.md 文件
-  // 格式：YAML frontmatter（--- ... ---）+ Markdown 正文
-  _parseSkillMd(filePath) {
-    const content = fs.readFileSync(filePath, 'utf-8');
-
-    // 提取 YAML frontmatter
-    const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
-    if (!frontmatterMatch) {
-      console.warn(`[SkillRegistry] 无 YAML frontmatter: ${filePath}`);
-      return null;
-    }
-
-    const yamlText = frontmatterMatch[1];
-    const instructions = content.slice(frontmatterMatch[0].length).trim();
-
-    // 用正则解析 YAML（不依赖 js-yaml）
-    const parsed = this._parseSimpleYaml(yamlText);
-
-    if (!parsed.name) {
-      console.warn(`[SkillRegistry] 缺少 name 字段: ${filePath}`);
-      return null;
-    }
-
-    // 解析 metadata（可能是 JSON 字符串或普通对象）
-    let metadata = {};
-    if (parsed.metadata) {
-      if (typeof parsed.metadata === 'string') {
-        try {
-          metadata = JSON.parse(parsed.metadata);
-        } catch (e) {
-          console.warn(`[SkillRegistry] metadata JSON 解析失败: ${filePath}`);
+  listDetailedSkills() {
+    return Array.from(this.skills.values())
+      .map((skill) => this._serializeSkill(skill))
+      .sort((left, right) => {
+        if (left.source !== right.source) {
+          return left.source === 'bundled' ? -1 : 1;
         }
-      } else {
-        metadata = parsed.metadata;
-      }
-    }
-
-    return {
-      name: parsed.name,
-      description: parsed.description || '',
-      metadata,
-      userInvocable: parsed['user-invocable'] === 'true' || parsed['user-invocable'] === true,
-      instructions,
-      filePath
-    };
+        return left.name.localeCompare(right.name);
+      });
   }
 
-  // 简单 YAML 解析器（正则实现，支持单层键值对）
-  _parseSimpleYaml(yamlText) {
-    const result = {};
-    const lines = yamlText.split('\n');
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-
-      // 匹配 key: value 格式
-      const match = trimmed.match(/^([a-zA-Z_-]+)\s*:\s*(.*)$/);
-      if (match) {
-        const key = match[1].trim();
-        let value = match[2].trim();
-
-        // 去除引号
-        if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
-          value = value.slice(1, -1);
-        }
-
-        // 布尔值转换
-        if (value === 'true') value = true;
-        else if (value === 'false') value = false;
-
-        result[key] = value;
-      }
-    }
-
-    return result;
-  }
-
-  // 根据当前环境过滤可用技能
   getEligibleSkills() {
     const eligible = [];
     const currentOS = process.platform;
 
-    for (const [name, skill] of this.skills) {
-      const requires = skill.metadata.requires || {};
-
-      // 检查操作系统要求
-      if (requires.os && Array.isArray(requires.os)) {
-        if (!requires.os.includes(currentOS)) {
-          continue;
-        }
+    for (const skill of this.skills.values()) {
+      if (skill.enabled === false) {
+        continue;
       }
 
-      // 检查必要的可执行文件
-      if (requires.bins && Array.isArray(requires.bins)) {
-        let allBinsAvailable = true;
-        for (const bin of requires.bins) {
-          if (!this._isBinAvailable(bin)) {
-            allBinsAvailable = false;
-            break;
-          }
-        }
-        if (!allBinsAvailable) continue;
+      const requires = skill.metadata.requires || {};
+      if (Array.isArray(requires.os) && requires.os.length > 0 && !requires.os.includes(currentOS)) {
+        continue;
+      }
+
+      if (Array.isArray(requires.bins) && requires.bins.some((binName) => !this._isBinAvailable(binName))) {
+        continue;
       }
 
       eligible.push({
@@ -171,29 +83,16 @@ class SkillRegistry {
         description: skill.description,
         dangerous: !!skill.metadata.dangerous,
         confirm: !!skill.metadata.confirm,
-        userInvocable: skill.userInvocable,
-        source: skill.source
+        userInvocable: !!skill.userInvocable,
+        source: skill.source,
+        enabled: true,
+        handler: this.getResolvedHandlerName(skill.name)
       });
     }
 
     return eligible;
   }
 
-  // 检查可执行文件是否在 PATH 中
-  _isBinAvailable(binName) {
-    const { execSync } = require('child_process');
-    try {
-      const cmd = process.platform === 'win32'
-        ? `where ${binName}`
-        : `which ${binName}`;
-      execSync(cmd, { stdio: 'ignore' });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  // 生成系统提示词 XML 片段
   formatForPrompt() {
     const eligible = this.getEligibleSkills();
     if (eligible.length === 0) return '';
@@ -201,111 +100,477 @@ class SkillRegistry {
     let xml = '<available_skills>\n';
     for (const skill of eligible) {
       const fullSkill = this.skills.get(skill.name);
-      xml += `<skill>\n`;
+      xml += '<skill>\n';
       xml += `  <name>${skill.name}</name>\n`;
       xml += `  <description>${skill.description}</description>\n`;
-      if (fullSkill.instructions) {
+      if (fullSkill?.instructions) {
         xml += `  <instructions>\n${fullSkill.instructions}\n  </instructions>\n`;
       }
-      xml += `</skill>\n`;
+      xml += '</skill>\n';
     }
     xml += '</available_skills>';
 
     return xml;
   }
 
-  // 生成 DeepSeek function calling tools 数组
   buildToolsArray() {
-    const eligible = this.getEligibleSkills();
-    const tools = [];
-
-    for (const skill of eligible) {
+    return this.getEligibleSkills().map((skill) => {
       const fullSkill = this.skills.get(skill.name);
-      const params = this._extractParameters(fullSkill.instructions);
+      let parameters = this._extractParameters(fullSkill?.instructions || '');
 
-      tools.push({
+      if (Object.keys(parameters.properties).length === 0) {
+        const resolvedHandlerName = this.getResolvedHandlerName(skill.name);
+        if (resolvedHandlerName && resolvedHandlerName !== skill.name) {
+          const handlerSkill = this.skills.get(resolvedHandlerName);
+          parameters = this._extractParameters(handlerSkill?.instructions || '');
+        }
+      }
+
+      return {
         type: 'function',
         function: {
           name: skill.name,
           description: skill.description,
-          parameters: params
+          parameters
         }
-      });
-    }
-
-    return tools;
+      };
+    });
   }
 
-  // 从 SKILL.md 的 instructions 中提取参数定义
-  _extractParameters(instructions) {
-    if (!instructions) {
-      return { type: 'object', properties: {}, required: [] };
+  getSkill(name) {
+    return this.skills.get(name) || null;
+  }
+
+  requiresConfirmation(name) {
+    const skill = this.skills.get(name);
+    return skill ? !!skill.metadata.confirm : false;
+  }
+
+  isDangerous(name) {
+    const skill = this.skills.get(name);
+    return skill ? !!skill.metadata.dangerous : false;
+  }
+
+  getResolvedHandlerName(name) {
+    let current = String(name || '').trim();
+    const seen = new Set();
+
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      const skill = this.skills.get(current);
+      const next = String(skill?.metadata?.handler || '').trim();
+      if (!next || next === current) {
+        return current;
+      }
+      current = next;
     }
 
+    return current || String(name || '').trim();
+  }
+
+  setSkillEnabled(name, enabled) {
+    const skill = this.skills.get(name);
+    if (!skill) {
+      throw new Error(`技能不存在: ${name}`);
+    }
+
+    if (!this.skillState.skills[name]) {
+      this.skillState.skills[name] = {};
+    }
+    this.skillState.skills[name].enabled = !!enabled;
+    skill.enabled = !!enabled;
+    this._writeState();
+
+    return this._serializeSkill(skill);
+  }
+
+  getStorageInfo() {
+    return {
+      bundledDir: this.bundledDir,
+      userDir: this.userDir,
+      stateFilePath: this.stateFilePath
+    };
+  }
+
+  createUserSkill(payload = {}) {
+    if (!this.userDir) {
+      throw new Error('用户技能目录不可用');
+    }
+
+    const name = String(payload.name || '').trim();
+    if (!/^[a-zA-Z0-9_-]{2,64}$/.test(name)) {
+      throw new Error('技能名称只能包含字母、数字、下划线和短横线，长度 2 到 64');
+    }
+    if (this.skills.has(name)) {
+      throw new Error(`技能已存在: ${name}`);
+    }
+
+    const handler = String(payload.handler || '').trim();
+    const baseSkill = this.skills.get(handler);
+    if (!baseSkill) {
+      throw new Error(`基础技能不存在: ${handler}`);
+    }
+
+    const description = String(payload.description || '').trim() || `基于 ${handler} 的自定义技能`;
+    const whenToUse = String(payload.whenToUse || '').trim()
+      || `当需要执行“${description}”这类任务时调用。`;
+    const notes = String(payload.notes || '').trim();
+    const enabled = payload.enabled !== false;
+    const userInvocable = !!payload.userInvocable;
+
+    const metadata = {
+      ...(baseSkill.metadata || {}),
+      handler,
+      dangerous: Object.prototype.hasOwnProperty.call(payload, 'dangerous')
+        ? !!payload.dangerous
+        : !!baseSkill.metadata.dangerous,
+      confirm: Object.prototype.hasOwnProperty.call(payload, 'confirm')
+        ? !!payload.confirm
+        : !!baseSkill.metadata.confirm,
+      category: String(payload.category || '').trim() || baseSkill.metadata.category || 'custom'
+    };
+
+    const markdown = this._buildSkillMarkdown({
+      name,
+      description,
+      metadata,
+      userInvocable,
+      instructions: this._buildDerivedInstructions({
+        handler,
+        whenToUse,
+        notes,
+        baseInstructions: baseSkill.instructions || ''
+      })
+    });
+
+    const directory = path.join(this.userDir, name);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'SKILL.md'), markdown, 'utf8');
+
+    if (!this.skillState.skills[name]) {
+      this.skillState.skills[name] = {};
+    }
+    this.skillState.skills[name].enabled = enabled;
+    this._writeState();
+    this.loadSkills();
+
+    return this.getSkill(name);
+  }
+
+  removeSkill(name) {
+    const skill = this.skills.get(name);
+    if (!skill) {
+      throw new Error(`技能不存在: ${name}`);
+    }
+    if (skill.source !== 'user') {
+      throw new Error('内置技能不可删除，只能停用');
+    }
+
+    fs.rmSync(skill.directory, { recursive: true, force: true });
+    delete this.skillState.skills[name];
+    this._writeState();
+    this.loadSkills();
+
+    return true;
+  }
+
+  getSkillDocument(name) {
+    const skill = this.skills.get(name);
+    if (!skill) {
+      throw new Error(`技能不存在: ${name}`);
+    }
+
+    return {
+      name: skill.name,
+      source: skill.source,
+      filePath: skill.filePath,
+      content: fs.readFileSync(skill.filePath, 'utf8')
+    };
+  }
+
+  saveUserSkillDocument(name, content) {
+    const skill = this.skills.get(name);
+    if (!skill) {
+      throw new Error(`技能不存在: ${name}`);
+    }
+    if (skill.source !== 'user') {
+      throw new Error('只有用户技能支持编辑');
+    }
+
+    const nextContent = String(content || '');
+    const parsed = this._parseSkillContent(nextContent, skill.filePath);
+    if (!parsed) {
+      throw new Error('技能文档格式无效');
+    }
+    if (parsed.name !== name) {
+      throw new Error('暂不支持通过编辑器修改技能名称');
+    }
+
+    fs.writeFileSync(skill.filePath, nextContent, 'utf8');
+    this.loadSkills();
+    return this.getSkill(name);
+  }
+
+  _scanDirectory(directoryPath, source) {
+    if (!directoryPath || !fs.existsSync(directoryPath)) {
+      return;
+    }
+
+    const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      const skillFilePath = path.join(directoryPath, entry.name, 'SKILL.md');
+      if (!fs.existsSync(skillFilePath)) continue;
+
+      try {
+        const parsed = this._parseSkillMd(skillFilePath);
+        if (!parsed) continue;
+
+        parsed.source = source;
+        parsed.directory = path.join(directoryPath, entry.name);
+        parsed.enabled = this._isSkillEnabled(parsed.name);
+        this.skills.set(parsed.name, parsed);
+        console.log(`[SkillRegistry] 已加载技能: ${parsed.name} (${source})`);
+      } catch (error) {
+        console.error(`[SkillRegistry] 解析失败: ${skillFilePath}`, error.message);
+      }
+    }
+  }
+
+  _parseSkillMd(filePath) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    return this._parseSkillContent(content, filePath);
+  }
+
+  _parseSkillContent(content, filePath = '') {
+    const frontmatterMatch = String(content || '').match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?/);
+    if (!frontmatterMatch) {
+      if (filePath) {
+        console.warn(`[SkillRegistry] 缺少 YAML frontmatter: ${filePath}`);
+      }
+      return null;
+    }
+
+    const frontmatter = this._parseSimpleYaml(frontmatterMatch[1]);
+    const metadata = this._parseMetadata(frontmatter.metadata);
+    const name = String(frontmatter.name || '').trim();
+    if (!name) {
+      if (filePath) {
+        console.warn(`[SkillRegistry] 缺少 name 字段: ${filePath}`);
+      }
+      return null;
+    }
+
+    return {
+      name,
+      description: String(frontmatter.description || '').trim(),
+      metadata,
+      userInvocable: frontmatter['user-invocable'] === true,
+      instructions: String(content).slice(frontmatterMatch[0].length).trim(),
+      filePath
+    };
+  }
+
+  _parseSimpleYaml(yamlText) {
+    const result = {};
+    const lines = String(yamlText || '').split(/\r?\n/);
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
+      if (!match) continue;
+
+      const key = match[1].trim();
+      const rawValue = match[2].trim();
+      result[key] = coerceScalar(rawValue);
+    }
+
+    return result;
+  }
+
+  _parseMetadata(value) {
+    if (!value) return {};
+    if (typeof value === 'object' && !Array.isArray(value)) return value;
+
+    const raw = String(value).trim();
+    if (!raw) return {};
+
+    if (raw.startsWith('{') || raw.startsWith('[')) {
+      try {
+        return JSON.parse(raw);
+      } catch (error) {
+        console.warn('[SkillRegistry] metadata JSON 解析失败:', error.message);
+      }
+    }
+
+    return {};
+  }
+
+  _extractParameters(instructions) {
     const properties = {};
     const required = [];
+    const text = String(instructions || '');
+    const regex = /^-\s+(\w+)\s*\(([^)]+)\)\s*[:：]\s*(.+)$/gm;
+    let match = null;
 
-    // 匹配 "- paramName (type, 必须/可选): description" 格式
-    const paramRegex = /^-\s+(\w+)\s*\(([^)]+)\)\s*[：:]\s*(.+)$/gm;
-    let match;
-
-    while ((match = paramRegex.exec(instructions)) !== null) {
+    while ((match = regex.exec(text)) !== null) {
       const paramName = match[1];
       const typeInfo = match[2];
       const description = match[3].trim();
+      const parts = typeInfo.split(',').map((item) => item.trim());
 
-      // 解析类型
-      const typeParts = typeInfo.split(',').map(s => s.trim());
-      let paramType = 'string';
+      let type = 'string';
       let isRequired = false;
-
-      for (const part of typeParts) {
+      for (const part of parts) {
         if (['string', 'number', 'boolean', 'integer', 'array', 'object'].includes(part)) {
-          paramType = part;
+          type = part;
         }
         if (part === '必须' || part === 'required') {
           isRequired = true;
         }
       }
 
-      // 提取默认值
-      const defaultMatch = description.match(/默认\s*(.+?)(?:[，,]|$)/);
-      const prop = { type: paramType, description };
+      const property = { type, description };
+      const defaultMatch = description.match(/默认\s*([^，。；;]+)/);
       if (defaultMatch) {
-        const defaultVal = defaultMatch[1].trim();
-        if (paramType === 'number' || paramType === 'integer') {
-          prop.default = Number(defaultVal);
-        } else if (paramType === 'boolean') {
-          prop.default = defaultVal === 'true';
-        } else {
-          prop.default = defaultVal;
-        }
+        property.default = coerceScalar(defaultMatch[1]);
       }
 
-      properties[paramName] = prop;
+      properties[paramName] = property;
       if (isRequired) {
         required.push(paramName);
       }
     }
 
-    return { type: 'object', properties, required };
+    return {
+      type: 'object',
+      properties,
+      required
+    };
   }
 
-  // 获取单个技能详情
-  getSkill(name) {
-    return this.skills.get(name) || null;
+  _isBinAvailable(binName) {
+    const { execSync } = require('child_process');
+    try {
+      const command = process.platform === 'win32' ? `where ${binName}` : `which ${binName}`;
+      execSync(command, { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  // 检查技能是否需要用户确认
-  requiresConfirmation(name) {
-    const skill = this.skills.get(name);
-    return skill ? !!skill.metadata.confirm : false;
+  _serializeSkill(skill) {
+    return {
+      name: skill.name,
+      description: skill.description,
+      source: skill.source,
+      enabled: skill.enabled !== false,
+      userInvocable: !!skill.userInvocable,
+      dangerous: !!skill.metadata.dangerous,
+      confirm: !!skill.metadata.confirm,
+      category: skill.metadata.category || 'default',
+      handler: this.getResolvedHandlerName(skill.name),
+      rawHandler: String(skill.metadata.handler || '').trim() || skill.name,
+      filePath: skill.filePath,
+      directory: skill.directory,
+      removable: skill.source === 'user'
+    };
   }
 
-  // 检查技能是否危险
-  isDangerous(name) {
-    const skill = this.skills.get(name);
-    return skill ? !!skill.metadata.dangerous : false;
+  _ensureUserDirectory() {
+    if (!this.userDir) return;
+    fs.mkdirSync(this.userDir, { recursive: true });
+  }
+
+  _readState() {
+    if (!this.stateFilePath || !fs.existsSync(this.stateFilePath)) {
+      return { skills: {} };
+    }
+
+    try {
+      const content = fs.readFileSync(this.stateFilePath, 'utf8');
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return {
+          skills: parsed.skills && typeof parsed.skills === 'object' ? parsed.skills : {}
+        };
+      }
+    } catch (error) {
+      console.warn('[SkillRegistry] 读取技能状态失败:', error.message);
+    }
+
+    return { skills: {} };
+  }
+
+  _writeState() {
+    if (!this.stateFilePath) return;
+
+    const normalized = { skills: {} };
+    for (const [name, state] of Object.entries(this.skillState.skills || {})) {
+      normalized.skills[name] = {
+        enabled: state?.enabled !== false
+      };
+    }
+
+    fs.writeFileSync(this.stateFilePath, JSON.stringify(normalized, null, 2), 'utf8');
+  }
+
+  _isSkillEnabled(name) {
+    const state = this.skillState.skills?.[name];
+    if (!state || typeof state !== 'object') {
+      return true;
+    }
+    return state.enabled !== false;
+  }
+
+  _cleanupState() {
+    const existingNames = new Set(this.skills.keys());
+    for (const name of Object.keys(this.skillState.skills || {})) {
+      if (!existingNames.has(name)) {
+        delete this.skillState.skills[name];
+      }
+    }
+  }
+
+  _buildSkillMarkdown({ name, description, metadata, userInvocable, instructions }) {
+    return [
+      '---',
+      `name: ${name}`,
+      `description: ${description}`,
+      `metadata: ${JSON.stringify(metadata)}`,
+      `user-invocable: ${userInvocable ? 'true' : 'false'}`,
+      '---',
+      String(instructions || '').trim(),
+      ''
+    ].join('\n');
+  }
+
+  _buildDerivedInstructions({ handler, whenToUse, notes, baseInstructions }) {
+    const sections = [
+      '## 何时调用',
+      whenToUse,
+      '',
+      '## 执行映射',
+      `- 该技能复用内部执行器 \`${handler}\`。`,
+      '- 参数结构与基础技能保持兼容。',
+      ''
+    ];
+
+    if (notes) {
+      sections.push('## 额外说明');
+      sections.push(notes);
+      sections.push('');
+    }
+
+    sections.push('## 基础技能说明');
+    sections.push(String(baseInstructions || '').trim() || '暂无基础技能说明。');
+    sections.push('');
+
+    return sections.join('\n');
   }
 }
 

@@ -11,6 +11,11 @@ const DEFAULT_BUBBLE_STATE_OFFSETS = {
   idle: { x: 0, y: 8 }
 };
 
+const DEFAULT_INTIMACY_WIDGET_OFFSET = {
+  x: 0,
+  y: 0
+};
+
 const DEFAULT_LLM_SCENE_CONFIG = {
   chat: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
   agent: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
@@ -32,6 +37,7 @@ const DEFAULTS = {
     selectedPet: '🐱',
     bubbleStateOffsets: DEFAULT_BUBBLE_STATE_OFFSETS,
     bubblePreviewState: 'idle',
+    intimacyWidgetOffset: DEFAULT_INTIMACY_WIDGET_OFFSET,
     llmSceneConfig: DEFAULT_LLM_SCENE_CONFIG
   }
 };
@@ -76,6 +82,20 @@ function normalizeLLMSceneConfig(sceneConfig) {
   }
 
   return normalized;
+}
+
+function normalizeIntimacyWidgetOffset(offset) {
+  if (!offset || typeof offset !== 'object') {
+    return { ...DEFAULT_INTIMACY_WIDGET_OFFSET };
+  }
+
+  const x = Number(offset.x);
+  const y = Number(offset.y);
+
+  return {
+    x: Number.isFinite(x) ? Math.max(-200, Math.min(200, Math.round(x))) : 0,
+    y: Number.isFinite(y) ? Math.max(-200, Math.min(200, Math.round(y))) : 0
+  };
 }
 
 // 获取宠物数据
@@ -189,6 +209,7 @@ function getSettings() {
     if (typeof merged.bubblePreviewState !== 'string' || !merged.bubblePreviewState) {
       merged.bubblePreviewState = 'idle';
     }
+    merged.intimacyWidgetOffset = normalizeIntimacyWidgetOffset(parsed.intimacyWidgetOffset);
     merged.llmSceneConfig = normalizeLLMSceneConfig(parsed.llmSceneConfig);
     return merged;
   } catch (error) {
@@ -233,6 +254,16 @@ function setBubblePreviewState(state) {
   if (!state || typeof state !== 'string') return false;
   const settings = getSettings();
   settings.bubblePreviewState = state;
+  return saveSettings(settings);
+}
+
+function getIntimacyWidgetOffset() {
+  return getSettings().intimacyWidgetOffset || { ...DEFAULT_INTIMACY_WIDGET_OFFSET };
+}
+
+function saveIntimacyWidgetOffset(offset) {
+  const settings = getSettings();
+  settings.intimacyWidgetOffset = normalizeIntimacyWidgetOffset(offset);
   return saveSettings(settings);
 }
 
@@ -350,6 +381,8 @@ window.PetStorage = {
   saveBubbleStateOffsets,
   getBubblePreviewState,
   setBubblePreviewState,
+  getIntimacyWidgetOffset,
+  saveIntimacyWidgetOffset,
   getLLMSceneConfig,
   saveLLMSceneConfig,
   getIntimacy,

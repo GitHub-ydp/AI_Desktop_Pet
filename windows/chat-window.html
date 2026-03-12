@@ -225,13 +225,13 @@
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 8px;
     }
     .attachment-tray {
       display: none;
       align-items: center;
       gap: 10px;
       padding: 8px 10px;
+      margin-bottom: 8px;
       border-radius: 12px;
       border: 1px solid var(--border, rgba(0,255,240,0.3));
       background: var(--bg-card, rgba(0,30,55,0.6));
@@ -241,10 +241,10 @@
     }
     .attachment-thumb {
       display: none;
-      width: 52px;
-      height: 52px;
+      width: 42px;
+      height: 42px;
       object-fit: cover;
-      border-radius: 10px;
+      border-radius: 8px;
       border: 1px solid var(--border, rgba(0,255,240,0.3));
       background: var(--bg-surface, rgba(0,15,30,0.98));
       flex-shrink: 0;
@@ -254,15 +254,15 @@
     }
     .attachment-file-badge {
       display: none;
-      width: 52px;
-      height: 52px;
-      border-radius: 12px;
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
       border: 1px solid var(--border, rgba(0,255,240,0.3));
       background: linear-gradient(160deg, var(--accent-bg-dim, rgba(0,255,240,0.08)), var(--bg-surface, rgba(0,15,30,0.98)));
       color: var(--neon-cyan, #00fff0);
       align-items: center;
       justify-content: center;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.04em;
       flex-shrink: 0;
@@ -275,115 +275,130 @@
       min-width: 0;
     }
     .attachment-title {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--text, #cff0ff);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .attachment-desc {
-      margin-top: 2px;
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-muted, rgba(160,220,240,0.75));
     }
     .attachment-remove {
-      padding: 7px 10px;
-      border-radius: 10px;
+      padding: 4px 8px;
+      border-radius: 8px;
       border: 1px solid var(--border, rgba(0,255,240,0.3));
       background: transparent;
       color: var(--text-muted, rgba(160,220,240,0.75));
       cursor: pointer;
+      font-size: 11px;
       flex-shrink: 0;
     }
     .input-area {
-      display: flex;
-      gap: 12px;
-      padding: 16px 18px 18px;
+      padding: 16px;
       background: var(--input-area-bg, rgba(0,12,25,0.98));
       border-top: 1px solid var(--border, rgba(0,255,240,0.3));
-      align-items: stretch;
     }
-    .input-card {
-      flex: 1;
-      min-width: 0;
+    .input-box {
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      padding: 12px;
-      border-radius: 20px;
+      border-radius: 14px;
       border: 1px solid var(--border, rgba(0,255,240,0.3));
-      background: linear-gradient(180deg, var(--bg-surface, rgba(2,10,20,0.98)), var(--bg-card, rgba(0,30,55,0.62)));
-      box-shadow: 0 18px 30px rgba(0, 0, 0, 0.12);
+      background: var(--bg-card, rgba(0,30,55,0.6));
+      backdrop-filter: blur(12px);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      overflow: hidden;
     }
-    .input-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .tool-btn {
-      width: 38px;
-      height: 38px;
-      border-radius: 12px;
-      border: 1px solid var(--border, rgba(0,255,240,0.3));
-      background: var(--bg-surface, rgba(2,10,20,0.98));
-      color: var(--text, #cff0ff);
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
-    }
-    .tool-btn:hover {
-      background: var(--accent-bg-faint, rgba(0,255,240,0.06));
-      border-color: var(--neon-cyan, #00fff0);
-      transform: translateY(-1px);
-    }
-    .tool-btn.is-disabled {
-      opacity: 0.42;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .tool-btn.is-disabled:hover {
-      background: var(--bg-surface, rgba(2,10,20,0.98));
-      border-color: var(--border, rgba(0,255,240,0.3));
-      transform: none;
+    .input-box:focus-within {
+      border-color: var(--border-bright, rgba(0,255,240,0.7));
+      box-shadow: var(--glow-sm, 0 0 10px rgba(0,255,240,0.2));
     }
     textarea#chatInput {
-      flex: 1;
+      width: 100%;
       resize: none;
-      height: 92px;
-      min-height: 92px;
-      max-height: 92px;
-      overflow-y: auto;
-      background: var(--input-field-bg, rgba(0,20,40,0.8));
+      height: 72px;
+      min-height: 72px;
+      max-height: 160px;
+      background: transparent;
       color: var(--text, #cff0ff);
-      border: 1px solid var(--border, rgba(0,255,240,0.22));
-      border-radius: 16px;
-      padding: 12px 14px;
+      border: none;
+      padding: 12px 14px 4px;
       font-size: 14px;
       outline: none;
       font-family: inherit;
-      line-height: 1.6;
+      line-height: 1.5;
     }
-    textarea#chatInput:focus {
-      border-color: var(--border, rgba(0,255,240,0.3));
-      box-shadow: none;
+    textarea#chatInput::placeholder { color: var(--text-muted, rgba(160,220,240,0.35)); }
+    .input-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 10px 10px;
+      background: transparent;
     }
-    textarea#chatInput::placeholder { color: var(--text-muted, rgba(160,220,240,0.75)); }
+    .input-tools {
+      display: flex;
+      gap: 6px;
+    }
+    .tool-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted, rgba(160,220,240,0.65));
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+    .tool-btn svg {
+      width: 18px;
+      height: 18px;
+      stroke-width: 1.6;
+    }
+    .tool-btn:hover {
+      background: var(--accent-bg-dim, rgba(0,255,240,0.06));
+      color: var(--neon-cyan, #00fff0);
+    }
+    .tool-btn.is-disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+    }
     .send-btn {
-      height: auto;
-      min-width: 104px;
-      padding: 0 24px;
-      border-radius: 18px;
-      background: linear-gradient(180deg, var(--neon-cyan, #00fff0), color-mix(in srgb, var(--neon-cyan, #00fff0) 72%, #ffffff));
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--neon-cyan, #00fff0);
       color: #020810;
       border: none;
-      font-size: 14px;
-      font-weight: 700;
       cursor: pointer;
-      transition: opacity 0.2s ease, transform 0.2s ease;
-      white-space: nowrap;
-      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 8px rgba(0,255,240,0.25);
     }
-    .send-btn:hover { opacity: 0.85; }
-    .send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .send-btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.1);
+      box-shadow: 0 0 10px rgba(0,255,240,0.4);
+    }
+    .send-btn:disabled {
+      background: var(--bg-card, rgba(0,30,55,0.6));
+      color: var(--text-muted, rgba(160,220,240,0.3));
+      cursor: not-allowed;
+      box-shadow: none;
+      border: 1px solid var(--border, rgba(0,255,240,0.1));
+    }
+    .send-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
     .empty-state {
       text-align: center;
       color: var(--text-muted, rgba(160,220,240,0.65));
@@ -539,6 +554,7 @@
       <div class="pet-sidebar-btns">
         <button onclick="goToSettings()">⚙️ 设置</button>
         <button onclick="goToHistory()">📜 历史</button>
+        <button onclick="goToTechPanel()">🛠️ 技术</button>
       </div>
     </div>
 
@@ -553,15 +569,7 @@
       </div>
 
       <div class="input-area">
-        <div class="input-card">
-          <div class="input-toolbar">
-            <button class="tool-btn" id="screenshotBtn" type="button" title="Screenshot">&#128247;</button>
-            <button class="tool-btn" id="uploadBtn" type="button" title="Upload">&#128206;</button>
-            <button class="tool-btn" id="voiceBtn" type="button" title="Voice">&#127908;</button>
-            <button class="tool-btn" id="videoBtn" type="button" title="Video">&#127909;</button>
-            <button class="tool-btn is-disabled" id="videoCallBtn" type="button" title="Video Call" disabled>&#128249;</button>
-            <input id="fileUploadInput" type="file" hidden accept="image/*,.txt,.md,.json,.csv,.log,.js,.ts,.py">
-          </div>
+        <div class="input-box">
           <div class="composer">
             <div class="attachment-tray" id="attachmentTray">
               <div class="attachment-file-badge" id="attachmentBadge">FILE</div>
@@ -574,8 +582,27 @@
             </div>
             <textarea id="chatInput" placeholder="&#21644;&#25105;&#35828;&#35828;&#35805;&#21543;~" rows="1"></textarea>
           </div>
+          <div class="input-footer">
+            <div class="input-tools">
+              <button class="tool-btn" id="screenshotBtn" type="button" title="Screenshot">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </button>
+              <button class="tool-btn" id="uploadBtn" type="button" title="Upload">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              </button>
+              <button class="tool-btn" id="voiceBtn" type="button" title="Voice">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              </button>
+              <button class="tool-btn" id="videoBtn" type="button" title="Video">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              </button>
+              <input id="fileUploadInput" type="file" hidden accept="image/*,.txt,.md,.json,.csv,.log,.js,.ts,.py">
+            </div>
+            <button class="send-btn" id="sendBtn" title="&#21457;&#36865;">
+              <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+            </button>
+          </div>
         </div>
-        <button class="send-btn" id="sendBtn">&#21457;&#36865;</button>
       </div>
     </div>
   </div>
@@ -714,7 +741,9 @@
 
     function autoGrowTextarea() {
       const input = document.getElementById('chatInput');
-      input.style.height = '92px';
+      input.style.height = 'auto';
+      const newHeight = Math.min(input.scrollHeight, 160);
+      input.style.height = (newHeight || 80) + 'px';
     }
 
     function renderAttachmentPreview() {
@@ -1115,7 +1144,7 @@
           } catch (agentError) {
             const errorText = String(agentError && agentError.message ? agentError.message : agentError || '');
             console.error('[chat-window] agent path failed:', agentError);
-            const canFallbackToBasicChat = !attachments && /PetAgent unavailable/.test(errorText);
+            const canFallbackToBasicChat = !attachments && /PetAgent unavailable|agent_runtime_unavailable/.test(errorText);
 
             if (canFallbackToBasicChat) {
               finishAgentRun();
@@ -1296,6 +1325,11 @@
       window.electron.createChildWindow({ id: 'history', title: '对话历史', width: 910, height: 640, html: 'windows/history-window.html' });
     }
 
+    function goToTechPanel() {
+      if (!window.electron || !window.electron.createChildWindow) return;
+      window.electron.createChildWindow({ id: 'skills-panel', title: '技术面板', width: 1180, height: 760, html: 'windows/skills-panel.html' });
+    }
+
     async function handleScreenshot() {
       try {
         if (!window.PetScreenshot || !window.PetScreenshot.captureFullScreen) {
@@ -1325,6 +1359,7 @@
           void sendMessage();
         }
       });
+      input.addEventListener('input', autoGrowTextarea);
       input.addEventListener('paste', async (event) => {
         const items = event.clipboardData ? Array.from(event.clipboardData.items || []) : [];
         const imageItem = items.find((item) => item.type && item.type.startsWith('image/'));
