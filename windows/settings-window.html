@@ -42,6 +42,17 @@
     .card, .theme-card, .personality-option, .pet-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); }
     .card { padding: 18px; }
     .section-subtitle { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--neon-cyan); text-transform: uppercase; margin-bottom: 12px; }
+    .card-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
+    .card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--memory-divider); }
+    .card-row:first-of-type { border-top: none; padding-top: 0; }
+    .card-row:last-of-type { padding-bottom: 0; }
+    .row-label { font-size: 13px; color: var(--text); }
+    .toggle-switch { position: relative; width: 46px; height: 26px; display: inline-flex; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; inset: 0; border-radius: 999px; border: 1px solid var(--border); background: rgba(0, 16, 32, 0.75); cursor: pointer; transition: background 0.2s ease, border-color 0.2s ease; }
+    .toggle-slider::before { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--text-muted); transition: transform 0.2s ease, background 0.2s ease; }
+    .toggle-switch input:checked + .toggle-slider { background: rgba(0, 255, 240, 0.16); border-color: var(--border-bright); }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); background: var(--neon-cyan); }
     .pet-grid { display: grid; grid-template-columns: repeat(2, minmax(180px, 220px)); gap: 14px; }
     .pet-card { padding: 18px; display: flex; align-items: center; gap: 14px; cursor: pointer; position: relative; transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
     .pet-card.selected { border-color: var(--neon-cyan); background: var(--accent-bg-dim); box-shadow: var(--glow-sm); }
@@ -99,6 +110,7 @@
     .theme-card.active .active-badge { display: inline-flex; }
     .active-badge { display: none; position: absolute; top: 10px; right: 10px; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 700; color: var(--neon-cyan); background: rgba(0, 255, 240, 0.08); border: 1px solid rgba(0, 255, 240, 0.28); z-index: 1; }
     .theme-preview { height: 72px; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; }
+    .preview-classic { background: linear-gradient(135deg, #F7F7F7 0%, #EDEDED 100%); }
     .preview-cyberpunk { background: linear-gradient(135deg, #020810 0%, #001833 100%); }
     .preview-lazyCat { background: linear-gradient(135deg, #1a0e05 0%, #2e1808 100%); }
     .preview-freshSpring { background: linear-gradient(135deg, #eef8f6 0%, #dff3ee 100%); }
@@ -150,6 +162,8 @@
     .btn-danger { color: var(--neon-magenta); border-color: var(--danger-border); }
     .btn-danger:hover { background: var(--danger-hover-bg); }
     .btn-small { padding: 8px 12px; font-size: 12px; }
+    .btn-outline { border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--neon-cyan); transition: border-color 0.2s ease, background 0.2s ease; }
+    .btn-outline:hover { border-color: var(--border-bright); background: var(--accent-hover-bg); }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
     ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(0, 255, 240, 0.25); }
     @media (max-width: 820px) {
@@ -176,6 +190,7 @@
       <button class="sidebar-item" type="button" data-section="mood" onclick="switchSection('mood')">心情</button>
       <button class="sidebar-item" type="button" data-section="memory" onclick="switchSection('memory')">我的记忆</button>
       <button class="sidebar-item" type="button" data-section="theme" onclick="switchSection('theme')">外观</button>
+      <button class="sidebar-item" type="button" data-section="ritual" onclick="switchSection('ritual')">仪式感</button>
     </nav>
     <main class="content-area">
       <section class="settings-panel active" data-section="pet">
@@ -258,15 +273,89 @@
         </div>
       </section>
       <section class="settings-panel" data-section="theme">
-        <div class="panel-shell"><div class="panel-header"><div class="panel-title">外观主题</div><div class="panel-desc">切换后会立即同步到其他窗口。主题卡片逻辑与原独立主题窗口保持一致。</div></div><div class="theme-cards" id="themeCards"><div class="theme-card" data-theme="cyberpunk" onclick="selectTheme('cyberpunk')"><span class="active-badge">当前主题</span><div class="theme-preview preview-cyberpunk"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff2d78; box-shadow:0 0 6px #ff2d78;"></div></div><div><div class="preview-text">CYBER PUNK</div><div class="preview-sub">霓虹 · 深夜 · 都市</div></div></div><div class="theme-info"><div class="theme-icon">🎨</div><div><div class="theme-name">赛博朋克</div><div class="theme-desc">冷色霓虹与深色背景，偏都市科技感。</div></div></div></div><div class="theme-card" data-theme="lazyCat" onclick="selectTheme('lazyCat')"><span class="active-badge">当前主题</span><div class="theme-preview preview-lazyCat"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff6b35; box-shadow:0 0 6px #ff6b35;"></div></div><div><div class="preview-text">Lazy Cat</div><div class="preview-sub">暖橘 · 午后 · 放松</div></div></div><div class="theme-info"><div class="theme-icon">🐱</div><div><div class="theme-name">懒猫橘</div><div class="theme-desc">暖色调更柔和，也更贴近宠物陪伴感。</div></div></div></div><div class="theme-card" data-theme="freshSpring" onclick="selectTheme('freshSpring')"><span class="active-badge">当前主题</span><div class="theme-preview preview-freshSpring"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#6fa7d8; box-shadow:0 0 6px rgba(111,167,216,.55);"></div></div><div><div class="preview-text">Fresh Spring</div><div class="preview-sub">浅青 · 清透 · 轻盈</div></div></div><div class="theme-info"><div class="theme-icon">🌿</div><div><div class="theme-name">小清新</div><div class="theme-desc">明亮、干净，适合白天使用和长时间停留。</div></div></div></div><div class="theme-card" data-theme="milkBlush" onclick="selectTheme('milkBlush')"><span class="active-badge">当前主题</span><div class="theme-preview preview-milkBlush"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#e8a0b7; box-shadow:0 0 6px rgba(232,160,183,.55);"></div></div><div><div class="preview-text">Milk Blush</div><div class="preview-sub">奶白 · 柔粉 · 温柔</div></div></div><div class="theme-info"><div class="theme-icon">🫧</div><div><div class="theme-name">奶白轻柔</div><div class="theme-desc">底色更轻，视觉压力小，柔和但不发灰。</div></div></div></div></div></div>
+        <div class="panel-shell"><div class="panel-header"><div class="panel-title">外观主题</div><div class="panel-desc">切换后会立即同步到其他窗口。主题卡片逻辑与原独立主题窗口保持一致。</div></div><div class="theme-cards" id="themeCards"><div class="theme-card" data-theme="classic" onclick="selectTheme('classic')"><span class="active-badge">当前主题</span><div class="theme-preview preview-classic"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#FF9500; box-shadow:0 0 6px #FF9500;"></div></div><div><div class="preview-text">⚪ 经典主题</div><div class="preview-sub">简约 · 时尚 · 经典</div></div></div><div class="theme-info"><div class="theme-icon">⚪</div><div><div class="theme-name">经典主题</div><div class="theme-desc">简约时尚，经典白灰橙，视觉舒缓。</div></div></div></div><div class="theme-card" data-theme="cyberpunk" onclick="selectTheme('cyberpunk')"><span class="active-badge">当前主题</span><div class="theme-preview preview-cyberpunk"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff2d78; box-shadow:0 0 6px #ff2d78;"></div></div><div><div class="preview-text">CYBER PUNK</div><div class="preview-sub">霓虹 · 深夜 · 都市</div></div></div><div class="theme-info"><div class="theme-icon">🎨</div><div><div class="theme-name">赛博朋克</div><div class="theme-desc">冷色霓虹与深色背景，偏都市科技感。</div></div></div></div><div class="theme-card" data-theme="lazyCat" onclick="selectTheme('lazyCat')"><span class="active-badge">当前主题</span><div class="theme-preview preview-lazyCat"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff6b35; box-shadow:0 0 6px #ff6b35;"></div></div><div><div class="preview-text">Lazy Cat</div><div class="preview-sub">暖橘 · 午后 · 放松</div></div></div><div class="theme-info"><div class="theme-icon">🐱</div><div><div class="theme-name">懒猫橘</div><div class="theme-desc">暖色调更柔和，也更贴近宠物陪伴感。</div></div></div></div><div class="theme-card" data-theme="freshSpring" onclick="selectTheme('freshSpring')"><span class="active-badge">当前主题</span><div class="theme-preview preview-freshSpring"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#6fa7d8; box-shadow:0 0 6px rgba(111,167,216,.55);"></div></div><div><div class="preview-text">Fresh Spring</div><div class="preview-sub">浅青 · 清透 · 轻盈</div></div></div><div class="theme-info"><div class="theme-icon">🌿</div><div><div class="theme-name">小清新</div><div class="theme-desc">明亮、干净，适合白天使用和长时间停留。</div></div></div></div><div class="theme-card" data-theme="milkBlush" onclick="selectTheme('milkBlush')"><span class="active-badge">当前主题</span><div class="theme-preview preview-milkBlush"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#e8a0b7; box-shadow:0 0 6px rgba(232,160,183,.55);"></div></div><div><div class="preview-text">Milk Blush</div><div class="preview-sub">奶白 · 柔粉 · 温柔</div></div></div><div class="theme-info"><div class="theme-icon">🫧</div><div><div class="theme-name">奶白轻柔</div><div class="theme-desc">底色更轻，视觉压力小，柔和但不发灰。</div></div></div></div></div></div>
       </section>
       <div class="confirm-dialog" id="resetConfirmDialog"><div class="confirm-text">确定要重置所有数据吗？这会清空聊天历史和本地设置。</div><div class="dialog-btns"><button class="btn btn-danger" type="button" onclick="confirmReset()">确定重置</button><button class="btn btn-primary" type="button" onclick="cancelReset()">取消</button></div></div>
+      <section class="settings-panel" data-section="ritual">
+        <div class="panel-shell">
+          <div class="panel-header">
+            <div class="panel-title">每日仪式感</div>
+            <div class="panel-desc">定时问候，让宠物陪伴你的每一天。</div>
+          </div>
+          <div class="card">
+            <div class="card-title">☀️ 早安问候</div>
+            <div class="card-row">
+              <span class="row-label">开启早安问候</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="morningEnabled" onchange="saveRitualSettings()">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="card-row">
+              <span class="row-label">问候时间</span>
+              <input type="time" id="morningTime" value="08:00" onchange="saveRitualSettings()" class="text-input" style="width:auto; padding:6px 10px; font-size:13px;">
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">🌙 晚安陪伴</div>
+            <div class="card-row">
+              <span class="row-label">开启晚安陪伴</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="eveningEnabled" onchange="saveRitualSettings()">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="card-row">
+              <span class="row-label">晚安时间</span>
+              <input type="time" id="eveningTime" value="22:00" onchange="saveRitualSettings()" class="text-input" style="width:auto; padding:6px 10px; font-size:13px;">
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">📘 每周周报</div>
+            <div class="card-row">
+              <span class="row-label">开启每周周报</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="weeklyEnabled" onchange="saveRitualSettings()">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="card-row">
+              <span class="row-label">周报发送日</span>
+              <select id="weeklyDay" onchange="saveRitualSettings()" class="text-input" style="width:auto; padding:6px 10px; font-size:13px;">
+                <option value="0">周日</option>
+                <option value="1">周一</option>
+                <option value="5">周五</option>
+                <option value="6">周六</option>
+              </select>
+            </div>
+            <div class="card-row">
+              <span class="row-label">发送时间</span>
+              <input type="time" id="weeklyTime" value="20:00" onchange="saveRitualSettings()" class="text-input" style="width:auto; padding:6px 10px; font-size:13px;">
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">预览效果</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn-outline" type="button" onclick="testRitual('morning')">预览早安</button>
+              <button class="btn-outline" type="button" onclick="testRitual('evening')">预览晚安</button>
+              <button class="btn-outline" type="button" onclick="testRitual('weekly')">预览周报</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">亲密度里程碑卡</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn-outline" type="button" onclick="generateMilestoneCard('clipboard')">复制里程碑卡</button>
+              <button class="btn-outline" type="button" onclick="generateMilestoneCard('save')">保存里程碑卡</button>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
   <div class="footer"><div class="message" id="messageToast"></div><div class="footer-buttons"><button class="btn btn-danger" type="button" onclick="resetData()">重置所有数据</button><button class="btn btn-primary" type="button" onclick="saveAndClose()">完成</button></div></div>
   <script src="../src/storage.js"></script>
   <script src="../src/settings-window-utils.js"></script>
-  <script>
+  <script type="text/plain" id="legacy-settings-script">
     const SettingsUtils = window.SettingsWindowUtils;
     const PROVIDER_OPTIONS = [
       { id: 'deepseek', name: 'DeepSeek', models: 'deepseek-chat, deepseek-reasoner' },
@@ -285,13 +374,17 @@
       { id: 'ocr', label: 'OCR', description: '文字识别。', defaultProvider: 'tesseract', defaultModel: 'tesseract' }
     ];
     const DEFAULT_SCENE_CONFIG = Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { provider: scene.defaultProvider, model: scene.defaultModel, apiKeyMode: 'provider-fallback' }]));
-    const THEME_FALLBACK_ID = 'lazyCat';
+    const THEME_FALLBACK_ID = 'classic';
     let allFacts = [];
     let activeSectionId = 'pet'; let activeSceneTab = 'chat'; let bubbleOffsets = { idle: { x: 0, y: 8 } }; let currentBubbleState = 'idle'; let intimacyWidgetOffset = { x: 0, y: 0 };
     let bubblePreviewHideTimer = null; let llmSceneConfig = JSON.parse(JSON.stringify(DEFAULT_SCENE_CONFIG)); let providerKeyInfo = {}; let sceneKeyStatusMap = {}; let weatherDefaultCity = ''; let toastTimer = null; let bubbleDebugStates = []; let currentMoodValue = 80; let savedMoodValue = 80;
     function showToast(message, isError = false) { const toast = document.getElementById('messageToast'); if (!toast) return; toast.textContent = message; toast.classList.toggle('error', !!isError); toast.classList.add('show'); if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.classList.remove('show'); }, 2400); }
     function sendSettingsChange(payload) { if (window.electron && window.electron.sendSettingsChange) window.electron.sendSettingsChange(payload); }
-    function switchSection(sectionId) { activeSectionId = sectionId; document.querySelectorAll('.sidebar-item').forEach((item) => item.classList.toggle('active', item.dataset.section === sectionId)); document.querySelectorAll('.settings-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.section === sectionId)); if (sectionId === 'memory') onMemoryPanelOpen(); }
+    function switchSection(sectionId) { activeSectionId = sectionId; document.querySelectorAll('.sidebar-item').forEach((item) => item.classList.toggle('active', item.dataset.section === sectionId)); document.querySelectorAll('.settings-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.section === sectionId)); if (sectionId === 'memory') onMemoryPanelOpen(); if (sectionId === 'ritual') loadRitualSettings(); }
+    function parseRitualTime(value, fallbackHour, fallbackMinute) { const parts = String(value || '').split(':'); const hour = Number.parseInt(parts[0], 10); const minute = Number.parseInt(parts[1], 10); return { hour: Number.isFinite(hour) ? hour : fallbackHour, minute: Number.isFinite(minute) ? minute : fallbackMinute }; }
+    function loadRitualSettings() { try { const raw = localStorage.getItem('ritual_settings'); const settings = raw ? JSON.parse(raw) : {}; const morningEnabled = document.getElementById('morningEnabled'); const morningTime = document.getElementById('morningTime'); const eveningEnabled = document.getElementById('eveningEnabled'); const eveningTime = document.getElementById('eveningTime'); const weeklyEnabled = document.getElementById('weeklyEnabled'); const weeklyDay = document.getElementById('weeklyDay'); const weeklyTime = document.getElementById('weeklyTime'); if (!morningEnabled || !morningTime || !eveningEnabled || !eveningTime || !weeklyEnabled || !weeklyDay || !weeklyTime) return; morningEnabled.checked = settings.morningEnabled !== false; morningTime.value = `${String(settings.morningHour ?? 8).padStart(2, '0')}:${String(settings.morningMinute ?? 0).padStart(2, '0')}`; eveningEnabled.checked = settings.eveningEnabled !== false; eveningTime.value = `${String(settings.eveningHour ?? 22).padStart(2, '0')}:${String(settings.eveningMinute ?? 0).padStart(2, '0')}`; weeklyEnabled.checked = settings.weeklyEnabled !== false; weeklyDay.value = String(settings.weeklyDay ?? 0); weeklyTime.value = `${String(settings.weeklyHour ?? 20).padStart(2, '0')}:${String(settings.weeklyMinute ?? 0).padStart(2, '0')}`; } catch (error) { console.warn('[Settings] Failed to load ritual settings:', error); } }
+    function saveRitualSettings() { try { const morning = parseRitualTime(document.getElementById('morningTime')?.value, 8, 0); const evening = parseRitualTime(document.getElementById('eveningTime')?.value, 22, 0); const weekly = parseRitualTime(document.getElementById('weeklyTime')?.value, 20, 0); const settings = { morningEnabled: !!document.getElementById('morningEnabled')?.checked, morningHour: morning.hour, morningMinute: morning.minute, eveningEnabled: !!document.getElementById('eveningEnabled')?.checked, eveningHour: evening.hour, eveningMinute: evening.minute, weeklyEnabled: !!document.getElementById('weeklyEnabled')?.checked, weeklyDay: Number.parseInt(document.getElementById('weeklyDay')?.value || '0', 10), weeklyHour: weekly.hour, weeklyMinute: weekly.minute }; localStorage.setItem('ritual_settings', JSON.stringify(settings)); showToast('仪式感设置已保存'); } catch (error) { console.error('[Settings] Failed to save ritual settings:', error); showToast('仪式感设置保存失败', true); } }
+    async function testRitual(type) { try { if (!window.PetRitual || typeof window.PetRitual.manualTrigger !== 'function') throw new Error('PetRitual bridge unavailable'); const result = await window.PetRitual.manualTrigger(type); if (!result || result.success === false) throw new Error(result?.error || 'manual trigger failed'); showToast('已触发预览'); } catch (error) { console.error('[Settings] Test ritual failed:', error); showToast('预览触发失败', true); } }
     function getSupportedPet() { return '🐱'; }
     function selectPet(pet) { if (pet !== '🐱') { showToast('狗狗形象暂未开放', true); return; } document.querySelectorAll('.pet-card').forEach((card) => card.classList.toggle('selected', card.dataset.pet === pet)); SettingsUtils.setPetSelection(window.PetStorage, pet); sendSettingsChange({ type: 'pet', pet }); showToast('已切换到猫咪'); }
     function selectPersonality(personality) { document.querySelectorAll('.personality-option').forEach((item) => item.classList.toggle('selected', item.dataset.personality === personality)); SettingsUtils.setPersonalitySelection(window.PetStorage, personality); sendSettingsChange({ type: 'personality', personality }); showToast('性格已更新，后续对话会使用新风格'); }
@@ -371,11 +464,12 @@
     if (factTypeFilter) factTypeFilter.addEventListener('change', function() { const val = this.value; const filtered = val ? allFacts.filter((f) => f.fact_type === val) : allFacts; renderFacts(filtered); });
     const clearProfileButton = document.getElementById('btn-clear-profile');
     if (clearProfileButton) clearProfileButton.addEventListener('click', async () => { const btn = document.getElementById('btn-clear-profile'); if (btn.dataset.confirm === 'pending') { try { await window.electron.clearMemoryProfile(); btn.textContent = '清除画像'; btn.dataset.confirm = ''; loadUserProfile(); loadMemoryStats(); showToast('已清除画像'); } catch (e) { console.error('清除画像失败', e); showToast('清除画像失败', true); } } else { btn.textContent = '再点一次确认清除'; btn.dataset.confirm = 'pending'; setTimeout(() => { if (btn.dataset.confirm === 'pending') { btn.textContent = '清除画像'; btn.dataset.confirm = ''; } }, 3000); } });
-    async function loadSettings() { const snapshot = SettingsUtils.getSettingsSnapshot(window.PetStorage); const supportedPet = getSupportedPet(snapshot.pet); if (snapshot.pet !== supportedPet) { SettingsUtils.setPetSelection(window.PetStorage, supportedPet); sendSettingsChange({ type: 'pet', pet: supportedPet }); } document.querySelectorAll('.pet-card').forEach((card) => card.classList.toggle('selected', card.dataset.pet === supportedPet)); document.querySelectorAll('.personality-option').forEach((item) => item.classList.toggle('selected', item.dataset.personality === snapshot.personality)); syncMoodState(snapshot.mood); bubbleDebugStates = getBubbleDebugStates(); bubbleOffsets = snapshot.bubbleStateOffsets || { idle: { x: 0, y: 8 } }; currentBubbleState = snapshot.bubblePreviewState || 'idle'; if (!bubbleDebugStates.includes(currentBubbleState)) currentBubbleState = bubbleDebugStates[0] || 'idle'; const bubbleSelect = document.getElementById('bubbleStateSelect'); bubbleSelect.innerHTML = bubbleDebugStates.map((state) => `<option value="${state}">${state}</option>`).join(''); bubbleSelect.value = currentBubbleState; applyBubbleOffsetEditors(); intimacyWidgetOffset = snapshot.intimacyWidgetOffset || { x: 0, y: 0 }; applyIntimacyOffsetEditors(); llmSceneConfig = normalizeSceneConfig(snapshot.llmSceneConfig || DEFAULT_SCENE_CONFIG); if (!SCENE_DEFINITIONS.some((scene) => scene.id === activeSceneTab)) activeSceneTab = 'chat'; await refreshCredentialSettings(); updateThemeSelection(); await loadWeatherDefaultCity(); setLocationStatus(''); switchSection(activeSectionId); }
+    async function loadSettings() { const snapshot = SettingsUtils.getSettingsSnapshot(window.PetStorage); const supportedPet = getSupportedPet(snapshot.pet); if (snapshot.pet !== supportedPet) { SettingsUtils.setPetSelection(window.PetStorage, supportedPet); sendSettingsChange({ type: 'pet', pet: supportedPet }); } document.querySelectorAll('.pet-card').forEach((card) => card.classList.toggle('selected', card.dataset.pet === supportedPet)); document.querySelectorAll('.personality-option').forEach((item) => item.classList.toggle('selected', item.dataset.personality === snapshot.personality)); syncMoodState(snapshot.mood); bubbleDebugStates = getBubbleDebugStates(); bubbleOffsets = snapshot.bubbleStateOffsets || { idle: { x: 0, y: 8 } }; currentBubbleState = snapshot.bubblePreviewState || 'idle'; if (!bubbleDebugStates.includes(currentBubbleState)) currentBubbleState = bubbleDebugStates[0] || 'idle'; const bubbleSelect = document.getElementById('bubbleStateSelect'); bubbleSelect.innerHTML = bubbleDebugStates.map((state) => `<option value="${state}">${state}</option>`).join(''); bubbleSelect.value = currentBubbleState; applyBubbleOffsetEditors(); intimacyWidgetOffset = snapshot.intimacyWidgetOffset || { x: 0, y: 0 }; applyIntimacyOffsetEditors(); llmSceneConfig = normalizeSceneConfig(snapshot.llmSceneConfig || DEFAULT_SCENE_CONFIG); if (!SCENE_DEFINITIONS.some((scene) => scene.id === activeSceneTab)) activeSceneTab = 'chat'; await refreshCredentialSettings(); updateThemeSelection(); await loadWeatherDefaultCity(); loadRitualSettings(); setLocationStatus(''); switchSection(activeSectionId); }
     if (window.electron && window.electron.onSettingsChange) { window.electron.onSettingsChange((event, payload) => { if (payload && payload.type === 'mood') syncMoodState(payload.mood); }); }
     window.addEventListener('DOMContentLoaded', () => { loadSettings().catch((error) => { console.error('[Settings] loadSettings failed:', error); showToast('设置加载失败', true); }); });
     window.addEventListener('storage', (event) => { if (event.key === 'pet_theme') updateThemeSelection(); if (event.key === 'pet_data') { const petData = window.PetStorage.getPetData ? window.PetStorage.getPetData() : null; if (petData) syncMoodState(petData.mood); } });
     window.addEventListener('mood-updated', (event) => { const nextMood = typeof event.detail === 'object' ? event.detail?.mood : event.detail; if (event.detail && typeof event.detail === 'object' && event.detail.source === 'settings') return; syncMoodState(nextMood); });
   </script>
+  <script src="../src/settings-window-runtime.js"></script>
 </body>
 </html>

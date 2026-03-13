@@ -11,6 +11,7 @@ const ContextBuilder = require('./context');
 const TextChunker = require('./chunker');
 const ReminderScheduler = require('./reminder');
 const HealthReminderScheduler = require('./health-reminder');
+const { DailyRitualScheduler } = require('./daily-ritual');
 const TaskManager = require('./task-manager');
 const WidgetManager = require('./widget-manager');
 const FileOperationsManager = require('./file-operations');
@@ -40,6 +41,7 @@ class MemoryMainProcess {
     this.textChunker = new TextChunker();
     this.reminderScheduler = new ReminderScheduler(this.storage);
     this.healthScheduler = new HealthReminderScheduler(this.storage);
+    this.dailyRitual = null;
     this.taskManager = new TaskManager(this.storage);
     this.widgetManager = new WidgetManager(this.storage);
     this.fileOperations = FileOperationsManager;
@@ -49,6 +51,7 @@ class MemoryMainProcess {
     this.factExtractorLLM = null;      // LLM 事实提取器
     this.memoryLayerManager = null;    // 分层记忆管理器
 
+    this.mainWindow = null;
     this.isInitialized = false;
   }
 
@@ -93,6 +96,18 @@ class MemoryMainProcess {
       this.taskManager.start();
       // 初始化小组件管理器
       this.widgetManager.initialize();
+      try {
+        if (!this.dailyRitual) {
+          this.dailyRitual = new DailyRitualScheduler(this.storage);
+        }
+        if (this.mainWindow) {
+          this.dailyRitual.setMainWindow(this.mainWindow);
+        }
+        this.dailyRitual.start();
+        console.log('[Memory] DailyRitual scheduler initialized');
+      } catch (ritualError) {
+        console.error('[Memory] DailyRitual init failed:', ritualError);
+      }
       console.log('[Memory] Core modules ready (storage + reminder + health + task + widget)');
 
       // 标记为已初始化（基础功能可用）
@@ -517,6 +532,10 @@ class MemoryMainProcess {
       this.healthScheduler.stop();
     }
 
+    if (this.dailyRitual) {
+      this.dailyRitual.stop();
+    }
+
     // 停止任务管理器
     if (this.taskManager) {
       this.taskManager.stop();
@@ -551,11 +570,15 @@ class MemoryMainProcess {
 
   // 设置主窗口（用于提醒通知）
   setMainWindow(mainWindow) {
+    this.mainWindow = mainWindow || null;
     if (this.reminderScheduler) {
       this.reminderScheduler.setMainWindow(mainWindow);
     }
     if (this.healthScheduler) {
       this.healthScheduler.setMainWindow(mainWindow);
+    }
+    if (this.dailyRitual) {
+      this.dailyRitual.setMainWindow(mainWindow);
     }
     if (this.taskManager) {
       this.taskManager.setMainWindow(mainWindow);
@@ -566,6 +589,15 @@ class MemoryMainProcess {
   }
 
   // 确保记忆系统已初始化（自动重试）
+  async manualTriggerRitual(type) {
+    await this._ensureInitialized();
+    if (!this.dailyRitual) {
+      throw new Error('DailyRitual not initialized');
+    }
+
+    await this.dailyRitual.manualTrigger(type);
+  }
+
   async _ensureInitialized() {
     if (this.isInitialized) return;
     console.log('[Memory] Not initialized, attempting auto-init...');

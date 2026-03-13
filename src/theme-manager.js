@@ -4,6 +4,43 @@
 (function () {
   // 主题定义
   var THEMES = {
+    classic: {
+      name: '经典主题',
+      icon: '⚪',
+      desc: '简约时尚，经典白灰橙',
+      vars: {
+        '--bg': '#F7F7F7',
+        '--bg-surface': '#FFFFFF',
+        '--bg-card': '#EDEDED',
+        '--border': 'rgba(0, 0, 0, 0.08)',
+        '--border-bright': 'rgba(0, 0, 0, 0.15)',
+        '--neon-cyan': '#FFC73D',
+        '--neon-magenta': '#FF9500',
+        '--text': '#333333',
+        '--text-muted': 'rgba(0, 0, 0, 0.45)',
+        '--glow-sm': '0 2px 8px rgba(0, 0, 0, 0.05)',
+        '--glow-md': '0 4px 12px rgba(0, 0, 0, 0.08)',
+        '--radius': '8px',
+        '--header-bg': '#F7F7F7',
+        '--input-area-bg': '#FFFFFF',
+        '--input-field-bg': '#F2F2F2',
+        '--personality-bg': '#F7F7F7',
+        '--confirm-bg': '#FFFFFF',
+        '--bubble-bg': '#FFFFFF',
+        '--bubble-border': '#EEEEEE',
+        '--bubble-shadow': 'rgba(0, 0, 0, 0.05)',
+        '--close-icon': 'rgba(0, 0, 0, 0.4)',
+        '--accent-bg-faint': 'rgba(255, 199, 61, 0.1)',
+        '--accent-bg-dim': 'rgba(255, 199, 61, 0.2)',
+        '--accent-bg-checked': 'rgba(255, 199, 61, 0.8)',
+        '--accent-hover-bg': 'rgba(255, 199, 61, 0.15)',
+        '--danger-glow': '0 0 8px rgba(255, 85, 85, 0.3)',
+        '--danger-hover-bg': 'rgba(255, 85, 85, 0.1)',
+        '--danger-border': 'rgba(255, 85, 85, 0.4)',
+        '--scrollbar': 'rgba(0, 0, 0, 0.1)',
+        '--scrollbar-hover': 'rgba(0, 0, 0, 0.2)',
+      }
+    },
     cyberpunk: {
       name: '赛博朋克',
       icon: '⚡',
@@ -155,7 +192,7 @@
   };
 
   function applyTheme(name) {
-    var theme = THEMES[name] || THEMES.lazyCat;
+    var theme = THEMES[name] || THEMES.classic;
     var root = document.documentElement;
     var vars = theme.vars;
     for (var key in vars) {
@@ -164,7 +201,7 @@
   }
 
   function getCurrentTheme() {
-    return localStorage.getItem('pet_theme') || 'lazyCat';
+    return localStorage.getItem('pet_theme') || 'classic';
   }
 
   function saveTheme(name) {
@@ -178,7 +215,7 @@
   // 监听其他窗口的主题变更（localStorage storage 事件跨窗口触发）
   window.addEventListener('storage', function (e) {
     if (e.key === 'pet_theme') {
-      applyTheme(e.newValue || 'lazyCat');
+      applyTheme(e.newValue || 'classic');
     }
   });
 

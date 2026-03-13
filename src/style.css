@@ -1435,9 +1435,22 @@ body {
 
 /* 图标 */
 .dial-icon {
-  font-size: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
   transition: transform 0.18s ease, filter 0.18s ease;
   filter: drop-shadow(0 0 4px rgb(from var(--neon-cyan) r g b / 0.60));
+}
+
+.dial-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
 }
 
 .dial-item:hover .dial-icon {

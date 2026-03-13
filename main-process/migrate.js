@@ -439,6 +439,9 @@ class DatabaseMigrator {
     if (currentVersion < 9) {
       await this.migrateToV9();
     }
+    if (currentVersion < 10) {
+      await this.migrateToV10();
+    }
   }
 
   // 迁移到 v7：FSRS 动态记忆强化系统
@@ -716,9 +719,31 @@ class DatabaseMigrator {
       throw error;
     }
   }
+
+  async migrateToV10() {
+    console.log('[Migrate] Migrating to v10: Add daily_ritual_log table...');
+
+    try {
+      this.storage.db.exec(`
+        CREATE TABLE IF NOT EXISTS daily_ritual_log (
+          id TEXT PRIMARY KEY,
+          ritual_type TEXT NOT NULL CHECK(ritual_type IN ('morning', 'evening', 'weekly')),
+          triggered_at INTEGER NOT NULL,
+          date_key TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_ritual_log_date_key ON daily_ritual_log(date_key);
+        CREATE INDEX IF NOT EXISTS idx_ritual_log_type ON daily_ritual_log(ritual_type);
+      `);
+
+      console.log('[Migrate] v10: daily_ritual_log table created');
+    } catch (error) {
+      console.error('[Migrate] v10 failed:', error);
+      throw error;
+    }
+  }
 }
 
 // 定义最新版本号
-const LATEST_VERSION = 9;
+const LATEST_VERSION = 10;
 
 module.exports = { DatabaseMigrator, LATEST_VERSION };

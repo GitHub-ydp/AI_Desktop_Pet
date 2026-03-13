@@ -1524,6 +1524,16 @@ document.addEventListener('DOMContentLoaded', () => {
   init();
   initDrag();
   initReminderListener();
+  if (window.PetRitual) {
+    window.PetRitual.onTrigger(async (payload) => {
+      console.log('[App] Ritual triggered:', payload && payload.type);
+      try {
+        await window.PetRitual.openCard(payload);
+      } catch (error) {
+        console.error('[App] Failed to open ritual card:', error);
+      }
+    });
+  }
   if (window.electron && window.electron.onChildWindowState) {
     window.electron.onChildWindowState((event, action) => {
       if (action === 'opened') {
@@ -1650,11 +1660,20 @@ function initHealthReminderListener() {
     // 播放提醒音效
     playReminderSound();
 
-    // 根据提醒类型播放动画
+    // 根据提醒类型播放不同动画
     if (window.PetAnimations) {
-      // 可以根据不同类型播放不同动画
-      // 目前统一使用 happy 动画
-      window.PetAnimations.happy(2000);
+      if (data.type === 'water') {
+        window.PetAnimations.setManualState('happy');
+        setTimeout(() => window.PetAnimations.unlockManualState(), 3000);
+      } else if (data.type === 'eyecare' || data.type === 'eye') {
+        window.PetAnimations.setManualState('thinking'); // 揉眼睛的感觉
+        setTimeout(() => window.PetAnimations.unlockManualState(), 3000);
+      } else if (data.type === 'sedentary' || data.type === 'exercise') {
+        window.PetAnimations.setManualState('exercising'); // 锻炼动画
+        setTimeout(() => window.PetAnimations.unlockManualState(), 4000);
+      } else {
+        window.PetAnimations.happy(2000);
+      }
     }
   });
 

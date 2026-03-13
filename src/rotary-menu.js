@@ -14,35 +14,35 @@ class RotaryMenuController {
     this.menuItems = [
       {
         id: 'chat',
-        icon: '💬',
+        icon: 'chat',
         label: '对话',
         action: () => window.openChat && window.openChat(),
         angle: 0
       },
       {
         id: 'settings',
-        icon: '⚙️',
+        icon: 'settings',
         label: '设置',
         action: () => window.openSettings && window.openSettings(),
         angle: 72
       },
       {
         id: 'history',
-        icon: '📋',
+        icon: 'history',
         label: '历史',
         action: () => window.openHistory && window.openHistory(),
         angle: 144
       },
       {
         id: 'more',
-        icon: '➕',
+        icon: 'more',
         label: '更多',
         action: () => this.toggleSecondLevel(),
         angle: 216
       },
       {
         id: 'close',
-        icon: '❌',
+        icon: 'close',
         label: '关闭',
         action: () => this.close(),
         angle: 288
@@ -53,35 +53,35 @@ class RotaryMenuController {
     this.secondLevelItems = [
       {
         id: 'states',
-        icon: '🎭',
+        icon: 'states',
         label: '状态',
         action: () => this.showStateMenu(true),
         angle: 0
       },
       {
         id: 'tech',
-        icon: '🛠️',
+        icon: 'tech',
         label: '技术',
         action: () => window.openTechPanel && window.openTechPanel(),
         angle: 72
       },
       {
         id: 'health',
-        icon: '❤️',
+        icon: 'health',
         label: '健康',
         action: () => window.openHealthSettings && window.openHealthSettings(),
         angle: 144
       },
       {
         id: 'tasks',
-        icon: '✅',
+        icon: 'tasks',
         label: '任务',
         action: () => window.openTasks && window.openTasks(),
         angle: 216
       },
       {
         id: 'back',
-        icon: '◀️',
+        icon: 'back',
         label: '返回',
         action: () => this.toggleSecondLevel(),
         angle: 288
@@ -91,16 +91,16 @@ class RotaryMenuController {
     // 三级菜单：宠物状态选择（动态构建，基于当前皮肤的可用 Lottie 动画）
     // 状态名 → 显示信息的映射
     this.stateDisplayMap = {
-      idle:       { icon: '😌', label: '待机' },
-      happy:      { icon: '😆', label: '开心' },
-      sleeping:   { icon: '😴', label: '睡觉' },
-      exercising: { icon: '💪', label: '锻炼' },
-      playing:    { icon: '🧹', label: '玩耍' },
-      thinking:   { icon: '🤔', label: '思考' },
-      talking:    { icon: '💬', label: '聊天' },
-      clicked:    { icon: '👆', label: '点击' },
-      sad:        { icon: '😢', label: '伤心' },
-      dragging:   { icon: '✋', label: '拖拽' }
+      idle:       { icon: 'idle', label: '待机' },
+      happy:      { icon: 'happy', label: '开心' },
+      sleeping:   { icon: 'sleeping', label: '睡觉' },
+      exercising: { icon: 'exercising', label: '锻炼' },
+      playing:    { icon: 'playing', label: '玩耍' },
+      thinking:   { icon: 'thinking', label: '思考' },
+      talking:    { icon: 'talking', label: '聊天' },
+      clicked:    { icon: 'clicked', label: '点击' },
+      sad:        { icon: 'sad', label: '伤心' },
+      dragging:   { icon: 'dragging', label: '拖拽' }
     };
     this.stateMenuItems = []; // 将由 buildStateMenuItems() 动态填充
 
@@ -183,14 +183,57 @@ class RotaryMenuController {
       // 图标
       const iconElement = document.createElement('span');
       iconElement.className = 'dial-icon';
-      iconElement.textContent = item.icon;
+      
+      let lottieLoaded = false;
+      if (item.isLottie && window.lottie && window.SkinRegistry) {
+        let petEmoji = window.PetAnimations && window.PetAnimations.baseExpression || '🐱';
+        let animInfo = window.SkinRegistry.getAnimationForState(petEmoji, item.state);
+        let path = animInfo ? animInfo.path : null;
+        
+        if (path) {
+          if (this.isMenuWindow && !path.startsWith('../') && !path.startsWith('/')) {
+            path = '../' + path;
+          }
+          iconElement.style.display = 'block';
+          iconElement.style.width = '24px';
+          iconElement.style.height = '24px';
+          iconElement.style.overflow = 'visible';
+          
+          window.lottie.loadAnimation({
+            container: iconElement,
+            renderer: 'svg',
+            loop: true,
+            autoplay: true,
+            path: path,
+            rendererSettings: {
+              preserveAspectRatio: 'xMidYMid meet',
+              clearCanvas: true
+            }
+          });
+          lottieLoaded = true;
+          
+          // 给 Lottie svg 一点特定样式避免裁剪
+          setTimeout(() => {
+             const svg = iconElement.querySelector('svg');
+             if(svg) {
+                svg.style.overflow = 'visible';
+                svg.style.transform = 'scale(1.2)';
+             }
+          }, 100);
+        }
+      }
+      
+      if (!lottieLoaded) {
+        iconElement.innerHTML = window.SVGIcons && window.SVGIcons[item.icon] ? window.SVGIcons[item.icon] : (window.SVGIcons && window.SVGIcons.default ? window.SVGIcons.default : item.icon);
+      }
+
       holeElement.appendChild(iconElement);
 
       itemElement.appendChild(holeElement);
 
       // 悬停显示浮动 tooltip（不再创建 dial-label 子元素）
-      itemElement.addEventListener('mouseenter', () => {
-        this.showTooltip(item.label, parseFloat(item.angle));
+      itemElement.addEventListener('mouseenter', (e) => {
+        this.showTooltip(item.label, parseFloat(item.angle), e.currentTarget);
       });
       itemElement.addEventListener('mouseleave', () => {
         this.hideTooltip();
@@ -341,29 +384,87 @@ class RotaryMenuController {
     }, 300); // 等待出场动画完成 (0.3s)
   }
   
-  // 显示浮动 tooltip（挂在 rotary-menu 上，不受 clip-path 裁切）
-  showTooltip(label, angleDeg) {
-    if (!this.tooltipElement) return;
-    const tooltip = this.tooltipElement;
-    tooltip.textContent = label;
-
-    // 根据菜单项角度，将 tooltip 推到圆环外侧
-    const tooltipRadius = 160; // 比菜单项半径 (115) 更远
+  // 显示浮动 tooltip（独立窗口）
+  showTooltip(label, angleDeg, itemElement) {
+    let absX, absY, tx, ty;
     const radian = (angleDeg - 90) * (Math.PI / 180);
-    const cx = this.menuElement.offsetWidth / 2;
-    const cy = this.menuElement.offsetHeight / 2;
-    const tx = cx + Math.cos(radian) * tooltipRadius;
-    const ty = cy + Math.sin(radian) * tooltipRadius;
 
-    tooltip.style.left = `${tx}px`;
-    tooltip.style.top = `${ty}px`;
-    tooltip.classList.add('dial-tooltip-visible');
+    if (itemElement) {
+      // 方案 B：基于具体按钮位置，精准向外推开
+      const rect = itemElement.getBoundingClientRect();
+      const itemAbsX = window.screenX + rect.left + rect.width / 2;
+      const itemAbsY = window.screenY + rect.top + rect.height / 2;
+
+      let pushX = 0;
+      let pushY = 0;
+      
+      // 根据角度（水平偏向还是垂直偏向），向外推开固定的安全距离
+      if (Math.abs(Math.cos(radian)) > 0.5) {
+        // 主要分布在左右两侧，X 轴大力推开（避开文字宽度），Y 轴微调
+        pushX = Math.sign(Math.cos(radian)) * 60;
+        pushY = Math.sin(radian) * 20;
+      } else {
+        // 主要分布在上下两侧，Y 轴大力推开，X 轴微调
+        pushX = Math.cos(radian) * 20;
+        pushY = Math.sign(Math.sin(radian)) * 45;
+      }
+      
+      absX = itemAbsX + pushX;
+      absY = itemAbsY + pushY;
+
+      // 为降级方案计算 tx, ty
+      tx = rect.left + rect.width / 2 + pushX;
+      ty = rect.top + rect.height / 2 + pushY;
+    } else {
+      // 方案 A（后备）：基于中心点和半径推算
+      const tooltipRadius = 145; 
+      const cx = this.menuElement.offsetWidth / 2;
+      const cy = this.menuElement.offsetHeight / 2;
+      tx = cx + Math.cos(radian) * tooltipRadius;
+      ty = cy + Math.sin(radian) * tooltipRadius;
+      absX = window.screenX + tx;
+      absY = window.screenY + ty;
+    }
+
+    if (window.electron && window.electron.showTooltip) {
+      window.electron.showTooltip({
+        label: label,
+        x: absX,
+        y: absY
+      });
+    } else {
+      // 降级：如果独立窗口不工作，使用原有逻辑
+      if (!this.tooltipElement) return;
+      const tooltip = this.tooltipElement;
+      tooltip.textContent = label;
+      let transX = '-50%';
+      let transY = '-50%';
+      if (Math.cos(radian) > 0.1) transX = '0%';
+      else if (Math.cos(radian) < -0.1) transX = '-100%';
+      if (Math.sin(radian) > 0.1) transY = '0%';
+      else if (Math.sin(radian) < -0.1) transY = '-100%';
+
+      tooltip.style.left = `${tx}px`;
+      tooltip.style.top = `${ty}px`;
+      tooltip.style.transform = `translate(${transX}, ${transY})`;
+      tooltip.classList.add('dial-tooltip-visible');
+    }
   }
 
   // 隐藏浮动 tooltip
   hideTooltip() {
-    if (!this.tooltipElement) return;
-    this.tooltipElement.classList.remove('dial-tooltip-visible');
+    if (window.electron && window.electron.hideTooltip) {
+      window.electron.hideTooltip();
+    }
+    
+    if (this.tooltipElement) {
+      this.tooltipElement.classList.remove('dial-tooltip-visible');
+      setTimeout(() => {
+        if (!this.tooltipElement.classList.contains('dial-tooltip-visible')) {
+          this.tooltipElement.style.transform = 'translate(-50%, -50%)';
+        }
+      }, 150);
+    }
   }
 
   // ========== 状态选择菜单（三级菜单） ==========
@@ -398,21 +499,22 @@ class RotaryMenuController {
     const angleStep = 360 / totalItems;
 
     statesToShow.forEach((state, index) => {
-      const display = this.stateDisplayMap[state] || { icon: '🎬', label: state };
+      const display = this.stateDisplayMap[state] || { icon: 'default', label: state };
       items.push({
         id: `state-${state}`,
         icon: display.icon,
         label: display.label,
         state: state,
         action: () => this.applyPetState(state),
-        angle: index * angleStep
+        angle: index * angleStep,
+        isLottie: true
       });
     });
 
     // 返回按钮
     items.push({
       id: 'state-back',
-      icon: '◀️',
+      icon: 'back',
       label: '返回',
       action: () => this.showStateMenu(false),
       angle: statesToShow.length * angleStep

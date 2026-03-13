@@ -12,42 +12,42 @@ class RadialMenuController {
     this.menuItems = [
       {
         id: 'chat',
-        icon: '💬',
+        icon: 'chat',
         label: '对话',
         action: () => window.openChat && window.openChat(),
         angle: 0
       },
       {
         id: 'settings',
-        icon: '⚙️',
+        icon: 'settings',
         label: '设置',
         action: () => window.openSettings && window.openSettings(),
         angle: 60
       },
       {
         id: 'history',
-        icon: '📜',
+        icon: 'history',
         label: '历史',
         action: () => window.openHistory && window.openHistory(),
         angle: 120
       },
       {
         id: 'reminder',
-        icon: '⏰',
+        icon: 'reminder',
         label: '提醒',
         action: () => this.showReminderMenu(),
         angle: 180
       },
       {
         id: 'more',
-        icon: '➕',
+        icon: 'more',
         label: '更多',
         action: () => this.toggleSecondLevel(),
         angle: 240
       },
       {
         id: 'close',
-        icon: '❌',
+        icon: 'close',
         label: '关闭',
         action: () => this.close(),
         angle: 300
@@ -58,35 +58,35 @@ class RadialMenuController {
     this.secondLevelItems = [
       {
         id: 'screenshot',
-        icon: '📸',
+        icon: 'screenshot',
         label: '截图',
         action: () => this.startScreenshot(),
         angle: 0
       },
       {
         id: 'tools',
-        icon: '🔧',
+        icon: 'tools',
         label: '工具',
         action: () => this.showToolsMenu(),
         angle: 72
       },
       {
         id: 'debug',
-        icon: '🐛',
+        icon: 'debug',
         label: '调试',
         action: () => this.openDebugConsole(),
         angle: 144
       },
       {
         id: 'hide',
-        icon: '👁️',
+        icon: 'hide',
         label: '隐藏',
         action: () => this.hideApp(),
         angle: 216
       },
       {
         id: 'back',
-        icon: '◀️',
+        icon: 'back',
         label: '返回',
         action: () => this.toggleSecondLevel(),
         angle: 288
@@ -147,7 +147,7 @@ class RadialMenuController {
       // 设置图标
       const iconElement = document.createElement('span');
       iconElement.className = 'menu-icon';
-      iconElement.textContent = item.icon;
+      iconElement.innerHTML = window.SVGIcons && window.SVGIcons[item.icon] ? window.SVGIcons[item.icon] : (window.SVGIcons && window.SVGIcons.default ? window.SVGIcons.default : item.icon);
       itemElement.appendChild(iconElement);
       
       // 设置工具提示

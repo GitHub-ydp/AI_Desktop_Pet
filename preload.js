@@ -111,6 +111,11 @@ contextBridge.exposeInMainWorld('electron', {
   },
   onIntimacyWidgetHide: (callback) => {
     ipcRenderer.on('intimacy-widget:hide', callback);
+  },
+  showTooltip: (payload) => ipcRenderer.invoke('tooltip:show', payload || {}),
+  hideTooltip: () => ipcRenderer.invoke('tooltip:hide'),
+  onTooltipShow: (callback) => {
+    ipcRenderer.on('tooltip:show', (event, payload) => callback(payload));
   }
 });
 
@@ -293,6 +298,22 @@ contextBridge.exposeInMainWorld('PetReminder', {
 });
 
 // 暴露工具系统 API 到渲染进程
+contextBridge.exposeInMainWorld('PetRitual', {
+  manualTrigger: (type) => ipcRenderer.invoke('ritual:manual-trigger', type),
+  openCard: (payload) => ipcRenderer.invoke('ritual:open-card', payload),
+  onTrigger: (callback) => {
+    ipcRenderer.on('ritual:trigger', (event, payload) => callback(payload));
+  },
+  offTrigger: () => {
+    ipcRenderer.removeAllListeners('ritual:trigger');
+  }
+});
+
+contextBridge.exposeInMainWorld('PetShare', {
+  copyCard: (payload) => ipcRenderer.invoke('share:generate', { payload, mode: 'clipboard' }),
+  saveCard: (payload) => ipcRenderer.invoke('share:generate', { payload, mode: 'save' })
+});
+
 contextBridge.exposeInMainWorld('PetTools', {
   // 执行工具
   execute: (toolName, params, context) =>

@@ -165,6 +165,10 @@
       justify-content: space-between;
     }
 
+    .preview-classic {
+      background: linear-gradient(135deg, #F7F7F7 0%, #EDEDED 100%);
+    }
+
     .preview-cyberpunk {
       background: linear-gradient(135deg, #020810 0%, #001833 100%);
     }
@@ -199,6 +203,12 @@
       flex: 1;
       border-radius: 2px;
     }
+
+    /* 经典主题预览色 */
+    .preview-classic .preview-dot { background: #FFC73D; box-shadow: 0 0 5px rgba(255, 199, 61, 0.6); }
+    .preview-classic .preview-line { background: rgba(0, 0, 0, 0.08); }
+    .preview-classic .preview-text { font-size: 11px; font-weight: 700; color: #333333; }
+    .preview-classic .preview-sub  { font-size: 9px; color: rgba(0, 0, 0, 0.45); }
 
     /* 赛博朋克预览色 */
     .preview-cyberpunk .preview-dot { background: #00fff0; box-shadow: 0 0 5px #00fff0; }
@@ -307,6 +317,29 @@
   <div class="content">
     <div class="section-title">选择主题风格</div>
     <div class="theme-cards">
+
+      <!-- 经典主题 -->
+      <div class="theme-card" id="card-classic" data-theme="classic">
+        <span class="active-badge">✓ 当前主题</span>
+        <div class="theme-preview preview-classic">
+          <div class="preview-bar">
+            <div class="preview-dot"></div>
+            <div class="preview-line"></div>
+            <div class="preview-dot" style="background:#FF9500;box-shadow:0 0 5px rgba(255,149,0,.55)"></div>
+          </div>
+          <div>
+            <div class="preview-text">⚪ 经典主题</div>
+            <div class="preview-sub">简约 · 时尚 · 经典</div>
+          </div>
+        </div>
+        <div class="theme-info">
+          <div class="theme-icon">⚪</div>
+          <div>
+            <div class="theme-name">经典主题</div>
+            <div class="theme-desc">简约时尚，经典白灰橙</div>
+          </div>
+        </div>
+      </div>
 
       <!-- 赛博朋克 -->
       <div class="theme-card" id="card-cyberpunk" data-theme="cyberpunk">

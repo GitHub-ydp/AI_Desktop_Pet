@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>每日仪式</title>
+  
+  <!-- 加载基础库 -->
+  <script src="../src/theme-manager.js"></script>
+  <script src="../assets/lib/lottie.min.js"></script>
+  <script src="../src/skin-registry.js"></script>
+  <script src="../src/lottie-controller.js"></script>
+  
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    /* 提供默认深色主题变量，允许 theme-manager.js 在 html 标签上覆盖它们从而实现主题切换 */
+    :root {
+      --bg: #020810;
+      --bg-surface: rgba(2, 10, 20, 0.98);
+      --bg-card: rgba(0, 30, 55, 0.6);
+      --bubble-bg: rgba(2, 12, 28, 0.96);
+      --header-bg: rgba(0, 15, 30, 0.6);
+      --border: rgba(0, 255, 240, 0.3);
+      --neon-cyan: #00fff0;
+      --neon-magenta: #ff2d78;
+      --text: #cff0ff;
+      --text-muted: rgba(160, 220, 240, 0.6);
+      --accent-hover-bg: rgba(0, 255, 240, 0.1);
+      --accent-bg-checked: rgba(0, 255, 240, 0.1);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      
+      /* 通用：卡片进场动画（从下方滑入 + fade） */
+      opacity: 0;
+      transform: translateY(30px);
+      animation: slideUpFade 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    }
+
+    @keyframes slideUpFade {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 背景装饰层 */
+    .bg-canvas {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    /* 头部样式 */
+    .window-header {
+      height: 44px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--header-bg);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+    .window-title { font-size: 13px; font-weight: 600; color: var(--neon-cyan); }
+    
+    .close-btn {
+      width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted); cursor: pointer;
+      -webkit-app-region: no-drag; position: relative; transition: all 0.2s;
+    }
+    .close-btn::before, .close-btn::after {
+      content: ''; position: absolute; left: 50%; top: 50%; width: 11px; height: 1.5px;
+      border-radius: 999px; background: currentColor; transform-origin: center;
+    }
+    .close-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .close-btn::after { transform: translate(-50%, -50%) rotate(-45deg); }
+    .close-btn:hover { border-color: var(--neon-magenta); color: var(--neon-magenta); }
+
+    .card-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: relative;
+    }
+
+    /* 宠物区域 */
+    .pet-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      height: 120px;
+    }
+    .pet-emoji { 
+      font-size: 64px; 
+      width: 120px;
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ritual-title { font-size: 24px; font-weight: 800; text-align: center; letter-spacing: 1px; color: var(--text); }
+    .ritual-subtitle { font-size: 13px; color: var(--text-muted); text-align: center; line-height: 1.6; white-space: pre-line; }
+
+    /* 气泡消息 */
+    .message-bubble {
+      background: var(--bubble-bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    /* =========================================
+       主题特效：早安 
+       ========================================= */
+    /* 暖色调渐变背景（金黄→粉橙），采用低透明度保护深色/浅色阅读体验 */
+    .theme-morning .bg-canvas::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 140, 66, 0.15));
+    }
+    /* 太阳升起动画 */
+    .sun {
+      position: absolute; bottom: 0px; right: 40px; width: 80px; height: 80px;
+      background: radial-gradient(circle, #ffdb58, #ff8c42);
+      border-radius: 50%;
+      box-shadow: 0 0 40px rgba(255, 219, 88, 0.5), 0 0 80px rgba(255, 140, 66, 0.3);
+      animation: sunRise 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    }
+    @keyframes sunRise {
+      from { transform: translateY(120px); opacity: 0; }
+      to { transform: translateY(-80px); opacity: 0.9; }
+    }
+    /* 宠物跳动更活泼 */
+    .theme-morning .pet-area {
+      animation: bouncyActive 0.8s cubic-bezier(0.28, 0.84, 0.42, 1) infinite alternate;
+    }
+    @keyframes bouncyActive {
+      from { transform: translateY(0); }
+      to { transform: translateY(-15px); }
+    }
+
+    /* =========================================
+       主题特效：晚安 
+       ========================================= */
+    .theme-evening .bg-canvas::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(0, 15, 40, 0.8), transparent);
+      opacity: 0.5;
+    }
+    /* 深蓝星空背景（CSS 伪元素做法衍生的径向渐变繁星），使用主题文字颜色适配亮/暗 */
+    .stars {
+      position: absolute; inset: 0;
+      background-image: 
+        radial-gradient(1.5px 1.5px at 10% 20%, var(--neon-cyan), transparent),
+        radial-gradient(1.5px 1.5px at 30% 60%, var(--text), transparent),
+        radial-gradient(2px 2px at 60% 30%, var(--text-muted), transparent),
+        radial-gradient(1px 1px at 80% 80%, var(--neon-cyan), transparent),
+        radial-gradient(1.5px 1.5px at 90% 10%, var(--text), transparent),
+        radial-gradient(2px 2px at 40% 90%, var(--text-muted), transparent);
+      animation: starsTwinkle 3s infinite alternate;
+    }
+    @keyframes starsTwinkle {
+      0% { opacity: 0.1; } 100% { opacity: 0.5; }
+    }
+    /* 月亮闪烁 */
+    .moon {
+      position: absolute; top: 40px; right: 40px; width: 50px; height: 50px;
+      border-radius: 50%;
+      box-shadow: inset -12px -12px 0 0 var(--neon-cyan);
+      opacity: 0.8;
+      animation: moonFlicker 4s infinite alternate;
+    }
+    @keyframes moonFlicker {
+      0% { filter: drop-shadow(0 0 5px var(--border)); transform: scale(1); }
+      100% { filter: drop-shadow(0 0 20px var(--border)); transform: scale(1.02); }
+    }
+
+    /* =========================================
+       主题特效：周报 
+       ========================================= */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+      transition: transform 0.3s;
+    }
+    .stat-card:hover { transform: translateY(-2px); border-color: var(--neon-cyan); }
+    .stat-value { font-size: 28px; font-weight: 800; color: var(--neon-cyan); }
+    .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+    
+    /* 心情渐变进度条 */
+    .mood-progress-container {
+      width: 100%; height: 6px; background: var(--border);
+      border-radius: 3px; margin-top: 10px; overflow: hidden;
+    }
+    .mood-progress-bar {
+      height: 100%; width: 0; 
+      background: linear-gradient(90deg, var(--neon-magenta), var(--neon-cyan));
+      transition: width 1.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    /* 按钮样式 */
+    .bottom-actions { display: flex; gap: 12px; margin-top: auto; padding-top: 10px; }
+    .btn {
+      flex: 1; height: 40px; border-radius: 8px; border: 1px solid var(--border);
+      background: transparent; color: var(--neon-cyan); font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.3s;
+    }
+    .btn:hover { background: var(--accent-hover-bg); border-color: var(--neon-cyan); }
+    .btn.primary { background: var(--accent-bg-checked); border-color: var(--neon-cyan); color: var(--text); }
+  </style>
+</head>
+<body class="theme-default">
+  <div class="bg-canvas" id="bgCanvas"></div>
+  
+  <div class="window-header">
+    <span class="window-title" id="windowTitle">每日问候</span>
+    <button class="close-btn" type="button" title="关闭" onclick="window.close()"></button>
+  </div>
+
+  <div class="card-body">
+    <div class="pet-area">
+      <div class="pet-emoji" id="petEmoji"></div>
+    </div>
+    <div class="ritual-title" id="ritualTitle">加载中...</div>
+    <div class="ritual-subtitle" id="ritualSubtitle"></div>
+    <div class="message-bubble" id="messageBubble" style="display:none"></div>
+    
+    <div id="weeklyStats" style="display:none">
+      <div class="stats-grid" id="statsGrid"></div>
+    </div>
+
+    <div class="bottom-actions" id="bottomActions">
+      <button class="btn primary" type="button" onclick="window.close()">收到 ✓</button>
+    </div>
+  </div>
+
+  <!-- 引入原文件，获取基础功能和数据 -->
+  <script src="../src/daily-card-window.js"></script>
+  
+  <script>
+    let shareCardPending = false;
+
+    function showShareTip(message, isError = false) {
+      const tip = document.createElement('div');
+      tip.textContent = message;
+      tip.style.cssText = [
+        'position:fixed',
+        'bottom:60px',
+        'left:50%',
+        'transform:translateX(-50%)',
+        `background:${isError ? 'rgba(255,45,120,0.15)' : 'rgba(0,255,240,0.15)'}`,
+        `border:1px solid ${isError ? 'rgba(255,45,120,0.4)' : 'rgba(0,255,240,0.4)'}`,
+        `color:${isError ? '#ff82ad' : '#00fff0'}`,
+        'padding:8px 18px',
+        'border-radius:20px',
+        'font-size:13px',
+        'pointer-events:none',
+        'z-index:20'
+      ].join(';');
+      document.body.appendChild(tip);
+      setTimeout(() => tip.remove(), 2000);
+    }
+
+    async function shareCard(mode) {
+      if (shareCardPending) return;
+
+      try {
+        if (!window.PetShare) {
+          throw new Error('PetShare bridge not available');
+        }
+
+        const payload = typeof getPayload === 'function' ? getPayload() : { type: 'weekly', stats: {} };
+        const sharePayload = {
+          type: payload.type,
+          data: payload.stats || {}
+        };
+
+        shareCardPending = true;
+        const result = mode === 'save'
+          ? await window.PetShare.saveCard(sharePayload)
+          : await window.PetShare.copyCard(sharePayload);
+
+        if (result?.success) {
+          showShareTip(mode === 'save' ? '已保存 PNG ✓' : '已复制到剪贴板 ✓');
+          return;
+        }
+
+        if (!result?.canceled) {
+          showShareTip(result?.error || '生成分享卡失败', true);
+        }
+      } catch (error) {
+        console.error('[Card] shareCard failed:', error);
+        showShareTip('生成分享卡失败', true);
+      } finally {
+        shareCardPending = false;
+      }
+    }
+
+    // 工具：数字跑动动画
+    function animateValue(element, start, end, duration) {
+      if (isNaN(end)) {
+        element.textContent = end;
+        return;
+      }
+      let startTimestamp = null;
+      const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        const current = Math.floor(start + (end - start) * easeOut);
+        element.textContent = current;
+        if (progress < 1) {
+          window.requestAnimationFrame(step);
+        } else {
+          element.textContent = end; // 确保结束值精确
+        }
+      };
+      window.requestAnimationFrame(step);
+    }
+
+    // 在原有 JS 触发 render 之后，我们拦截并施加美化升级
+    window.addEventListener('DOMContentLoaded', () => {
+      // 延迟 50ms 确保原 JS 的 render 执行完，从而避免 DOM 被它的逻辑覆盖（特别是宠物 Emoji）
+      setTimeout(() => {
+        const payload = typeof getPayload === 'function' ? getPayload() : { type: 'morning' };
+        const body = document.body;
+        const bgCanvas = document.getElementById('bgCanvas');
+
+        // 设置主题 class 激活对应的特效动画
+        body.className = `theme-${payload.type}`;
+        
+        if (payload.type === 'evening') {
+          bgCanvas.innerHTML = '<div class="stars"></div><div class="moon"></div>';
+        } else if (payload.type === 'weekly') {
+          // 重构周报：替换为含动画版本
+          const stats = payload.stats || {};
+          const statsGrid = document.getElementById('statsGrid');
+          const bottomActions = document.getElementById('bottomActions');
+          
+          statsGrid.innerHTML = `
+            <div class="stat-card">
+              <div class="stat-value" id="val-msgs">0</div>
+              <div class="stat-label">本周对话</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value"><span id="val-mood">0</span>分</div>
+              <div class="stat-label">平均心情</div>
+              <div class="mood-progress-container">
+                <div class="mood-progress-bar" id="mood-bar"></div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" style="font-size: 18px; line-height: 38px;">${stats.busiestDay || '--'}</div>
+              <div class="stat-label">活跃之日</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="val-total">0</div>
+              <div class="stat-label">累计心意</div>
+            </div>
+          `;
+
+          // 执行数字跳动和渐变进度条宽度过渡
+          setTimeout(() => {
+            animateValue(document.getElementById('val-msgs'), 0, stats.userMessages || 0, 1500);
+            animateValue(document.getElementById('val-mood'), 0, stats.avgMood || 0, 1500);
+            animateValue(document.getElementById('val-total'), 0, stats.totalMessages || 0, 1500);
+            
+            const moodBar = document.getElementById('mood-bar');
+            if (moodBar) {
+              moodBar.style.width = `${stats.avgMood || 0}%`;
+            }
+          }, 100);
+
+          if (bottomActions) {
+            bottomActions.innerHTML = `
+              <button class="btn" type="button" onclick="shareCard('clipboard')">复制图片</button>
+              <button class="btn" type="button" onclick="shareCard('save')">保存</button>
+              <button class="btn primary" type="button" onclick="window.close()">收到 ✓</button>
+            `;
+          }
+
+        } else {
+          // 早安
+          bgCanvas.innerHTML = '<div class="sun"></div>';
+        }
+
+        /*======================================================
+          Lottie 渲染逻辑（替代基础文字表情）
+         ======================================================*/
+        const petEmojiEl = document.getElementById('petEmoji');
+        // 原 JS 已经把 emoji 文本（如 🐱）写入，我们提取它用于匹配皮肤
+        const petEmojiStr = petEmojiEl.textContent || '🐱';
+        
+        if (window.SkinRegistry && window.LottieController) {
+          // 修正相对路径，使其能越过 windows/ 找到 Lottie JSON
+          window.SkinRegistry.animationBasePath = '../lottie';
+          
+          if (window.SkinRegistry.hasLottieSupport(petEmojiStr)) {
+            // 清空原本的文字，避免被原 JS 占位导致 Lottie 消失
+            petEmojiEl.textContent = '';
+            
+            // 初始化 Lottie 并在 DOM 中播放
+            window.LottieController.initialize('petEmoji');
+            window.LottieController.loadPet(petEmojiStr, 'idle');
+          }
+        }
+      }, 50); // 50ms 延迟是对抗原 JS DOMContentLoaded 的最佳时机
+    });
+  </script>
+</body>
+</html>

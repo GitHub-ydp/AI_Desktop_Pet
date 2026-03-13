@@ -3,6 +3,7 @@ const path = require('path');
 const fsSync = require('fs');
 const MemoryMainProcess = require('./main-process/memory');
 const { ScreenshotManager } = require('./main-process/screenshot');
+const { ShareCardManager } = require('./main-process/share-card');
 const WorkflowManager = require('./main-process/workflow-manager');
 const ModelRouter = require('./main-process/model-router');
 const SkillRegistry = require('./main-process/skill-registry');
@@ -35,6 +36,7 @@ let tray = null;
 let memorySystem = null;
 let toolSystem = null;
 let screenshotSystem = null;
+let shareCardManager = null;
 let workflowManager = null;
 let modelRouter = null;
 let skillRegistry = null;
@@ -60,10 +62,14 @@ let agentRuntimeInitState = {
 let childWindows = new Map(); // 管理所有子窗口
 let lastSmallBounds = null; // 记录小窗口位置，避免缩放漂移
 let isPetHidden = false; // 宠物是否已隐藏到托盘（子窗口打开时）
+let dailyCardWindow = null;
 let menuWindow = null;
 let bubbleWindow = null;
 let bubbleWindowReady = false;
 let pendingBubblePayload = null;
+let tooltipWindow = null;
+let tooltipWindowReady = false;
+let pendingTooltipPayload = null;
 let intimacyWindow = null;
 let intimacyWindowReady = false;
 let pendingIntimacyPayload = null;
@@ -79,6 +85,7 @@ const WINDOW_SIZES = {
 };
 const MENU_WINDOW_SIZE = { width: 340, height: 340 };
 const BUBBLE_WINDOW_SIZE = { width: 260, height: 110 };
+const TOOLTIP_WINDOW_SIZE = { width: 200, height: 40 };
 const INTIMACY_WINDOW_SIZE = { width: 140, height: 58 };
 const DEFAULT_BUBBLE_OFFSET = { x: 0, y: 8 };
 const DEFAULT_INTIMACY_OFFSET = { x: 0, y: 0 };
@@ -1054,6 +1061,71 @@ function createBubbleWindow() {
   });
 }
 
+
+function createTooltipWindow() {
+  tooltipWindowReady = false;
+  tooltipWindow = new BrowserWindow({
+    width: TOOLTIP_WINDOW_SIZE.width,
+    height: TOOLTIP_WINDOW_SIZE.height,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    focusable: false,
+    hasShadow: false,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+
+  tooltipWindow.loadFile('windows/tooltip-window.html');
+  tooltipWindow.setIgnoreMouseEvents(true, { forward: true });
+
+  tooltipWindow.webContents.on('did-finish-load', () => {
+    tooltipWindowReady = true;
+    if (pendingTooltipPayload && tooltipWindow && !tooltipWindow.isDestroyed()) {
+      tooltipWindow.webContents.send('tooltip:show', pendingTooltipPayload);
+      pendingTooltipPayload = null;
+    }
+  });
+
+  tooltipWindow.on('closed', () => {
+    tooltipWindow = null;
+    tooltipWindowReady = false;
+    pendingTooltipPayload = null;
+  });
+}
+
+function showTooltipWindow(payload) {
+  if (isPetHidden) return;
+  if (!tooltipWindow || tooltipWindow.isDestroyed()) {
+    createTooltipWindow();
+  }
+
+  const x = Math.round(payload.x - TOOLTIP_WINDOW_SIZE.width / 2);
+  const y = Math.round(payload.y - TOOLTIP_WINDOW_SIZE.height / 2);
+  tooltipWindow.setBounds({ x, y, width: TOOLTIP_WINDOW_SIZE.width, height: TOOLTIP_WINDOW_SIZE.height }, false);
+  
+  tooltipWindow.showInactive();
+
+  if (!tooltipWindowReady || tooltipWindow.webContents.isLoading()) {
+    pendingTooltipPayload = payload;
+    return;
+  }
+
+  tooltipWindow.webContents.send('tooltip:show', payload);
+}
+
+function hideTooltipWindow() {
+  pendingTooltipPayload = null;
+  if (!tooltipWindow || tooltipWindow.isDestroyed()) return;
+  tooltipWindow.hide();
+}
+
 function createIntimacyWindow() {
   intimacyWindowReady = false;
   intimacyWindow = new BrowserWindow({
@@ -1429,6 +1501,7 @@ app.whenReady().then(async () => {
   setAutoLaunch();
   registerScreenshotIPCHandlers(ipcMain);
   registerScreenshotShortcut();
+  shareCardManager = new ShareCardManager();
 
   // 初始化记忆系统
   console.log('Initializing memory system...');
@@ -1503,6 +1576,37 @@ app.whenReady().then(async () => {
   modelRouter.registerIPCHandlers(ipcMain);
   // 设置主窗口引用（提醒通知需要）
   memorySystem.setMainWindow(mainWindow);
+  ipcMain.handle('ritual:manual-trigger', async (event, type) => {
+    try {
+      if (!memorySystem) {
+        return { success: false, error: 'system not ready' };
+      }
+      await memorySystem.manualTriggerRitual(type);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+  ipcMain.handle('ritual:get-settings', async () => ({ success: true }));
+  ipcMain.handle('ritual:open-card', async (event, payload) => {
+    try {
+      createDailyCardWindow(payload);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+  ipcMain.handle('share:generate', async (event, { payload, mode } = {}) => {
+    try {
+      if (!shareCardManager) {
+        return { success: false, error: 'not ready' };
+      }
+      return await shareCardManager.generate(payload, mode || 'clipboard');
+    } catch (error) {
+      console.error('[Share] generate failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
   try {
     setAgentRuntimeInitState('initializing', 'memory-storage:start');
     console.log('Initializing memory storage for agent runtime...');
@@ -2096,6 +2200,69 @@ function createChildWindow(options) {
 }
 
 // IPC 通信处理
+function notifyMainWindowChildState(state) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('child-window-state', state);
+  }
+}
+
+function createDailyCardWindow(payload = {}) {
+  if (dailyCardWindow && !dailyCardWindow.isDestroyed()) {
+    dailyCardWindow.close();
+  }
+
+  const width = 380;
+  const height = 520;
+  const ownerBounds = (mainWindow && !mainWindow.isDestroyed())
+    ? mainWindow.getBounds()
+    : screen.getPrimaryDisplay().workArea;
+  const display = screen.getDisplayMatching(ownerBounds);
+  const workArea = display.workArea;
+  const x = Math.max(workArea.x, Math.min(
+    ownerBounds.x + Math.round((ownerBounds.width - width) / 2),
+    workArea.x + workArea.width - width
+  ));
+  const y = Math.max(workArea.y, Math.min(
+    ownerBounds.y + Math.round((ownerBounds.height - height) / 2),
+    workArea.y + workArea.height - height
+  ));
+
+  dailyCardWindow = new BrowserWindow({
+    width,
+    height,
+    x,
+    y,
+    frame: false,
+    transparent: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    backgroundColor: '#020810',
+    parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : null,
+    modal: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+
+  const encodedPayload = encodeURIComponent(JSON.stringify(payload || { type: 'morning' }));
+  dailyCardWindow.loadFile(path.join(__dirname, 'windows', 'daily-card-window.html'), {
+    hash: encodedPayload
+  });
+  dailyCardWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('[DailyCardWindow] Failed to load:', errorCode, errorDescription);
+  });
+  notifyMainWindowChildState('opened');
+  dailyCardWindow.on('closed', () => {
+    dailyCardWindow = null;
+    notifyMainWindowChildState('closed');
+  });
+
+  return dailyCardWindow;
+}
+
 ipcMain.handle('move-window', (event, deltaX, deltaY) => {
   if (mainWindow) {
     const [currentX, currentY] = mainWindow.getPosition();
@@ -2267,6 +2434,17 @@ ipcMain.handle('bubble:show', (event, payloadOrMessage, duration) => {
 
 ipcMain.handle('bubble:hide', () => {
   hideBubbleWindow();
+  return { success: true };
+});
+
+
+ipcMain.handle('tooltip:show', (event, payload) => {
+  showTooltipWindow(payload);
+  return { success: true };
+});
+
+ipcMain.handle('tooltip:hide', () => {
+  hideTooltipWindow();
   return { success: true };
 });
 

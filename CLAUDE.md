@@ -580,7 +580,7 @@ this.checkIntervalMs = 30000;     // 30 秒
 - `windows/bubble-window.html` - 更新：引入 theme-manager.js，气泡颜色使用 CSS 变量
 
 **主题系统设计：**
-- 默认主题：`lazyCat`（懒猫橘，与白/黄/橙猫配色一致）
+- 默认主题：`classic`（经典主题，简约白灰橙）
 - 赛博朋克：深蓝底 + 霓虹青 `#00fff0` + 品红 `#ff2d78`
 - 懒猫橘：深暖棕底 + 琥珀橙 `#ffb347` + 橙红 `#ff6b35`
 - 存储：`localStorage.pet_theme`，跨窗口通过 `storage` 事件实时同步
