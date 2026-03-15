@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('electron', {
   getAllProviderAPIKeys: () => ipcRenderer.invoke('get-all-provider-keys'),
   getAllSceneKeyStatuses: (sceneConfig) => ipcRenderer.invoke('get-all-scene-key-statuses', sceneConfig),
   testProviderAPIKey: (provider) => ipcRenderer.invoke('test-provider-api-key', provider),
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   testSceneAPIKey: (scene, sceneConfig) => ipcRenderer.invoke('test-scene-api-key', scene, sceneConfig),
   getPythonConfig: () => ipcRenderer.invoke('workflow:get-python-config'),
   choosePythonInterpreter: () => ipcRenderer.invoke('workflow:choose-python-interpreter'),
@@ -127,6 +128,7 @@ contextBridge.exposeInMainWorld('PetAgent', {
   getState: (payload) => ipcRenderer.invoke('agent:get-state', payload),
   approve: (payload) => ipcRenderer.invoke('agent:approve', payload),
   cancel: (payload) => ipcRenderer.invoke('agent:cancel', payload),
+  injectMessage: (runId, text) => ipcRenderer.invoke('agent:inject-message', { runId, text }),
   wait: (payload) => ipcRenderer.invoke('agent:wait', payload),
   openStream: async (payload, onEvent) => {
     const clientStreamId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

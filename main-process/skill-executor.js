@@ -18,11 +18,29 @@ const BLOCKED_PATH_KEYWORDS = [
 ];
 
 // 危险命令黑名单（PowerShell/cmd）
+// 注意：使用 toLowerCase() 做不区分大小写匹配，防止大小写绕过
 const DANGEROUS_COMMANDS = [
-  'format', 'diskpart', 'bcdedit', 'reg delete', 'reg add',
+  // 磁盘/系统破坏
+  'format', 'diskpart', 'bcdedit',
+  'reg delete', 'reg add',
   'net stop', 'net user', 'sc delete', 'taskkill /f',
   'Remove-Item -Recurse -Force C:', 'rm -rf /',
-  'del /s /q C:', 'rd /s /q C:'
+  'del /s /q C:', 'rd /s /q C:',
+  // PowerShell 编码执行绕过（-enc / -encodedcommand 可隐藏真实命令）
+  '-enc', '-encodedcommand', '-encoded',
+  // PowerShell 危险执行绕过策略
+  '-executionpolicy bypass', '-exec bypass',
+  // PowerShell 远程执行 / 下载执行
+  'invoke-expression', 'iex ',
+  'invoke-webrequest', 'iwr ',
+  'invoke-restmethod',
+  'downloadstring', 'downloadfile',
+  'system.net.webclient',
+  // PowerShell 进程启动
+  'start-process', 'start-job',
+  // 注册表写入（hklm/hkcu 高危键）
+  'set-itemproperty hklm', 'set-itemproperty hkcu',
+  'new-service',
 ];
 
 class SkillExecutor {
@@ -40,18 +58,19 @@ class SkillExecutor {
     this.mainWindow = null;
 
     // 技能名 → 现有 WorkflowManager 工具名映射（向后兼容）
-    this._legacyMapping = {
-      file_read: 'file_ops_read_file',
-      file_write: 'file_ops_write_file'
-    };
+    this._legacyMapping = {};
 
-    // 内置 Node.js 处理器映射
     this._builtinHandlers = {
       bash_run: this._bashRun.bind(this),
+      file_write: this._fileWrite.bind(this),
+      file_read: this._fileRead.bind(this),  // 原生实现，绕过 Python 层（< 50ms）
       file_edit: this._fileEdit.bind(this),
+      multi_file_edit: this._multiFileEdit.bind(this),
       file_list: this._fileList.bind(this),
       file_search: this._fileSearch.bind(this),
+      grep_search: this._grepSearch.bind(this),
       memory_search: this._memorySearch.bind(this),
+      git_ops: this._gitOps.bind(this),
       open_app: this._openApp.bind(this),
       open_url: this._openUrl.bind(this),
       clipboard_set: this._clipboardSet.bind(this),
@@ -358,32 +377,162 @@ class SkillExecutor {
     }
   }
 
-  // file_read：读取文件（Node.js 原生实现）
+  async _multiFileEdit(args) {
+    const { edits = [], description = '' } = args;
+
+    if (!Array.isArray(edits) || edits.length === 0) {
+      return { success: false, error: '缺少 edits 数组参数' };
+    }
+    if (edits.length > 10) {
+      return { success: false, error: '单次最多支持 10 个文件编辑' };
+    }
+
+    const previews = [];
+    for (const edit of edits) {
+      const previewResult = await this._fileEdit(edit, { previewOnly: true });
+      if (!previewResult.success) {
+        return {
+          success: false,
+          error: `预检失败 [${edit.path}]: ${previewResult.error}`,
+          failedAt: edit.path
+        };
+      }
+      previews.push(previewResult.result);
+    }
+
+    const backups = new Map();
+    for (const edit of edits) {
+      try {
+        const expandedPath = String(edit.path || '').replace(/^~/, os.homedir());
+        const content = await fs.readFile(expandedPath, 'utf8').catch(() => null);
+        backups.set(expandedPath, content);
+      } catch {
+        backups.set(edit.path, null);
+      }
+    }
+
+    const applied = [];
+    for (const edit of edits) {
+      const result = await this._fileEdit(edit, {});
+      if (!result.success) {
+        for (const [filePath, originalContent] of backups) {
+          try {
+            if (originalContent === null) {
+              await fs.unlink(filePath).catch(() => {});
+            } else {
+              await fs.writeFile(filePath, originalContent, 'utf8');
+            }
+          } catch {
+            // 回滚失败也继续
+          }
+        }
+        return {
+          success: false,
+          error: `写入失败已全部回滚 [${edit.path}]: ${result.error}`,
+          appliedBeforeFailure: applied,
+          rolledBack: true
+        };
+      }
+      applied.push(edit.path);
+    }
+
+    return {
+      success: true,
+      result: {
+        description,
+        filesEdited: applied.length,
+        files: applied,
+        previews
+      }
+    };
+  }
+
+  // file_read：读取文件（Node.js 原生实现，支持 offset/limit 行范围）
   async _fileRead(args) {
-    const { path: filePath, encoding = 'utf8' } = args;
+    const { path: filePath, encoding = 'utf8', offset = 0, limit = 0 } = args;
 
     if (!filePath) {
       return { success: false, error: '缺少 path 参数' };
     }
 
+    const expandedPath = String(filePath).replace(/^~/, os.homedir());
+
     // 安全路径校验
-    const safetyCheck = this._validatePath(filePath);
+    const safetyCheck = this._validatePath(expandedPath);
     if (!safetyCheck.safe) {
       return { success: false, error: safetyCheck.reason };
     }
 
     try {
-      const stat = await fs.stat(filePath);
+      const stat = await fs.stat(expandedPath);
       if (stat.size > 5 * 1024 * 1024) {
         return { success: false, error: '文件超过 5MB 限制' };
       }
-      const content = await fs.readFile(filePath, encoding);
-      return { success: true, result: { content, size: stat.size } };
+      let content = await fs.readFile(expandedPath, encoding);
+      const lines = content.split('\n');
+      const totalLines = lines.length;
+      const parsedOffset = Number(offset);
+      const parsedLimit = Number(limit);
+
+      if (!Number.isFinite(parsedOffset) || parsedOffset < 0) {
+        return { success: false, error: 'offset 必须是大于等于 0 的数字' };
+      }
+      if (!Number.isFinite(parsedLimit) || parsedLimit < 0) {
+        return { success: false, error: 'limit 必须是大于等于 0 的数字' };
+      }
+
+      const start = parsedOffset > 0 ? parsedOffset - 1 : 0;
+      const end = parsedLimit > 0 ? start + parsedLimit : lines.length;
+
+      if (parsedOffset > 0 || parsedLimit > 0) {
+        content = lines.slice(start, end).join('\n');
+      }
+
+      return {
+        success: true,
+        result: {
+          path: expandedPath,
+          content,
+          totalLines,
+          size: stat.size,
+          truncated: parsedLimit > 0 && end < totalLines
+        }
+      };
     } catch (error) {
       return { success: false, error: `读取失败: ${error.message}` };
     }
   }
 
+  async _fileWrite(args) {
+    const { path: filePath, content = '', encoding = 'utf8', create_dirs = true } = args;
+
+    if (!filePath) {
+      return { success: false, error: 'missing path parameter' };
+    }
+
+    const expandedPath = String(filePath).replace(/^~/, os.homedir());
+    const safeCheck = this._validatePath(expandedPath);
+    if (!safeCheck.safe) {
+      return { success: false, error: safeCheck.reason };
+    }
+
+    try {
+      if (create_dirs) {
+        await fs.mkdir(path.dirname(expandedPath), { recursive: true });
+      }
+      await fs.writeFile(expandedPath, content, encoding);
+      const stat = await fs.stat(expandedPath);
+      return {
+        success: true,
+        result: {
+          path: expandedPath,
+          size: stat.size
+        }
+      };
+    } catch (e) {
+      return { success: false, error: `write failed: ${e.message}` };
+    }
+  }
   // memory_search：记忆系统搜索
   async _memorySearch(args) {
     const { query, maxResults = 5 } = args;
@@ -477,73 +626,40 @@ class SkillExecutor {
       return { success: false, error: '缺少 query 参数' };
     }
 
-    // 使用 DuckDuckGo Instant Answer API（免费无 Key）
     try {
-      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-      const https = require('https');
+      const limit = Math.max(1, Math.min(10, Number(maxResults) || 5));
+      const instantResults = await this._safeSearch(() => this._searchDuckDuckGoInstant(query, limit));
+      let results = instantResults.length >= limit
+        ? instantResults
+        : await this._safeSearch(() => this._searchDuckDuckGoHtml(query, limit, instantResults));
 
-      const data = await new Promise((resolve, reject) => {
-        const req = https.get(url, { timeout: 10000 }, (res) => {
-          let body = '';
-          res.on('data', chunk => body += chunk);
-          res.on('end', () => {
-            try {
-              resolve(JSON.parse(body));
-            } catch (e) {
-              reject(new Error('解析搜索结果失败'));
-            }
-          });
-        });
-        req.on('error', reject);
-        req.on('timeout', () => {
-          req.destroy();
-          reject(new Error('搜索请求超时'));
-        });
-      });
-
-      const results = [];
-
-      // 提取摘要
-      if (data.Abstract) {
-        results.push({
-          title: data.Heading || '摘要',
-          snippet: data.Abstract,
-          url: data.AbstractURL || ''
-        });
-      }
-
-      // 提取相关话题
-      if (data.RelatedTopics) {
-        for (const topic of data.RelatedTopics.slice(0, maxResults - results.length)) {
-          if (topic.Text) {
-            results.push({
-              title: topic.Text.substring(0, 50),
-              snippet: topic.Text,
-              url: topic.FirstURL || ''
-            });
-          }
-        }
-      }
-
-      if (results.length === 0) {
-        return {
-          success: true,
-          result: {
-            message: '未找到相关结果，建议用更具体的关键词搜索',
-            query
-          }
-        };
+      if (results.length < limit && this._looksLikeNewsQuery(query)) {
+        results = await this._safeSearch(() => this._searchGoogleNewsRss(query, limit, results), results);
       }
 
       return {
         success: true,
         result: {
           count: results.length,
-          results
+          results,
+          note: results.length === 0 ? '未找到明确的网页结果，请尝试换更具体的关键词。' : undefined
         }
       };
     } catch (error) {
-      return { success: false, error: `搜索失败: ${error.message}` };
+      return {
+        success: false,
+        error: `网络搜索失败: ${error.message}`,
+        originalError: error.message
+      };
+    }
+  }
+
+  async _safeSearch(fn, fallback = []) {
+    try {
+      const result = await fn();
+      return Array.isArray(result) ? result : fallback;
+    } catch {
+      return fallback;
     }
   }
 
@@ -578,6 +694,129 @@ class SkillExecutor {
     } catch (error) {
       return { success: false, error: `网页抓取失败: ${error.message}` };
     }
+  }
+
+  async _searchDuckDuckGoInstant(query, maxResults) {
+    const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+    const data = await new Promise((resolve, reject) => {
+      const req = https.get(url, { timeout: 10000 }, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            reject(new Error('解析 DuckDuckGo Instant Answer 结果失败'));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('DuckDuckGo Instant Answer 请求超时'));
+      });
+    });
+
+    const results = [];
+    if (data.Abstract) {
+      results.push({
+        title: data.Heading || '摘要',
+        snippet: data.Abstract,
+        url: data.AbstractURL || ''
+      });
+    }
+
+    const topicQueue = Array.isArray(data.RelatedTopics) ? [...data.RelatedTopics] : [];
+    while (topicQueue.length > 0 && results.length < maxResults) {
+      const topic = topicQueue.shift();
+      if (!topic || typeof topic !== 'object') continue;
+      if (Array.isArray(topic.Topics)) {
+        topicQueue.push(...topic.Topics);
+        continue;
+      }
+      if (!topic.Text) continue;
+      results.push({
+        title: String(topic.Text).slice(0, 50),
+        snippet: topic.Text,
+        url: topic.FirstURL || ''
+      });
+    }
+
+    return this._dedupeSearchResults(results).slice(0, maxResults);
+  }
+
+  async _searchDuckDuckGoHtml(query, maxResults, seedResults = []) {
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const html = await this._fetchTextUrl(url, 0);
+    const results = Array.isArray(seedResults) ? [...seedResults] : [];
+    const blocks = html.match(/<div class="result__body">[\s\S]*?<\/div>\s*<\/div>/gi) || [];
+
+    for (const block of blocks) {
+      if (results.length >= maxResults) break;
+      const titleMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+      if (!titleMatch) continue;
+      const snippetMatch = block.match(/<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>|<div[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/div>/i);
+      const rawUrl = this._decodeHtmlEntities(titleMatch[1]);
+      const title = this._decodeHtmlEntities(titleMatch[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+      const snippetRaw = snippetMatch ? (snippetMatch[1] || snippetMatch[2] || '') : '';
+      const snippet = this._decodeHtmlEntities(String(snippetRaw).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+      if (!title) continue;
+      results.push({
+        title,
+        snippet,
+        url: rawUrl
+      });
+    }
+
+    return this._dedupeSearchResults(results).slice(0, maxResults);
+  }
+
+  async _searchGoogleNewsRss(query, maxResults, seedResults = []) {
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans`;
+    const xml = await this._fetchTextUrl(url, 0);
+    const results = Array.isArray(seedResults) ? [...seedResults] : [];
+    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+    let match;
+
+    while ((match = itemRegex.exec(xml)) !== null && results.length < maxResults) {
+      const item = match[1];
+      const title = this._decodeHtmlEntities((item.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i)?.[1]
+        || item.match(/<title>([\s\S]*?)<\/title>/i)?.[1]
+        || '').replace(/\s+/g, ' ').trim());
+      const rawUrl = this._decodeHtmlEntities((item.match(/<link>([\s\S]*?)<\/link>/i)?.[1] || '').trim());
+      const source = this._decodeHtmlEntities((item.match(/<source[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/source>/i)?.[1]
+        || item.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1]
+        || '').replace(/\s+/g, ' ').trim());
+      const pubDate = this._decodeHtmlEntities((item.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1] || '').trim());
+      if (!title) continue;
+      results.push({
+        title,
+        snippet: [source, pubDate].filter(Boolean).join(' | '),
+        url: rawUrl
+      });
+    }
+
+    return this._dedupeSearchResults(results).slice(0, maxResults);
+  }
+
+  _dedupeSearchResults(results = []) {
+    const deduped = [];
+    const seen = new Set();
+    for (const item of results) {
+      const title = String(item?.title || '').trim();
+      const snippet = String(item?.snippet || '').trim();
+      const url = String(item?.url || '').trim();
+      if (!title && !snippet) continue;
+      const key = `${url}::${title}`.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push({ title, snippet, url });
+    }
+    return deduped;
+  }
+
+  _looksLikeNewsQuery(query) {
+    return /(新闻|热点|热搜|要闻|快讯|国际|国内|今日|今天|latest news|breaking news|headline)/i.test(String(query || ''));
   }
 
   async _fileList(args = {}) {
@@ -661,6 +900,146 @@ class SkillExecutor {
         total: files.length
       }
     };
+  }
+
+  async _grepSearch(args = {}) {
+    const {
+      path: rootPath = '',
+      pattern = '',
+      file_pattern = '*',
+      case_sensitive = false,
+      max_results = 50,
+      context_lines = 2
+    } = args;
+
+    if (!pattern) return { success: false, error: '缺少 pattern 参数' };
+
+    const expandedRoot = String(rootPath || `${os.homedir()}\\Desktop`).replace(/^~/, os.homedir());
+    const safeCheck = this._validatePath(expandedRoot);
+    if (!safeCheck.safe) return { success: false, error: safeCheck.reason };
+
+    const stat = await fs.stat(expandedRoot);
+    if (!stat.isDirectory()) {
+      return { success: false, error: `目录不存在: ${expandedRoot}` };
+    }
+
+    const fileMatcher = this._wildcardToRegExp(file_pattern);
+    let searchRegex;
+    try {
+      searchRegex = new RegExp(pattern, case_sensitive ? '' : 'i');
+    } catch (e) {
+      return { success: false, error: `无效的正则表达式: ${e.message}` };
+    }
+
+    const matches = [];
+
+    await this._walkDirectory(expandedRoot, async (fullPath, entry) => {
+      if (entry.isDirectory()) return;
+      if (!fileMatcher.test(entry.name)) return;
+      if (matches.length >= max_results) return;
+
+      try {
+        const content = await fs.readFile(fullPath, 'utf8');
+        const lines = content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          searchRegex.lastIndex = 0;
+          if (!searchRegex.test(lines[i])) continue;
+          const start = Math.max(0, i - context_lines);
+          const end = Math.min(lines.length - 1, i + context_lines);
+          matches.push({
+            file: fullPath,
+            line: i + 1,
+            match: lines[i].trim(),
+            context: lines.slice(start, end + 1).map((line, idx) => ({
+              line: start + idx + 1,
+              text: line,
+              isMatch: start + idx === i
+            }))
+          });
+          if (matches.length >= max_results) break;
+        }
+      } catch {
+        // 跳过无法读取的文件
+      }
+      return matches.length > 0;
+    }, { recursive: true, includeDirectories: false, maxResults: 500 });
+
+    return {
+      success: true,
+      result: { count: matches.length, matches, truncated: matches.length >= max_results }
+    };
+  }
+
+  async _gitOps(args = {}) {
+    const { action, path: repoPath = '', message = '' } = args;
+    const ALLOWED_ACTIONS = ['status', 'diff', 'log', 'commit', 'branch'];
+
+    if (!ALLOWED_ACTIONS.includes(action)) {
+      return { success: false, error: `不支持的 git 操作: ${action}，支持: ${ALLOWED_ACTIONS.join(', ')}` };
+    }
+
+    const expandedPath = String(repoPath || `${os.homedir()}\\Desktop`).replace(/^~/, os.homedir());
+    const safeCheck = this._validatePath(expandedPath);
+    if (!safeCheck.safe) return { success: false, error: safeCheck.reason };
+
+    // commit 操作使用 spawn + 参数数组，彻底避免字符串拼接命令注入
+    if (action === 'commit') {
+      if (!message) {
+        return { success: false, error: 'commit 操作需要提供 message 参数' };
+      }
+      return await new Promise((resolve) => {
+        const { spawn } = require('child_process');
+        // 第一步：git add -A
+        const addProc = spawn('git', ['add', '-A'], { cwd: expandedPath, windowsHide: true });
+        let addErr = '';
+        addProc.stderr.on('data', (d) => { addErr += d.toString(); });
+        addProc.on('close', (code) => {
+          if (code !== 0) {
+            resolve({ success: false, error: `git add 失败: ${addErr.trim()}` });
+            return;
+          }
+          // 第二步：git commit -m <message>（参数数组，无注入风险）
+          const commitProc = spawn('git', ['commit', '-m', String(message)], {
+            cwd: expandedPath, windowsHide: true
+          });
+          let out = '', err = '';
+          commitProc.stdout.on('data', (d) => { out += d.toString(); });
+          commitProc.stderr.on('data', (d) => { err += d.toString(); });
+          commitProc.on('close', (c) => {
+            if (c !== 0) {
+              resolve({ success: false, error: err.trim() || '提交失败' });
+            } else {
+              resolve({ success: true, result: { action, output: (out || err || '提交成功').trim().slice(0, 2000) } });
+            }
+          });
+        });
+      });
+    }
+
+    const commands = {
+      status: 'git status --short',
+      diff: 'git diff --stat HEAD',
+      log: 'git log --oneline -10',
+      branch: 'git branch -a',
+    };
+
+    const cmd = commands[action];
+
+    return await new Promise((resolve) => {
+      exec(cmd, { cwd: expandedPath, windowsHide: true, timeout: 15000 }, (error, stdout, stderr) => {
+        if (error && action !== 'status') {
+          resolve({ success: false, error: stderr.trim() || error.message });
+          return;
+        }
+        resolve({
+          success: true,
+          result: {
+            action,
+            output: (stdout || stderr || '(无输出)').trim().slice(0, 2000)
+          }
+        });
+      });
+    });
   }
 
   async _weatherGet(args = {}) {
@@ -766,10 +1145,15 @@ class SkillExecutor {
       return { safe: false, reason: '路径不允许包含 ".."' };
     }
 
-    // 禁止系统目录
-    const normalized = path.normalize(filePath);
+    // 禁止 UNC 网络路径（\\server\share 或 //server/share）
+    if (filePath.startsWith('\\\\') || filePath.startsWith('//')) {
+      return { safe: false, reason: '禁止访问 UNC 网络路径' };
+    }
+
+    // 禁止系统目录（大小写不敏感，防止 c:\windows 绕过 'Windows' 检查）
+    const normalized = path.normalize(filePath).toLowerCase();
     for (const keyword of BLOCKED_PATH_KEYWORDS) {
-      if (normalized.includes(keyword)) {
+      if (normalized.includes(keyword.toLowerCase())) {
         return { safe: false, reason: `禁止访问系统目录: ${keyword}` };
       }
     }

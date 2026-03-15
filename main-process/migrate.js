@@ -76,43 +76,45 @@ class DatabaseMigrator {
       const existingData = this.storage.db.prepare('SELECT * FROM reminders').all();
       console.log(`[Migrate] Backed up ${existingData.length} reminder records`);
 
-      // 删除旧表
-      this.storage.db.exec('DROP TABLE IF EXISTS reminders');
+      // 用事务包裹 DROP → 重建 → 恢复，确保原子性
+      // 若中途失败则整体回滚，不会出现数据丢失的中间状态
+      const rebuildReminders = this.storage.db.transaction(() => {
+        // 删除旧表
+        this.storage.db.exec('DROP TABLE IF EXISTS reminders');
 
-      // 创建新表
-      this.storage.db.exec(`
-        CREATE TABLE reminders (
-          id TEXT PRIMARY KEY,
-          content TEXT NOT NULL,
-          remind_at INTEGER NOT NULL,
-          created_at INTEGER NOT NULL,
-          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'completed', 'cancelled', 'missed')),
-          source_conversation_id TEXT,
-          repeat_pattern TEXT,
-          repeat_end_at INTEGER,
-          completed_at INTEGER,
-          metadata TEXT
-        )
-      `);
+        // 创建新表
+        this.storage.db.exec(`
+          CREATE TABLE reminders (
+            id TEXT PRIMARY KEY,
+            content TEXT NOT NULL,
+            remind_at INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'completed', 'cancelled', 'missed')),
+            source_conversation_id TEXT,
+            repeat_pattern TEXT,
+            repeat_end_at INTEGER,
+            completed_at INTEGER,
+            metadata TEXT
+          )
+        `);
 
-      // 重建索引
-      this.storage.db.exec(`
-        CREATE INDEX idx_reminders_remind_at ON reminders(remind_at);
-        CREATE INDEX idx_reminders_status ON reminders(status);
-        CREATE INDEX idx_reminders_pending ON reminders(status, remind_at);
-        CREATE INDEX idx_reminders_created_at ON reminders(created_at);
-      `);
+        // 重建索引
+        this.storage.db.exec(`
+          CREATE INDEX idx_reminders_remind_at ON reminders(remind_at);
+          CREATE INDEX idx_reminders_status ON reminders(status);
+          CREATE INDEX idx_reminders_pending ON reminders(status, remind_at);
+          CREATE INDEX idx_reminders_created_at ON reminders(created_at);
+        `);
 
-      // 恢复数据
-      const stmt = this.storage.db.prepare(`
-        INSERT INTO reminders (id, content, remind_at, created_at, status,
-          source_conversation_id, repeat_pattern, repeat_end_at, completed_at, metadata)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+        // 恢复数据
+        const stmt = this.storage.db.prepare(`
+          INSERT INTO reminders (id, content, remind_at, created_at, status,
+            source_conversation_id, repeat_pattern, repeat_end_at, completed_at, metadata)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
 
-      let restored = 0;
-      for (const row of existingData) {
-        try {
+        let restored = 0;
+        for (const row of existingData) {
           stmt.run(
             row.id,
             row.content,
@@ -126,11 +128,11 @@ class DatabaseMigrator {
             row.metadata
           );
           restored++;
-        } catch (error) {
-          console.error(`[Migrate] Failed to restore reminder ${row.id}:`, error.message);
         }
-      }
+        return restored;
+      });
 
+      const restored = rebuildReminders();
       console.log(`[Migrate] Restored ${restored} reminder records`);
       console.log('[Migrate] ✓ Migration to v1 complete');
 
@@ -501,54 +503,62 @@ class DatabaseMigrator {
         `).get();
 
         if (createSql && !createSql.sql.includes("'personal'")) {
-          // 备份 → 重建 → 恢复
+          // 备份 → 重建 → 恢复（用事务包裹，保证原子性，防止中途崩溃丢数据）
           const existingData = this.storage.db.prepare('SELECT * FROM memory_facts').all();
-          this.storage.db.exec('DROP TABLE IF EXISTS memory_facts');
 
-          // 重建表，新增 last_confirmed_at 和 source_text 字段
-          this.storage.db.exec(`
-            CREATE TABLE memory_facts (
-              id TEXT PRIMARY KEY,
-              fact_type TEXT NOT NULL CHECK(fact_type IN ('personal', 'preference', 'event', 'relationship', 'routine')),
-              subject TEXT,
-              predicate TEXT NOT NULL,
-              object TEXT,
-              confidence REAL DEFAULT 1.0 CHECK(confidence >= 0 AND confidence <= 1),
-              source_conversation_id TEXT,
-              created_at INTEGER NOT NULL,
-              updated_at INTEGER NOT NULL,
-              last_confirmed_at INTEGER,
-              source_text TEXT,
-              FOREIGN KEY (source_conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
-            )
-          `);
+          const rebuildFacts = this.storage.db.transaction(() => {
+            this.storage.db.exec('DROP TABLE IF EXISTS memory_facts');
 
-          // 重建索引
-          this.storage.db.exec(`
-            CREATE INDEX IF NOT EXISTS idx_memory_facts_type ON memory_facts(fact_type);
-            CREATE INDEX IF NOT EXISTS idx_memory_facts_subject ON memory_facts(subject);
-            CREATE INDEX IF NOT EXISTS idx_memory_facts_confidence ON memory_facts(confidence);
-          `);
+            // 重建表，新增 last_confirmed_at 和 source_text 字段
+            this.storage.db.exec(`
+              CREATE TABLE memory_facts (
+                id TEXT PRIMARY KEY,
+                fact_type TEXT NOT NULL CHECK(fact_type IN ('personal', 'preference', 'event', 'relationship', 'routine')),
+                subject TEXT,
+                predicate TEXT NOT NULL,
+                object TEXT,
+                confidence REAL DEFAULT 1.0 CHECK(confidence >= 0 AND confidence <= 1),
+                source_conversation_id TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                last_confirmed_at INTEGER,
+                source_text TEXT,
+                FOREIGN KEY (source_conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
+              )
+            `);
 
-          // 恢复数据
-          const insertStmt = this.storage.db.prepare(`
-            INSERT INTO memory_facts (id, fact_type, subject, predicate, object, confidence,
-              source_conversation_id, created_at, updated_at, last_confirmed_at, source_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `);
+            // 重建索引
+            this.storage.db.exec(`
+              CREATE INDEX IF NOT EXISTS idx_memory_facts_type ON memory_facts(fact_type);
+              CREATE INDEX IF NOT EXISTS idx_memory_facts_subject ON memory_facts(subject);
+              CREATE INDEX IF NOT EXISTS idx_memory_facts_confidence ON memory_facts(confidence);
+            `);
 
-          for (const row of existingData) {
-            try {
-              insertStmt.run(
-                row.id, row.fact_type, row.subject, row.predicate, row.object,
-                row.confidence, row.source_conversation_id, row.created_at,
-                row.updated_at, row.last_confirmed_at || null, row.source_text || null
-              );
-            } catch (e) {
-              console.warn('[Migrate] Skip fact:', row.id, e.message);
+            // 恢复数据
+            const insertStmt = this.storage.db.prepare(`
+              INSERT INTO memory_facts (id, fact_type, subject, predicate, object, confidence,
+                source_conversation_id, created_at, updated_at, last_confirmed_at, source_text)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            let count = 0;
+            for (const row of existingData) {
+              try {
+                insertStmt.run(
+                  row.id, row.fact_type, row.subject, row.predicate, row.object,
+                  row.confidence, row.source_conversation_id, row.created_at,
+                  row.updated_at, row.last_confirmed_at || null, row.source_text || null
+                );
+                count++;
+              } catch (e) {
+                console.warn('[Migrate] Skip fact:', row.id, e.message);
+              }
             }
-          }
-          console.log(`[Migrate] Rebuilt memory_facts with 'personal' type, restored ${existingData.length} rows`);
+            return count;
+          });
+
+          const restoredCount = rebuildFacts();
+          console.log(`[Migrate] Rebuilt memory_facts with 'personal' type, restored ${restoredCount} rows`);
         }
       }
 

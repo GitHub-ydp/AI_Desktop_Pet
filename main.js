@@ -22,9 +22,29 @@ const {
   getIntimacyWindowBoundsFromMain
 } = require('./src/bubble-window-utils');
 
+const APP_DISPLAY_NAME = 'AI桌宠';
+const APP_USER_MODEL_ID = 'com.jizhang.ai-desktop-pet';
+
 // 忽略 stdout/stderr 管道断开错误（npm start 关闭终端后常见，无需弹窗提示）
 process.stdout.on('error', (err) => { if (err.code === 'EPIPE') return; });
 process.stderr.on('error', (err) => { if (err.code === 'EPIPE') return; });
+
+// 全局未捕获异常处理，防止主进程无声崩溃
+// 捕获同步异常（如模块初始化失败、空指针等）
+process.on('uncaughtException', (err) => {
+  console.error('[Main] uncaughtException:', err.message);
+  console.error(err.stack);
+  // 不退出进程，允许应用继续运行（Electron 窗口仍可操作）
+});
+// 捕获未处理的 Promise rejection（如 async 函数内未 catch 的错误）
+process.on('unhandledRejection', (reason) => {
+  console.error('[Main] unhandledRejection:', reason instanceof Error ? reason.stack : reason);
+});
+
+app.setName(APP_DISPLAY_NAME);
+if (process.platform === 'win32' && typeof app.setAppUserModelId === 'function') {
+  app.setAppUserModelId(APP_USER_MODEL_ID);
+}
 
 // 加载环境变量（从 .env 文件）
 require('dotenv').config();
@@ -878,6 +898,7 @@ function getProviderApiKeyByProvider(provider) {
 // 创建主窗口（只显示宠物本体）
 function createWindow() {
   mainWindow = new BrowserWindow({
+    title: APP_DISPLAY_NAME,
     width: WINDOW_SIZES.small.width,   // 默认小尺寸
     height: WINDOW_SIZES.small.height,
     x: 100,
@@ -1468,7 +1489,7 @@ function createTray() {
     }
   ]);
 
-  tray.setToolTip('AI Desktop Pet');
+  tray.setToolTip(APP_DISPLAY_NAME);
   tray.setContextMenu(contextMenu);
 
   tray.on('double-click', () => {
@@ -1487,7 +1508,7 @@ function setAutoLaunch() {
   app.setLoginItemSettings({
     openAtLogin: true,
     openAsHidden: false,
-    name: 'AI Desktop Pet'
+    name: APP_DISPLAY_NAME
   });
 }
 
@@ -1891,6 +1912,12 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('skill:reload', () => reloadSkillsRegistry());
 
+  ipcMain.handle('agent:inject-message', async (event, { runId, text } = {}) => {
+    if (!agentRuntime) return { ok: false, error: 'agent not ready' };
+    const ok = agentRuntime.injectMessage(runId, text);
+    return { ok };
+  });
+
   ipcMain.handle('mcp:list', () => {
     if (mcpRuntime) return mcpRuntime.listServers();
     if (mcpRegistry) return mcpRegistry.listServers();
@@ -2153,6 +2180,7 @@ function createChildWindow(options) {
   }
 
   const childWindow = new BrowserWindow({
+    title: title || APP_DISPLAY_NAME,
     width: childW,
     height: childH,
     x: childX,
@@ -2626,8 +2654,13 @@ ipcMain.on('settings:change', (event, payload) => {
     syncMemoryApiKey();
   }
 
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send('settings:change', payload);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('settings:change', payload);
+  }
+  childWindows.forEach((window) => {
+    if (!window || window.isDestroyed()) return;
+    window.webContents.send('settings:change', payload);
+  });
 });
 
 // 菜单窗口宠物状态切换 -> 主窗口
@@ -2724,6 +2757,14 @@ ipcMain.on('open-screenshots-folder', () => {
   const path = require('path');
   const screenshotsDir = path.join(app.getPath('userData'), 'screenshots');
   shell.openPath(screenshotsDir);
+});
+
+// 在系统默认浏览器中打开外部 URL（只允许 https:// 链接）
+ipcMain.handle('open-external-url', (event, url) => {
+  if (typeof url === 'string' && url.startsWith('https://')) {
+    const { shell } = require('electron');
+    shell.openExternal(url);
+  }
 });
 
 ipcMain.handle('minimize-window', () => {

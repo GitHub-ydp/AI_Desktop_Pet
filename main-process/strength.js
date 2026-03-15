@@ -68,11 +68,15 @@ function calcNewStability(oldS, R, triggerCount = 0) {
   const baseGrowth = config.baseGrowth;  // 2.2
   const initialStability = config.initialStability;  // 24（1天）
 
+  // 下限保护：stability=0 时视为新记忆，从 initialStability 开始恢复
+  // 不加此保护时，0 * growthFactor = 0，stability 永远无法恢复
+  const effectiveOldS = Math.max(oldS || 0, initialStability);
+
   // 饱和衰减：S 越大，增长因子越低
   // 当 S = initialStability 时 saturation ≈ 1.0
   // 当 S = initialStability × 180 时 saturation ≈ 0.5
   // 当 S = initialStability × 365 时 saturation ≈ 0.35
-  const saturation = 1 / (1 + Math.log(1 + oldS / initialStability));
+  const saturation = 1 / (1 + Math.log(1 + effectiveOldS / initialStability));
 
   // 困难奖励：R 越低（快要遗忘时被回忆起来），增长越多
   // R=1.0 时 difficultyBonus=1.0，R=0.3 时 difficultyBonus≈1.35
@@ -82,13 +86,13 @@ function calcNewStability(oldS, R, triggerCount = 0) {
   const growthFactor = 1 + (baseGrowth - 1) * saturation * difficultyBonus;
 
   // 计算新 S
-  let newS = oldS * growthFactor;
+  let newS = effectiveOldS * growthFactor;
 
   // 上限：1年 = 8760 小时
   newS = Math.min(newS, config.maxStability);
 
-  // 下限：不低于旧值（强化只能增强，不能削弱）
-  newS = Math.max(newS, oldS);
+  // 下限：不低于有效旧值（强化只能增强，不能削弱）
+  newS = Math.max(newS, effectiveOldS);
 
   return newS;
 }

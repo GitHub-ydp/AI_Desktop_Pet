@@ -9,7 +9,15 @@ async function directDeepSeekChat(userMessage, personality, chatHistory = []) {
     throw new Error('no deepseek api key');
   }
 
-  const systemPrompt = window.PersonalityPrompts?.getPrompt?.(personality) || '你是一个可爱的桌面宠物助手，请用中文简短回复。';
+  const basePrompt = window.PersonalityPrompts?.getPersonalityPrompt?.(personality)
+    || '你是一个可爱的桌面宠物助手，请用中文简短回复。';
+  let systemPrompt = basePrompt;
+  try {
+    const settings = JSON.parse(localStorage.getItem('settings') || '{}');
+    if (settings.petName) {
+      systemPrompt = `你的名字是「${settings.petName}」，主人这样称呼你。\n\n${basePrompt}`;
+    }
+  } catch (e) {}
   const messages = [{ role: 'system', content: systemPrompt }];
 
   // 附带最近 10 条历史（来自 app-vanilla.js 的 state.chatHistory）
@@ -56,6 +64,10 @@ async function chatWithAI(userMessage, personality, chatHistory = []) {
     throw new Error('empty reply');
   } catch (error) {
     console.warn('[API] directDeepSeekChat failed:', error.message);
+    // 区分"未配置 API Key"和其他错误，给出明确的引导而非模糊提示
+    if (error.message === 'no deepseek api key') {
+      return '还没有配置 API Key 哦~\n点击菜单 → 设置 → API Key 管理，填入 DeepSeek Key 就能开始聊天啦！';
+    }
     return '遇到了点问题，请稍后再试~';
   }
 }
