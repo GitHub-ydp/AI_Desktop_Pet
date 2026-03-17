@@ -845,6 +845,11 @@ function closeWindow() {
   if (window.electron && window.electron.closeChildWindow) window.electron.closeChildWindow('settings');
 }
 
+function reopenInitWizard() {
+  sendSettingsChange({ type: 'rerun-init-wizard' });
+  closeWindow();
+}
+
 const factTypeFilter = document.getElementById('fact-type-filter');
 if (factTypeFilter) {
   factTypeFilter.addEventListener('change', function onFactFilterChange() {

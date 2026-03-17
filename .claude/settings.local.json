@@ -50,7 +50,19 @@
       "WebFetch(domain:borretti.me)",
       "Bash(rm:*)",
       "Bash(/tmp/test-plan.md:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "mcp__zread__search_doc",
+      "mcp__web-search-prime__web_search_prime",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.remotion.dev)",
+      "Bash(npx skills:*)",
+      "Bash(mv:*)",
+      "Bash(ls:*)",
+      "Bash(python:*)",
+      "Bash(D:\\\\kaifa\\\\Anaconda\\\\envs\\\\main310\\\\python.exe:*)",
+      "Bash(find:*)",
+      "Bash(cd:*)",
+      "Bash(grep:*)"
     ]
   }
 }

@@ -7,19 +7,6 @@
   <script src="../src/theme-manager.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #020810; --bg-surface: rgba(0, 15, 30, 0.98); --bg-card: rgba(0, 30, 55, 0.6);
-      --border: rgba(0, 255, 240, 0.3); --border-bright: rgba(0, 255, 240, 0.7); --neon-cyan: #00fff0;
-      --neon-magenta: #ff2d78; --text: #cff0ff; --text-muted: rgba(160, 220, 240, 0.6);
-      --header-bg: rgba(0, 15, 30, 0.98); --input-area-bg: rgba(0, 12, 25, 0.98); --input-field-bg: rgba(0, 16, 32, 0.75);
-      --accent-bg-dim: rgba(0, 255, 240, 0.08); --accent-bg-faint: rgba(0, 255, 240, 0.05); --accent-hover-bg: rgba(0, 255, 240, 0.1);
-      --danger-border: rgba(255, 45, 120, 0.5); --danger-hover-bg: rgba(255, 45, 120, 0.08); --confirm-bg: rgba(0, 20, 45, 0.98);
-      --memory-divider: rgba(0, 255, 240, 0.06); --memory-tag-preference: #b46cff; --memory-tag-relationship: #ffb432;
-      --memory-tag-event: #32dc78; --memory-tag-routine: #ff6450; --memory-tag-preference-border: rgba(180, 100, 255, 0.4);
-      --memory-tag-relationship-border: rgba(255, 180, 50, 0.4); --memory-tag-event-border: rgba(50, 220, 120, 0.4);
-      --memory-tag-routine-border: rgba(255, 100, 80, 0.4);
-      --glow-sm: 0 0 8px rgba(0, 255, 240, 0.4); --danger-glow: 0 0 8px rgba(255, 45, 120, 0.4); --radius: 10px;
-    }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
     .window-header { height: 50px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; background: var(--header-bg); border-bottom: 1px solid var(--border); -webkit-app-region: drag; flex-shrink: 0; }
     .window-title { font-size: 14px; font-weight: 600; color: var(--neon-cyan); letter-spacing: 0.5px; }
@@ -51,7 +38,7 @@
     .toggle-switch input { opacity: 0; width: 0; height: 0; }
     .toggle-slider { position: absolute; inset: 0; border-radius: 999px; border: 1px solid var(--border); background: rgba(0, 16, 32, 0.75); cursor: pointer; transition: background 0.2s ease, border-color 0.2s ease; }
     .toggle-slider::before { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--text-muted); transition: transform 0.2s ease, background 0.2s ease; }
-    .toggle-switch input:checked + .toggle-slider { background: rgba(0, 255, 240, 0.16); border-color: var(--border-bright); }
+    .toggle-switch input:checked + .toggle-slider { background: var(--accent-bg-checked, rgba(0, 255, 240, 0.16)); border-color: var(--border-bright); }
     .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); background: var(--neon-cyan); }
     .pet-grid { display: grid; grid-template-columns: repeat(2, minmax(180px, 220px)); gap: 14px; }
     .pet-card { padding: 18px; display: flex; align-items: center; gap: 14px; cursor: pointer; position: relative; transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
@@ -80,7 +67,7 @@
     .scene-panel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
     .scene-panel-title { font-size: 15px; font-weight: 600; color: var(--text); }
     .scene-panel-desc { margin-top: 4px; font-size: 12px; line-height: 1.7; color: var(--text-muted); }
-    .scene-source-tag { border: 1px solid rgba(0, 255, 240, 0.25); border-radius: 999px; padding: 4px 8px; color: var(--neon-cyan); background: rgba(0, 255, 240, 0.08); font-size: 11px; white-space: nowrap; }
+    .scene-source-tag { border: 1px solid var(--border, rgba(0, 255, 240, 0.25)); border-radius: 999px; padding: 4px 8px; color: var(--neon-cyan); background: var(--accent-bg-faint, rgba(0, 255, 240, 0.08)); font-size: 11px; white-space: nowrap; }
     .scene-panel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .scene-field { display: flex; flex-direction: column; gap: 8px; }
     .scene-field.full { grid-column: 1 / -1; }
@@ -108,7 +95,7 @@
     .theme-card:hover { border-color: var(--border-bright); box-shadow: var(--glow-sm); transform: translateY(-1px); }
     .theme-card.active { border-color: var(--neon-cyan); box-shadow: var(--glow-sm); }
     .theme-card.active .active-badge { display: inline-flex; }
-    .active-badge { display: none; position: absolute; top: 10px; right: 10px; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 700; color: var(--neon-cyan); background: rgba(0, 255, 240, 0.08); border: 1px solid rgba(0, 255, 240, 0.28); z-index: 1; }
+    .active-badge { display: none; position: absolute; top: 10px; right: 10px; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 700; color: var(--neon-cyan); background: var(--accent-bg-faint, rgba(0, 255, 240, 0.08)); border: 1px solid var(--border, rgba(0, 255, 240, 0.28)); z-index: 1; }
     .theme-preview { height: 72px; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; }
     .preview-classic { background: linear-gradient(135deg, #F7F7F7 0%, #EDEDED 100%); }
     .preview-cyberpunk { background: linear-gradient(135deg, #020810 0%, #001833 100%); }
@@ -142,7 +129,7 @@
     .fact-item:last-child { border-bottom: none; }
     .fact-item:hover { background: var(--accent-bg-faint); border-radius: 6px; }
     .fact-type-tag { font-size: 10px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
-    .fact-type-tag.personal { border-color: rgba(0, 255, 240, 0.4); color: var(--neon-cyan); }
+    .fact-type-tag.personal { border-color: var(--border-bright, rgba(0, 255, 240, 0.4)); color: var(--neon-cyan); }
     .fact-type-tag.preference { border-color: var(--memory-tag-preference-border); color: var(--memory-tag-preference); }
     .fact-type-tag.relationship { border-color: var(--memory-tag-relationship-border); color: var(--memory-tag-relationship); }
     .fact-type-tag.event { border-color: var(--memory-tag-event-border); color: var(--memory-tag-event); }
@@ -165,7 +152,7 @@
     .btn-outline { border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--neon-cyan); transition: border-color 0.2s ease, background 0.2s ease; }
     .btn-outline:hover { border-color: var(--border-bright); background: var(--accent-hover-bg); }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-    ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(0, 255, 240, 0.25); }
+    ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--scrollbar, rgba(0, 255, 240, 0.25)); }
     @media (max-width: 820px) {
       .app-body { flex-direction: column; }
       .sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; padding: 10px; border-right: none; border-bottom: 1px solid var(--border); }
@@ -194,7 +181,7 @@
     </nav>
     <main class="content-area">
       <section class="settings-panel active" data-section="pet">
-        <div class="panel-shell"><div class="panel-header"><div class="panel-title">宠物形象</div><div class="panel-desc">当前版本仅开放猫咪形象。狗狗入口先保留占位，后续补充完整资源后开放。</div></div><div class="pet-grid" id="petSelector"><div class="pet-card" data-pet="🐱" onclick="selectPet('🐱')"><div class="pet-emoji">🐱</div><div><div class="pet-name">猫咪</div><div class="pet-desc">当前可用，支持现有动画与状态切换。</div></div></div><div class="pet-card disabled" data-pet="🐶"><span class="coming-soon">敬请期待</span><div class="pet-emoji">🐶</div><div><div class="pet-name">狗狗</div><div class="pet-desc">资源与交互还在补齐，暂不可选择。</div></div></div></div></div>
+        <div class="panel-shell"><div class="panel-header"><div class="panel-title">宠物形象</div><div class="panel-desc">当前版本仅开放猫咪形象。狗狗入口先保留占位，后续补充完整资源后开放。</div></div><div class="pet-grid" id="petSelector"><div class="pet-card" data-pet="🐱" onclick="selectPet('🐱')"><div class="pet-emoji">🐱</div><div><div class="pet-name">猫咪</div><div class="pet-desc">当前可用，支持现有动画与状态切换。</div></div></div><div class="pet-card disabled" data-pet="🐶"><span class="coming-soon">敬请期待</span><div class="pet-emoji">🐶</div><div><div class="pet-name">狗狗</div><div class="pet-desc">资源与交互还在补齐，暂不可选择。</div></div></div></div><div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)"><div class="section-subtitle" style="margin-bottom:10px">初始化向导</div><p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">重新运行向导，可修改昵称、宠物设定和 API Key 等初始信息。</p><button type="button" style="background:transparent;border:1px solid var(--border);color:var(--text-muted);padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='var(--neon-cyan)';this.style.color='var(--neon-cyan)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'" onclick="reopenInitWizard()">重新运行初始化向导</button></div></div>
       </section>
       <section class="settings-panel" data-section="personality">
         <div class="panel-shell"><div class="panel-header"><div class="panel-title">性格风格</div><div class="panel-desc">切换后会立即影响后续对话风格。性格 prompt 会始终作为 system prompt 的最前部分参与请求。</div></div><div class="personality-grid" id="personalitySelector"><div class="personality-option" data-personality="healing" onclick="selectPersonality('healing')"><div class="personality-emoji">💖</div><div><div class="personality-name">治愈陪伴型</div><div class="personality-desc">温柔体贴，偏重情绪安抚与陪伴感。</div></div></div><div class="personality-option" data-personality="funny" onclick="selectPersonality('funny')"><div class="personality-emoji">😄</div><div><div class="personality-name">搞笑逗比型</div><div class="personality-desc">更活泼、更会接梗，回复里会带点自然玩笑。</div></div></div><div class="personality-option" data-personality="cool" onclick="selectPersonality('cool')"><div class="personality-emoji">😼</div><div><div class="personality-name">毒舌傲娇型</div><div class="personality-desc">嘴硬一点，但仍然会认真回应和关心你。</div></div></div><div class="personality-option" data-personality="assistant" onclick="selectPersonality('assistant')"><div class="personality-emoji">🧠</div><div><div class="personality-name">贴心助理型</div><div class="personality-desc">更直接、更实用，偏向清晰建议和执行导向。</div></div></div></div></div>
@@ -460,6 +447,7 @@
     function confirmReset() { document.getElementById('resetConfirmDialog').classList.remove('show'); window.PetStorage.resetAllData(); sendSettingsChange({ type: 'reset' }); loadSettings(); showToast('数据已重置'); }
     function saveAndClose() { closeWindow(); }
     function closeWindow() { persistPendingMood(false); clearBubblePreviewHideTimer(); if (window.electron && window.electron.hideBubble) window.electron.hideBubble(); if (window.electron && window.electron.closeChildWindow) window.electron.closeChildWindow('settings'); }
+    function reopenInitWizard() { sendSettingsChange({ type: 'rerun-init-wizard' }); closeWindow(); }
     const factTypeFilter = document.getElementById('fact-type-filter');
     if (factTypeFilter) factTypeFilter.addEventListener('change', function() { const val = this.value; const filtered = val ? allFacts.filter((f) => f.fact_type === val) : allFacts; renderFacts(filtered); });
     const clearProfileButton = document.getElementById('btn-clear-profile');

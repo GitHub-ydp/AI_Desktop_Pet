@@ -30,19 +30,28 @@ async function directDeepSeekChat(userMessage, personality, chatHistory = []) {
   }
   messages.push({ role: 'user', content: userMessage });
 
-  const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages,
-      max_tokens: 500,
-      temperature: 0.8
-    })
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
+  let resp;
+  try {
+    resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages,
+        max_tokens: 500,
+        temperature: 0.8
+      })
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => resp.status);

@@ -201,7 +201,8 @@
   }
 
   function getCurrentTheme() {
-    return localStorage.getItem('pet_theme') || 'classic';
+    // 默认使用 lazyCat 暖色主题，更符合宠物应用的温暖定位
+    return localStorage.getItem('pet_theme') || 'lazyCat';
   }
 
   function saveTheme(name) {

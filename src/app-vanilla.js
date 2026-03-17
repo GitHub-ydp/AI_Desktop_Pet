@@ -269,8 +269,8 @@ function openInitModal() {
     window.electron.createChildWindow({
       id: 'init',
       title: '初始化设置',
-      width: 450,
-      height: 550,
+      width: 500,
+      height: 580,
       html: 'windows/init-window.html'
     });
 
@@ -284,18 +284,53 @@ function openInitModal() {
 
 // 处理初始化完成
 async function handleInitCompleted(event) {
-  const { name, gender, birthday, interests } = event.detail;
+  const { name, gender, birthday, interests, petEmoji, petName, personality, apiKey, apiKeySet } = event.detail;
+
+  // 同步宠物选择
+  if (petEmoji) {
+    selectPet(petEmoji);
+  }
+
+  // 同步性格（不清空历史，直接赋值）
+  if (personality && personality !== state.currentPersonality) {
+    state.currentPersonality = personality;
+    saveData();
+  }
+
+  // 保存宠物名（同时同步到 state.settings，防止 saveData() 覆盖）
+  if (petName) {
+    window.PetStorage.updateSetting('petName', petName);
+    state.settings.petName = petName;
+    if (window.electron && window.electron.sendSettingsChange) {
+      window.electron.sendSettingsChange({ type: 'pet-name', petName });
+    }
+  }
+
+  // 保存 API Key
+  if (apiKeySet && apiKey) {
+    try {
+      if (window.electron && window.electron.saveProviderAPIKey) {
+        await window.electron.saveProviderAPIKey('deepseek', apiKey);
+        console.log('[Init] DeepSeek API key saved');
+      }
+    } catch (err) {
+      console.error('[Init] Failed to save API key:', err);
+    }
+  }
 
   // 构建用户信息消息
   let userInfoMessage = `我叫${name}`;
-  if (gender && gender !== '其他') {
-    userInfoMessage += `，我是${gender}生`;
+  if (gender) {
+    userInfoMessage += `，称谓是${gender}`;
   }
   if (birthday) {
     userInfoMessage += `，我的生日是${birthday}`;
   }
   if (interests) {
     userInfoMessage += `，我喜欢${interests}`;
+  }
+  if (petName) {
+    userInfoMessage += `，我的宠物叫${petName}`;
   }
 
   console.log('[Init] User info:', userInfoMessage);
@@ -311,12 +346,21 @@ async function handleInitCompleted(event) {
       console.log('[Init] User profile saved to memory');
 
       // 生成AI的确认回复
-      const confirmMessage = `好的${name}，我记住啦！以后我会好好陪伴你的~ 💕`;
+      const petGreet = petName ? `我会好好照顾${petName}的！` : '';
+      const confirmMessage = `好的${name}，我记住啦！${petGreet}以后我会好好陪伴你的~ 💕`;
       await window.PetMemory.addConversation('assistant', confirmMessage, {
         personality: state.currentPersonality,
         mood: state.mood,
         extra: { type: 'profile_confirmation' }
       });
+
+      // 立即触发事实提取，写入 user_profile 表（否则需等待 3 轮对话积累）
+      try {
+        await window.PetMemory.flushFacts();
+        console.log('[Init] Facts flushed to user_profile');
+      } catch (e) {
+        console.warn('[Init] flushFacts failed (non-fatal):', e);
+      }
 
       // 显示欢迎消息
       showBubbleMessage(confirmMessage);
@@ -424,8 +468,9 @@ async function init() {
 
   console.log('App initialized!');
 
-  // 检查是否需要初始化
-  await checkIfNeedsInit();
+  // 检查是否需要初始化（优先使用 first-run.js 注入的 patchedCheckIfNeedsInit）
+  const _checkInit = window.checkIfNeedsInit || checkIfNeedsInit;
+  await _checkInit();
   updateIntimacyUI();
   checkDailyLogin();
 }
@@ -454,7 +499,11 @@ function initSettingsIpc() {
   if (!window.electron || !window.electron.onSettingsChange) return;
   window.electron.onSettingsChange((event, data) => {
     if (!data || !data.type) return;
-    if (data.type === 'pet') {
+    if (data.type === 'init-completed') {
+      void handleInitCompleted({ detail: data.detail || {} });
+    } else if (data.type === 'init-skipped') {
+      handleInitSkipped();
+    } else if (data.type === 'pet') {
       state.currentPet = data.pet;
       if (window.PetAnimations) {
         window.PetAnimations.setBasePet(data.pet);
@@ -480,6 +529,9 @@ function initSettingsIpc() {
       state.mood = Number.isFinite(nextMood) ? Math.max(0, Math.min(100, Math.round(nextMood))) : state.mood;
       saveData();
       updateUI();
+    } else if (data.type === 'pet-name') {
+      state.settings.petName = typeof data.petName === 'string' ? data.petName : state.settings.petName;
+      saveData();
     } else if (data.type === 'reset') {
       window.PetStorage.resetAllData();
       loadData();
@@ -494,6 +546,20 @@ function initSettingsIpc() {
     } else if (data.type === 'intimacy-widget-offset-update') {
       state.settings.intimacyWidgetOffset = normalizeIntimacyWidgetOffset(data.offset);
       applyIntimacyWidgetOffset();
+    } else if (data.type === 'rerun-init-wizard') {
+      // 绕过 first-run.js 的两层拦截（patchedOpenInitModal + createChildWindow 拦截器）
+      if (window.electron && window.electron.createChildWindow) {
+        window.electron.createChildWindow({
+          id: 'init',
+          title: '初始化设置',
+          width: 500,
+          height: 580,
+          html: 'windows/init-window.html',
+          _forceOpen: true
+        });
+        window.addEventListener('init-completed', handleInitCompleted, { once: true });
+        window.addEventListener('init-skipped', handleInitSkipped, { once: true });
+      }
     }
   });
 }
@@ -654,6 +720,16 @@ function saveData() {
     mood: state.mood,
     lastInteraction: Date.now()
   });
+
+  // 防止 state.settings 中的旧值覆盖 first-run.js 等外部模块写入的单向标志
+  // 这些标志只能 false→true，一旦为 true 就不可逆
+  const persisted = window.PetStorage.getSettings();
+  if (persisted.welcomeOverlayDismissed) state.settings.welcomeOverlayDismissed = true;
+  if (persisted.profileSetupCompleted) state.settings.profileSetupCompleted = true;
+  if (persisted.profilePromptDeferred) state.settings.profilePromptDeferred = true;
+  // 防止外部模块写入的 petName 被 state.settings 中的空值覆盖
+  if (persisted.petName && !state.settings.petName) state.settings.petName = persisted.petName;
+
   window.PetStorage.saveSettings(state.settings);
 }
 
@@ -1600,6 +1676,7 @@ function initReminderListener() {
 
     // 播放提醒音效（如果支持）
     playReminderSound();
+
   });
 
   // 监听过期提醒事件
@@ -1650,6 +1727,20 @@ function initHealthReminderListener() {
     return;
   }
 
+  const applyReminderPetState = (stateName, duration = 3000) => {
+    if (!window.PetAnimations || !stateName) return;
+    if (stateName === 'idle') {
+      window.PetAnimations.unlockManualState();
+      return;
+    }
+    window.PetAnimations.setManualState(stateName);
+    setTimeout(() => {
+      if (window.PetAnimations && typeof window.PetAnimations.unlockManualState === 'function') {
+        window.PetAnimations.unlockManualState();
+      }
+    }, duration);
+  };
+
   // 监听健康提醒触发事件
   window.PetHealth.onTriggered((data) => {
     console.log('[Health] Triggered:', data);
@@ -1660,14 +1751,17 @@ function initHealthReminderListener() {
     // 播放提醒音效
     playReminderSound();
 
+    if (window.PetAnimations && (data.type === 'eyecare' || data.type === 'eye')) {
+      applyReminderPetState('playing', 3200);
+      return;
+    }
+
     // 根据提醒类型播放不同动画
     if (window.PetAnimations) {
       if (data.type === 'water') {
-        window.PetAnimations.setManualState('happy');
-        setTimeout(() => window.PetAnimations.unlockManualState(), 3000);
+        applyReminderPetState('happy', 3000);
       } else if (data.type === 'eyecare' || data.type === 'eye') {
         window.PetAnimations.setManualState('thinking'); // 揉眼睛的感觉
-        setTimeout(() => window.PetAnimations.unlockManualState(), 3000);
       } else if (data.type === 'sedentary' || data.type === 'exercise') {
         window.PetAnimations.setManualState('exercising'); // 锻炼动画
         setTimeout(() => window.PetAnimations.unlockManualState(), 4000);

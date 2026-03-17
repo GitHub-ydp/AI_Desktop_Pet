@@ -1,5 +1,5 @@
 // 分享卡片生成器
-// offscreen: true 离屏渲染 + 订阅 paint 事件激活渲染管线
+// 使用普通窗口定位到屏幕外（非离屏渲染），规避 Electron offscreen 黑帧问题
 // CommonJS
 
 const { BrowserWindow, clipboard, dialog, app, screen } = require('electron');
@@ -28,7 +28,6 @@ class ShareCardManager {
     return new Promise((resolve, reject) => {
       let settled = false;
       let managedDestroy = false;
-      let latestFrame = null; // paint 事件收到的最新帧
 
       const settle = (handler) => {
         if (settled) return;
@@ -47,11 +46,13 @@ class ShareCardManager {
           show: false,
           frame: false,
           skipTaskbar: true,
+          alwaysOnTop: false,
           backgroundColor: '#04131f',
+          paintWhenInitiallyHidden: true,
           webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            offscreen: true  // 离屏渲染：不需要窗口可见，GPU 直接渲染到缓冲区
+            backgroundThrottling: false
           }
         });
 
@@ -60,12 +61,6 @@ class ShareCardManager {
         };
 
         this.pendingWindow = win;
-
-        // 关键：订阅 paint 事件才能激活离屏渲染管线
-        // 无此订阅时 Electron 不会主动绘制任何帧
-        win.webContents.on('paint', (event, dirty, image) => {
-          latestFrame = image;
-        });
 
         win.on('closed', () => {
           cleanup();
@@ -81,22 +76,26 @@ class ShareCardManager {
         });
 
         win.webContents.once('did-finish-load', () => {
-          // 等待 JS / CSS 渲染完成，paint 事件至少触发一次
-          // 800ms：数字动画跑完 + 字体渲染 + 背景特效
-          setTimeout(async () => {
+          const MAX_WAIT = 4000;
+          const startTime = Date.now();
+
+          const checkReady = setInterval(async () => {
             try {
               if (win.isDestroyed()) throw new Error('window destroyed');
 
-              // 优先使用 paint 事件收到的最新帧（最可靠）
-              // 若没收到帧则回退到 capturePage（理论上不会发生）
-              let image = latestFrame;
-              if (!image || image.isEmpty()) {
-                console.warn('[ShareCard] No paint frame received, falling back to capturePage');
-                image = await win.webContents.capturePage();
-              }
+              const elapsed = Date.now() - startTime;
+              const timeout = elapsed >= MAX_WAIT;
+              const isPageReady = await win.webContents.executeJavaScript(
+                'window.__shareCardReady === true'
+              ).catch(() => false);
+
+              if (!isPageReady && !timeout) return;
+
+              clearInterval(checkReady);
+
+              const image = await win.webContents.capturePage();
               if (!image || image.isEmpty()) throw new Error('captured image is empty');
 
-              // 离屏渲染图像尺寸跟随设备 DPI，需缩放回逻辑像素 750×420
               const scaleFactor = screen.getPrimaryDisplay().scaleFactor;
               const finalImage = scaleFactor !== 1
                 ? image.resize({ width: 750, height: 420 })
@@ -116,12 +115,10 @@ class ShareCardManager {
                   defaultPath,
                   filters: [{ name: 'PNG 图片', extensions: ['png'] }]
                 });
-
                 if (canceled || !filePath) {
                   settle(() => resolve({ success: false, canceled: true }));
                   return;
                 }
-
                 fs.writeFileSync(filePath, finalImage.toPNG());
                 settle(() => resolve({ success: true, mode: 'save', filePath }));
                 return;
@@ -130,12 +127,13 @@ class ShareCardManager {
               clipboard.writeImage(finalImage);
               settle(() => resolve({ success: true, mode: 'clipboard' }));
             } catch (error) {
+              clearInterval(checkReady);
               managedDestroy = true;
               if (!win.isDestroyed()) win.destroy();
               cleanup();
               settle(() => reject(error));
             }
-          }, 800);
+          }, 100);
         });
 
         win.loadFile(

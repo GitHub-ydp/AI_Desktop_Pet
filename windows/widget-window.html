@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>小组件</title>
+  <script src="../src/theme-manager.js"></script>
   <style>
     * {
       margin: 0;
@@ -29,12 +30,12 @@
       align-items: center;
       margin-bottom: 16px;
       padding-bottom: 12px;
-      border-bottom: 1px solid rgba(0, 255, 240, 0.2);
+      border-bottom: 1px solid var(--border, rgba(0, 255, 240, 0.2));
     }
 
     .header h1 {
       font-size: 18px;
-      color: #00fff0;
+      color: var(--neon-cyan, #00fff0);
       text-shadow: 0 0 10px rgba(0, 255, 240, 0.5);
     }
 
@@ -58,7 +59,7 @@
     /* 小组件卡片 */
     .widget-card {
       background: rgba(0, 30, 55, 0.6);
-      border: 1px solid rgba(0, 255, 240, 0.2);
+      border: 1px solid var(--border, rgba(0, 255, 240, 0.2));
       border-radius: 8px;
       padding: 16px;
       margin-bottom: 12px;
@@ -86,8 +87,8 @@
     .refresh-btn {
       padding: 4px 8px;
       background: transparent;
-      border: 1px solid rgba(0, 255, 240, 0.3);
-      color: rgba(0, 255, 240, 0.7);
+      border: 1px solid var(--border, rgba(0, 255, 240, 0.3));
+      color: var(--text-muted, rgba(0, 255, 240, 0.7));
       font-size: 11px;
       cursor: pointer;
       border-radius: 4px;
@@ -95,8 +96,8 @@
     }
 
     .refresh-btn:hover {
-      border-color: #00fff0;
-      color: #00fff0;
+      border-color: var(--neon-cyan, #00fff0);
+      color: var(--neon-cyan, #00fff0);
     }
 
     /* 天气小组件 */
@@ -114,7 +115,7 @@
     .weather-temp {
       font-size: 36px;
       font-weight: bold;
-      color: #00fff0;
+      color: var(--neon-cyan, #00fff0);
     }
 
     .weather-temp span {
@@ -186,8 +187,8 @@
     }
 
     .calendar-nav-btn:hover {
-      border-color: #00fff0;
-      color: #00fff0;
+      border-color: var(--neon-cyan, #00fff0);
+      color: var(--neon-cyan, #00fff0);
     }
 
     .calendar-weekdays {
@@ -222,7 +223,7 @@
     }
 
     .calendar-day:hover {
-      background: rgba(0, 255, 240, 0.1);
+      background: var(--accent-bg-faint, rgba(0, 255, 240, 0.1));
     }
 
     .calendar-day.empty {
@@ -230,8 +231,8 @@
     }
 
     .calendar-day.today {
-      background: rgba(0, 255, 240, 0.3);
-      color: #00fff0;
+      background: var(--accent-bg-checked, rgba(0, 255, 240, 0.3));
+      color: var(--neon-cyan, #00fff0);
       font-weight: bold;
     }
 
@@ -268,13 +269,13 @@
     }
 
     .todo-stat:hover {
-      background: rgba(0, 255, 240, 0.1);
+      background: var(--accent-bg-faint, rgba(0, 255, 240, 0.1));
     }
 
     .todo-stat-value {
       font-size: 24px;
       font-weight: bold;
-      color: #00fff0;
+      color: var(--neon-cyan, #00fff0);
     }
 
     .todo-stat.overdue .todo-stat-value {
@@ -303,7 +304,7 @@
       flex: 1;
       padding: 6px 10px;
       background: rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(0, 255, 240, 0.3);
+      border: 1px solid var(--border, rgba(0, 255, 240, 0.3));
       border-radius: 4px;
       color: #fff;
       font-size: 12px;
@@ -311,14 +312,14 @@
 
     .location-input input:focus {
       outline: none;
-      border-color: #00fff0;
+      border-color: var(--neon-cyan, #00fff0);
     }
 
     .location-input button {
       padding: 6px 12px;
-      background: rgba(0, 255, 240, 0.2);
-      border: 1px solid #00fff0;
-      color: #00fff0;
+      background: var(--accent-bg-dim, rgba(0, 255, 240, 0.2));
+      border: 1px solid var(--neon-cyan, #00fff0);
+      color: var(--neon-cyan, #00fff0);
       font-size: 12px;
       cursor: pointer;
       border-radius: 4px;
@@ -331,10 +332,10 @@
       left: 50%;
       transform: translateX(-50%);
       padding: 8px 16px;
-      background: rgba(0, 255, 240, 0.2);
-      border: 1px solid #00fff0;
+      background: var(--accent-bg-dim, rgba(0, 255, 240, 0.2));
+      border: 1px solid var(--neon-cyan, #00fff0);
       border-radius: 4px;
-      color: #00fff0;
+      color: var(--neon-cyan, #00fff0);
       font-size: 12px;
       opacity: 0;
       transition: opacity 0.3s;

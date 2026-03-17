@@ -38,7 +38,8 @@ const DEFAULTS = {
     llmSceneConfig: DEFAULT_LLM_SCENE_CONFIG,
     welcomeOverlayDismissed: false,
     profileSetupCompleted: false,
-    profilePromptDeferred: false
+    profilePromptDeferred: false,
+    petName: ''
   }
 };
 

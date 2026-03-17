@@ -6,36 +6,95 @@
   <title>宠物的小窝</title>
   <script src="../src/theme-manager.js"></script>
   <script src="../src/plan-manager.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+  <script src="../assets/lib/lottie.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
-      background: var(--bg, #020810);
-      color: var(--text, #cff0ff);
+      background: var(--bg, #1a0e05);
+      color: var(--text, #ffe8cc);
       display: flex;
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
     }
     .window-header {
-      height: 46px;
+      height: 58px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 12px 0 16px;
+      padding: 0 10px 0 14px;
       border-bottom: 1px solid var(--border, rgba(0,255,240,0.3));
       background: var(--header-bg, rgba(0,15,30,0.98));
-      color: var(--neon-cyan, #00fff0);
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+    .header-pet-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+    }
+    .header-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--accent-bg-dim, rgba(0,255,240,0.08));
+      border: 1.5px solid var(--border, rgba(0,255,240,0.25));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .header-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .pet-name {
       font-size: 14px;
       font-weight: 700;
-      -webkit-app-region: drag;
+      color: var(--neon-cyan, #00fff0);
+      text-shadow: var(--glow-sm, 0 0 8px rgba(0,255,240,0.4));
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 140px;
+    }
+    .mood-mini-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .mood-bar {
+      width: 56px;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--accent-bg-dim, rgba(0,255,240,0.12));
+      flex-shrink: 0;
+    }
+    .mood-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--neon-cyan, #00fff0);
+      transition: width 0.4s ease;
+      width: 0;
+    }
+    .mood-text {
+      font-size: 10px;
+      color: var(--text-muted, rgba(160,220,240,0.65));
+      white-space: nowrap;
     }
     .window-actions {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
       -webkit-app-region: no-drag;
+      flex-shrink: 0;
     }
     .window-btn {
       width: 28px;
@@ -57,67 +116,26 @@
       color: var(--neon-magenta, #ff2d78);
       background: var(--danger-hover-bg, rgba(255,45,120,0.08));
     }
-    .app-body { flex: 1; display: flex; overflow: hidden; }
-    .pet-sidebar {
-      width: 240px;
-      flex-shrink: 0;
-      background: var(--header-bg, rgba(0,15,30,0.98));
-      border-right: 1px solid var(--border, rgba(0,255,240,0.3));
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px 16px;
-      gap: 12px;
-    }
-    .pet-name {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--neon-cyan, #00fff0);
-      text-shadow: var(--glow-sm, 0 0 8px rgba(0,255,240,0.4));
-    }
-    .pet-lottie-wrap { width: 180px; height: 180px; flex-shrink: 0; }
-    .mood-section { width: 100%; }
-    .mood-label { font-size: 12px; color: var(--text, #cff0ff); }
-    .mood-bar {
-      height: 4px;
-      border-radius: 999px;
-      background: rgba(0,255,240,0.15);
-      margin: 6px 0;
-    }
-    .mood-fill {
-      height: 100%;
-      border-radius: 999px;
-      background: var(--neon-cyan, #00fff0);
-      transition: width 0.4s ease;
-      width: 0;
-    }
-    .mood-text {
-      font-size: 12px;
-      color: rgba(160,220,240,0.9);
-      line-height: 1.4;
-      min-height: 18px;
-    }
-    .pet-sidebar-btns {
-      display: flex;
-      gap: 8px;
-      width: 100%;
-      margin-top: auto;
-    }
-    .pet-sidebar-btns button {
-      flex: 1;
-      padding: 8px 0;
-      font-size: 12px;
-      background: var(--accent-bg-dim, rgba(0,255,240,0.08));
-      border: 1px solid var(--border, rgba(0,255,240,0.3));
+    .header-nav-btn {
+      width: 28px;
+      height: 28px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted, rgba(160,220,240,0.6));
       border-radius: 8px;
-      color: var(--text, #cff0ff);
       cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
     }
-    .pet-sidebar-btns button:hover {
-      border-color: var(--neon-cyan, #00fff0);
+    .header-nav-btn:hover {
+      background: var(--accent-bg-faint, rgba(0,255,240,0.06));
       color: var(--neon-cyan, #00fff0);
+      border-color: var(--border, rgba(0,255,240,0.3));
     }
+    .header-nav-btn svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .app-body { flex: 1; display: flex; overflow: hidden; }
     .chat-panel {
       flex: 1;
       display: flex;
@@ -143,6 +161,51 @@
       word-break: break-word;
       white-space: pre-wrap;
     }
+    .bubble-text {
+      min-width: 0;
+    }
+    .bubble-text.is-rich {
+      white-space: normal;
+    }
+    .bubble-text.is-rich p {
+      margin: 0;
+    }
+    .bubble-text.is-rich p + p {
+      margin-top: 10px;
+    }
+    .bubble-text.is-rich ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+    .bubble-text.is-rich li + li {
+      margin-top: 8px;
+    }
+    .bubble-text.is-rich strong {
+      color: var(--neon-cyan, #00fff0);
+      font-weight: 700;
+    }
+    .bubble-text.is-rich .news-lead {
+      color: var(--text, #cff0ff);
+      font-weight: 600;
+    }
+    .bubble-text.is-rich .news-tag {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 1px 8px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--bubble-border, rgba(0,255,240,0.3)) 88%, transparent);
+      background: color-mix(in srgb, var(--accent-bg-dim, rgba(0,255,240,0.08)) 92%, transparent);
+      color: var(--neon-cyan, #00fff0);
+      font-size: 12px;
+      font-weight: 700;
+      vertical-align: 1px;
+    }
+    .bubble-text.is-rich .news-tail {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed color-mix(in srgb, var(--bubble-border, rgba(0,255,240,0.3)) 75%, transparent);
+      color: var(--text-muted, rgba(160,220,240,0.9));
+    }
     .bubble.has-image {
       display: flex;
       flex-direction: column;
@@ -167,19 +230,36 @@
       color: var(--text, #cff0ff);
       border-radius: 2px 12px 12px 12px;
     }
-    .typing {
+    .typing-wrap {
       display: none;
-      color: var(--text-muted, rgba(160,220,240,0.65));
-      font-size: 12px;
-      padding-left: 2px;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0 2px;
     }
-    .typing::after {
-      content: '';
-      display: inline-block;
-      width: 1.2em;
-      animation: typingDots 1s steps(4, end) infinite;
-      vertical-align: bottom;
-      overflow: hidden;
+    .typing-wrap.show { display: flex; }
+    .typing-dots {
+      display: flex;
+      gap: 3px;
+      align-items: flex-end;
+    }
+    .typing-dots span {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--neon-cyan, #00fff0);
+      animation: typingBounce 1.3s ease-in-out infinite;
+      opacity: 0.7;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.14s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.28s; }
+    @keyframes typingBounce {
+      0%, 100% { transform: translateY(0); opacity: 0.5; }
+      50% { transform: translateY(-5px); opacity: 1; }
+    }
+    .typing-label {
+      font-size: 12px;
+      color: var(--text-muted, rgba(160,220,240,0.6));
+      font-style: italic;
     }
     .agent-status {
       display: none;
@@ -380,12 +460,12 @@
       align-items: center;
       justify-content: center;
       transition: all 0.2s ease;
-      box-shadow: 0 0 8px rgba(0,255,240,0.25);
+      box-shadow: var(--glow-sm, 0 0 8px rgba(0,255,240,0.25));
     }
     .send-btn:hover {
       transform: translateY(-1px);
       filter: brightness(1.1);
-      box-shadow: 0 0 10px rgba(0,255,240,0.4);
+      box-shadow: var(--glow-md, 0 0 10px rgba(0,255,240,0.4));
     }
     .send-btn:disabled {
       background: var(--bg-card, rgba(0,30,55,0.6));
@@ -400,14 +480,60 @@
       fill: currentColor;
     }
     .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 20px 24px;
+      gap: 0;
+    }
+    .empty-lottie {
+      width: 140px;
+      height: 140px;
+      flex-shrink: 0;
+      margin-bottom: 16px;
+    }
+    .empty-greeting {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text, #cff0ff);
+      margin-bottom: 5px;
       text-align: center;
-      color: var(--text-muted, rgba(160,220,240,0.65));
-      font-size: 13px;
-      padding: 40px 16px;
+    }
+    .empty-sub {
+      font-size: 12px;
+      color: var(--text-muted, rgba(160,220,240,0.6));
+      margin-bottom: 22px;
+      text-align: center;
+    }
+    .quick-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      max-width: 320px;
+    }
+    .quick-chip {
+      padding: 7px 15px;
+      border-radius: 20px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: var(--accent-bg-dim, rgba(0,255,240,0.06));
+      color: var(--text, #cff0ff);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      -webkit-app-region: no-drag;
+    }
+    .quick-chip:hover {
+      border-color: var(--neon-cyan, #00fff0);
+      background: var(--accent-bg-faint, rgba(0,255,240,0.1));
+      color: var(--neon-cyan, #00fff0);
+      transform: translateY(-1px);
     }
     .plan-card {
-      background: rgba(0,255,240,0.05);
-      border: 1px solid rgba(0,255,240,0.3);
+      background: var(--accent-bg-faint, rgba(0,255,240,0.05));
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
       border-radius: 8px;
       padding: 10px 12px;
       margin-top: 8px;
@@ -520,48 +646,91 @@
       pointer-events: none;
     }
     .toast.show { opacity: 1; }
-    @keyframes typingDots {
-      0% { width: 0; }
-      100% { width: 1.2em; }
-    }
     @keyframes agentPulse {
       0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(0, 255, 240, 0.35); }
       70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 255, 240, 0); }
       100% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(0, 255, 240, 0); }
     }
     ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-thumb { background: rgba(0,255,240,0.35); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar, rgba(0,255,240,0.35)); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover, rgba(0,255,240,0.6)); }
+
+    /* ── Remotion-style spring entrance animations ──────────────────────────
+       cubic-bezier(0.22, 1, 0.36, 1) 模拟 Remotion spring { damping: 200 }
+       无反弹、自然减速，完全对齐 Remotion 的 smooth 预设              */
+    @keyframes msgSlideInLeft {
+      from { opacity: 0; transform: translate(-40px, 10px) scale(0.86); }
+      to   { opacity: 1; transform: translate(0, 0)        scale(1);    }
+    }
+    @keyframes msgSlideInRight {
+      from { opacity: 0; transform: translate(40px, 10px) scale(0.86); }
+      to   { opacity: 1; transform: translate(0, 0)       scale(1);    }
+    }
+    .msg.ai   { animation: msgSlideInLeft  0.52s cubic-bezier(0.22, 1, 0.36, 1) both; will-change: transform, opacity; }
+    /* 动画完成后释放 GPU 图层 */
+    .msg.ai.anim-done { will-change: auto; }
+
+    /* ── 流式输出光标（Remotion 打字机 blinking cursor）─────────────────── */
+    .streaming-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1.05em;
+      background: var(--neon-cyan, #00fff0);
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      border-radius: 1px;
+      box-shadow: 0 0 5px var(--neon-cyan, #00fff0);
+      animation: cursorBlink 1s step-end infinite;
+    }
+    @keyframes cursorBlink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
   </style>
 </head>
 <body>
   <div class="window-header">
-    <span>&#23456;&#29289;&#32842;&#22825;</span>
+    <div class="header-pet-info">
+      <div class="header-avatar" id="headerAvatar">🐱</div>
+      <div class="header-meta">
+        <span class="pet-name" id="petName">···</span>
+        <div class="mood-mini-row">
+          <div class="mood-bar"><div class="mood-fill" id="moodFill"></div></div>
+          <span class="mood-text" id="moodText">···</span>
+          <span id="moodValue" style="display:none">80</span>
+        </div>
+      </div>
+    </div>
     <div class="window-actions">
+      <button class="header-nav-btn" type="button" onclick="goToSettings()" title="设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button class="header-nav-btn" type="button" onclick="goToHistory()" title="历史记录">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><polyline points="12 7 12 12 15 15"/></svg>
+      </button>
       <button class="window-btn" type="button" onclick="minimizeWindow()">&#9472;</button>
       <button class="window-btn close" type="button" onclick="closeWindow()">&#10005;</button>
     </div>
   </div>
 
   <div class="app-body">
-    <div class="pet-sidebar">
-      <div class="pet-name" id="petName">···</div>
-      <div class="pet-lottie-wrap" id="chatLottie"></div>
-      <div class="mood-section">
-        <div class="mood-label">心情 <span id="moodValue">--</span></div>
-        <div class="mood-bar"><div class="mood-fill" id="moodFill"></div></div>
-        <div class="mood-text" id="moodText">···</div>
-      </div>
-      <div class="pet-sidebar-btns">
-        <button onclick="goToSettings()">⚙️ 设置</button>
-        <button onclick="goToHistory()">📜 历史</button>
-        <button onclick="goToTechPanel()">🛠️ 技术</button>
-      </div>
-    </div>
-
     <div class="chat-panel">
       <div class="messages-wrap" id="messagesWrap">
-        <div class="empty-state" id="emptyState">和我说说今天发生了什么吧~</div>
-        <div class="typing" id="typingText">&#27491;&#22312;&#24605;&#32771;&#20013;...</div>
+        <div class="empty-state" id="emptyState">
+          <div class="empty-lottie" id="chatLottie"></div>
+          <p class="empty-greeting">嗨~ 今天过得怎么样？</p>
+          <p class="empty-sub">说说心里话，我都在听~</p>
+          <div class="quick-chips">
+            <button class="quick-chip" type="button" onclick="sendQuickMsg('讲个笑话逗逗我')">😄 讲个笑话</button>
+            <button class="quick-chip" type="button" onclick="sendQuickMsg('今天发生了什么有趣的事')">💬 聊聊今天</button>
+            <button class="quick-chip" type="button" onclick="sendQuickMsg('帮我解解闷')">🌙 帮我解闷</button>
+            <button class="quick-chip" type="button" onclick="sendQuickMsg('你喜欢我吗')">💕 认识你</button>
+          </div>
+        </div>
+        <div class="typing-wrap" id="typingText">
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+          <span class="typing-label" id="typingLabel">正在想...</span>
+        </div>
         <div class="agent-status" id="agentStatus">
           <div class="agent-status-dot"></div>
           <div class="agent-status-text" id="agentStatusText">&#27491;&#22312;&#20934;&#22791;&#20013;...</div>
@@ -584,18 +753,15 @@
           </div>
           <div class="input-footer">
             <div class="input-tools">
-              <button class="tool-btn" id="screenshotBtn" type="button" title="Screenshot">
+              <button class="tool-btn" id="screenshotBtn" type="button" title="截图">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               </button>
-              <button class="tool-btn" id="uploadBtn" type="button" title="Upload">
+              <button class="tool-btn" id="uploadBtn" type="button" title="上传文件">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
               </button>
-              <button class="tool-btn" id="voiceBtn" type="button" title="Voice">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-              </button>
-              <button class="tool-btn" id="videoBtn" type="button" title="Video">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-              </button>
+              <!-- 语音/视频功能开发中，暂时隐藏 -->
+              <button class="tool-btn" id="voiceBtn" type="button" title="语音（开发中）" style="display:none"></button>
+              <button class="tool-btn" id="videoBtn" type="button" title="视频（开发中）" style="display:none"></button>
               <input id="fileUploadInput" type="file" hidden accept="image/*,.txt,.md,.json,.csv,.log,.js,.ts,.py">
             </div>
             <button class="send-btn" id="sendBtn" title="&#21457;&#36865;">
@@ -633,7 +799,20 @@
     let toastTimer = null;
     let pendingImageAttachment = null;
     let agentSessionPersonality = sessionStorage.getItem('chatAgentPersonality') || null;
+    let agentSessionPetName = sessionStorage.getItem('chatAgentPetName') || '';
     let agentStatusTimer = null;
+
+    // ── 终端风格打字机状态 ──────────────────────────────────────────────────────
+    // 设计：setTimeout 自调度（非 rAF），22ms/字符 ≈ 45字/秒
+    // 像 Mac 终端 cat 输出：匀速、机械感、每个字清晰可见
+    // lag > 40 时自动加速到 2字/tick，防止积压
+    let streamBuffer = '';        // 已接收完整文本
+    let streamDisplayed = 0;      // 已渲染字符数
+    let streamTimeout = null;     // setTimeout 句柄
+    let streamingTextNode = null; // bubble 内文字 div
+    let streamingCursorEl = null; // 光标 span
+    let isStreaming = false;       // 流式会话是否仍在进行
+    const TICK_MS = 22;           // 每 tick 间隔（ms），调大=更慢更清晰
 
     function getStoredPetData() {
       try {
@@ -653,8 +832,18 @@
     function resetAgentSession() {
       agentSessionId = null;
       agentSessionPersonality = null;
+      agentSessionPetName = '';
       sessionStorage.removeItem('chatAgentSessionId');
       sessionStorage.removeItem('chatAgentPersonality');
+      sessionStorage.removeItem('chatAgentPetName');
+    }
+
+    function getCurrentPetNameSetting() {
+      try {
+        return JSON.parse(localStorage.getItem('settings') || '{}').petName || '';
+      } catch {
+        return '';
+      }
     }
 
     function setAgentStatus(message, tone = 'working', autoHideMs = 0) {
@@ -895,10 +1084,97 @@
         bubble.appendChild(image);
       }
       const textNode = document.createElement('div');
-      textNode.textContent = content;
+      textNode.className = 'bubble-text';
+      setBubbleContent(textNode, content, role === 'assistant');
       bubble.appendChild(textNode);
       wrapper.appendChild(bubble);
       return { wrapper, bubble };
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text == null ? '' : String(text);
+      return div.innerHTML;
+    }
+
+    function formatAssistantText(content) {
+      const source = String(content || '').replace(/\r\n/g, '\n').trim();
+      if (!source) {
+        return '';
+      }
+
+      const lines = source.split('\n');
+      const html = [];
+      let listOpen = false;
+
+      const closeList = () => {
+        if (listOpen) {
+          html.push('</ul>');
+          listOpen = false;
+        }
+      };
+
+      const formatInline = (text) => {
+        let value = escapeHtml(text);
+        value = value.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        value = value.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<strong>$1</strong>');
+        return value;
+      };
+
+      for (let index = 0; index < lines.length; index += 1) {
+        const rawLine = lines[index];
+        const line = rawLine.trim();
+
+        if (!line) {
+          closeList();
+          continue;
+        }
+
+        const bulletMatch = line.match(/^(?:[-*•]|[0-9一二三四五六七八九十]+[.、:：])\s*(.+)$/);
+        if (bulletMatch) {
+          if (!listOpen) {
+            html.push('<ul>');
+            listOpen = true;
+          }
+          let itemBody = formatInline(bulletMatch[1]);
+          itemBody = itemBody.replace(/^<strong>([^<]+)<\/strong>\s*[:：]\s*/, '<span class="news-tag">$1</span>');
+          html.push(`<li>${itemBody}</li>`);
+          continue;
+        }
+
+        closeList();
+
+        if (index === 0 && /[:：]$/.test(line)) {
+          html.push(`<p class="news-lead">${formatInline(line)}</p>`);
+          continue;
+        }
+
+        const paragraphHtml = formatInline(line)
+          .replace(/^<strong>([^<]+)<\/strong>\s*[:：]\s*/, '<span class="news-tag">$1</span>');
+        const paragraphClass = /想了解|可以再帮你|我可以再帮你|要不要|如果你想/.test(line) ? ' class="news-tail"' : '';
+        html.push(`<p${paragraphClass}>${paragraphHtml}</p>`);
+      }
+
+      closeList();
+      return html.join('');
+    }
+
+    function setBubbleContent(node, content, rich = false) {
+      if (!node) return;
+      const text = content == null ? '' : String(content);
+      if (!rich) {
+        node.classList.remove('is-rich');
+        node.textContent = text;
+        return;
+      }
+      const formatted = formatAssistantText(text);
+      if (!formatted) {
+        node.classList.remove('is-rich');
+        node.textContent = text;
+        return;
+      }
+      node.classList.add('is-rich');
+      node.innerHTML = formatted;
     }
 
     function addMessage(role, content, attachments = null) {
@@ -923,19 +1199,31 @@
       }
 
       container.appendChild(messageNode.wrapper);
-      container.scrollTop = container.scrollHeight;
+      container.scrollTop = 999999;
+      // 动画结束后释放 will-change GPU 图层
+      messageNode.wrapper.addEventListener('animationend', () => {
+        messageNode.wrapper.classList.add('anim-done');
+      }, { once: true });
       return messageNode.bubble;
     }
 
     function showTyping() {
       const typing = document.getElementById('typingText');
-      typing.style.display = 'block';
+      typing.style.display = 'flex';
       const container = document.getElementById('messagesWrap');
       container.scrollTop = container.scrollHeight;
     }
 
     function hideTyping() {
       document.getElementById('typingText').style.display = 'none';
+    }
+
+    // 快捷回复：直接发送预设消息
+    function sendQuickMsg(text) {
+      const input = document.getElementById('chatInput');
+      if (!input || isProcessing) return;
+      input.value = text;
+      void sendMessage();
     }
 
     function persistAgentSession() {
@@ -945,12 +1233,14 @@
       if (agentSessionPersonality) {
         sessionStorage.setItem('chatAgentPersonality', agentSessionPersonality);
       }
+      sessionStorage.setItem('chatAgentPetName', agentSessionPetName || '');
     }
 
     async function ensureAgentSession() {
       const personality = getCurrentPersonality();
-      if (agentSessionId && agentSessionPersonality === personality) return agentSessionId;
-      if (agentSessionId && agentSessionPersonality !== personality) {
+      const petName = getCurrentPetNameSetting();
+      if (agentSessionId && agentSessionPersonality === personality && agentSessionPetName === petName) return agentSessionId;
+      if (agentSessionId && (agentSessionPersonality !== personality || agentSessionPetName !== petName)) {
         resetAgentSession();
       }
       if (!window.PetAgent || !window.PetAgent.startSession) {
@@ -959,7 +1249,7 @@
       console.log('[chat-window] startSession begin');
       const started = await window.PetAgent.startSession({
         channel: 'chat-window',
-        metadata: { personality }
+        metadata: { personality, petName }
       });
       console.log('[chat-window] startSession result:', started);
       if (!started || started.error || !started.sessionId) {
@@ -967,6 +1257,7 @@
       }
       agentSessionId = started.sessionId;
       agentSessionPersonality = personality;
+      agentSessionPetName = petName;
       persistAgentSession();
       return agentSessionId;
     }
@@ -986,27 +1277,74 @@
       throw new Error((result && result.error) ? result.error : 'basic_chat_failed');
     }
 
+    // ── 终端风格打字机核心 tick ────────────────────────────────────────────────
+    function _tickStream() {
+      streamTimeout = null;
+      if (!streamingTextNode) return;
+
+      const lag = streamBuffer.length - streamDisplayed;
+
+      if (lag > 0) {
+        // lag > 40 时补速，防止服务器流速远快于显示速度时积压过多
+        const step = lag > 40 ? 2 : 1;
+        streamDisplayed = Math.min(streamDisplayed + step, streamBuffer.length);
+        streamingTextNode.textContent = streamBuffer.slice(0, streamDisplayed);
+        streamingTextNode.classList.remove('is-rich');
+        const container = document.getElementById('messagesWrap');
+        if (container) container.scrollTop = 999999;
+        streamTimeout = setTimeout(_tickStream, TICK_MS);
+      } else if (isStreaming) {
+        // 已追上 buffer，但流还没结束，等待下一个 delta
+        streamTimeout = setTimeout(_tickStream, TICK_MS);
+      }
+      // isStreaming=false 且 lag=0：全部显示完毕，自然停止
+    }
+
     function appendAssistantDelta(delta) {
       hideTyping();
       setAgentStatus('\u6b63\u5728\u56de\u590d\u4e2d...', 'working');
       if (!streamingAssistantMessage) {
         streamingAssistantMessage = addMessage('assistant', '');
+        streamBuffer = '';
+        streamDisplayed = 0;
+        isStreaming = true;
+        streamingTextNode = streamingAssistantMessage.querySelector('div') || streamingAssistantMessage;
+        streamingCursorEl = document.createElement('span');
+        streamingCursorEl.className = 'streaming-cursor';
+        streamingAssistantMessage.appendChild(streamingCursorEl);
+        streamTimeout = setTimeout(_tickStream, TICK_MS); // 启动，不再手动重启
       }
-      streamingAssistantMessage.textContent += delta || '';
-      const container = document.getElementById('messagesWrap');
-      container.scrollTop = container.scrollHeight;
+      streamBuffer += delta || '';
     }
 
     function finalizeStreamedAssistantMessage(finalText) {
       const text = finalText || '\u597d\u7684~';
-      if (streamingAssistantMessage) {
-        const wrapper = streamingAssistantMessage.closest('.msg');
-        if (wrapper && wrapper.parentNode) {
-          wrapper.parentNode.removeChild(wrapper);
-        }
-        streamingAssistantMessage = null;
+      // 标记流结束，tick 会自然排干 buffer 后停止
+      isStreaming = false;
+      if (streamTimeout) { clearTimeout(streamTimeout); streamTimeout = null; }
+      // 移除光标
+      if (streamingCursorEl && streamingCursorEl.parentNode) {
+        streamingCursorEl.parentNode.removeChild(streamingCursorEl);
+        streamingCursorEl = null;
       }
-      return addMessage('assistant', text);
+      // 直接在原节点写入最终文本，避免 DOM 跳变
+      if (streamingTextNode) {
+        setBubbleContent(streamingTextNode, text, true);
+      } else if (streamingAssistantMessage) {
+        const fallbackTextNode = document.createElement('div');
+        fallbackTextNode.className = 'bubble-text';
+        setBubbleContent(fallbackTextNode, text, true);
+        streamingAssistantMessage.replaceChildren(fallbackTextNode);
+      } else {
+        // 降级：既无流式节点，正常添加
+        return addMessage('assistant', text);
+      }
+      const bubble = streamingAssistantMessage;
+      streamingAssistantMessage = null;
+      streamingTextNode = null;
+      streamBuffer = '';
+      streamDisplayed = 0;
+      return bubble;
     }
 
     async function openAgentStream(sessionId, runId) {
@@ -1066,6 +1404,20 @@
         activeAgentStream.close();
       }
       activeAgentStream = null;
+      // 停止 tick，清理流式状态
+      isStreaming = false;
+      if (streamTimeout) { clearTimeout(streamTimeout); streamTimeout = null; }
+      if (streamingCursorEl && streamingCursorEl.parentNode) {
+        streamingCursorEl.parentNode.removeChild(streamingCursorEl);
+        streamingCursorEl = null;
+      }
+      if (streamingTextNode && streamBuffer.length > streamDisplayed) {
+        // 确保剩余 buffer 全部显示
+        setBubbleContent(streamingTextNode, streamBuffer, true);
+      }
+      streamingTextNode = null;
+      streamBuffer = '';
+      streamDisplayed = 0;
       streamingAssistantMessage = null;
       isProcessing = false;
       document.getElementById('sendBtn').disabled = false;
@@ -1267,19 +1619,26 @@
     async function loadPetName() {
       const PET_NAMES = { '🐱': '猫咪', '🐶': '狗狗', '🐰': '兔兔', '🦊': '小狐', '🐻': '小熊' };
       let name = '';
-      // 第一优先：记忆系统 user_profile 中的名字
+      // 最高优先：用户在初始化向导中给宠物起的名字
       try {
-        if (window.electron && window.electron.getPetProfile) {
-          const profile = await window.electron.getPetProfile();
-          if (Array.isArray(profile)) {
-            const row = profile.find(r => r.key === 'name' || r.key === 'pet_name');
-            if (row && row.value) name = row.value;
-          } else if (profile) {
-            name = profile.petName || profile.name || '';
-          }
-        }
+        const settings = JSON.parse(localStorage.getItem('settings') || '{}');
+        if (settings.petName) name = settings.petName;
       } catch (e) {}
-      // 第二优先：localStorage pet_data.basePet → 中文名
+      // 第二优先：记忆系统 user_profile 中的 pet_name 字段
+      if (!name) {
+        try {
+          if (window.electron && window.electron.getPetProfile) {
+            const profile = await window.electron.getPetProfile();
+            if (Array.isArray(profile)) {
+              const row = profile.find(r => r.key === 'pet_name');
+              if (row && row.value) name = row.value;
+            } else if (profile) {
+              name = profile.petName || '';
+            }
+          }
+        } catch (e) {}
+      }
+      // 第三优先：emoji → 中文名
       if (!name) {
         try {
           const petData = JSON.parse(localStorage.getItem('pet_data') || '{}');
@@ -1299,10 +1658,22 @@
     }
 
     function initLottie() {
+      const container = document.getElementById('chatLottie');
+      if (!container) return;
+
+      // 根据当前宠物类型更新 header 头像 emoji
+      const PET_EMOJIS = { '🐱': '🐱', '🐶': '🐶', '🐰': '🐰', '🦊': '🦊', '🐻': '🐻' };
+      try {
+        const petData = JSON.parse(localStorage.getItem('pet_data') || '{}');
+        const emoji = PET_EMOJIS[petData.basePet] || '🐱';
+        const avatarEl = document.getElementById('headerAvatar');
+        if (avatarEl) avatarEl.textContent = emoji;
+      } catch (e) {}
+
       if (!window.lottie) return;
       try {
         window.lottie.loadAnimation({
-          container: document.getElementById('chatLottie'),
+          container,
           renderer: 'svg',
           loop: true,
           autoplay: true,
@@ -1310,6 +1681,7 @@
         });
       } catch (e) {
         console.warn('[chat-window] lottie init failed:', e);
+        // 加载失败时 container 保持空白，不影响使用
       }
     }
 
@@ -1444,6 +1816,11 @@
             resetAgentSession();
             showToast('\u6027\u683c\u5df2\u66f4\u65b0\uff0c\u4e0b\u4e00\u8f6e\u5bf9\u8bdd\u751f\u6548');
           }
+          if (payload && payload.type === 'pet-name') {
+            resetAgentSession();
+            loadPetName();
+            showToast('\u540d\u5b57\u5df2\u66f4\u65b0\uff0c\u4e0b\u4e00\u8f6e\u5bf9\u8bdd\u751f\u6548');
+          }
         });
       }
 
@@ -1455,6 +1832,10 @@
             if (typeof petData.mood === 'number') updateMoodDisplay(petData.mood);
             if (typeof petData.personality === 'string') resetAgentSession();
           } catch (_) {}
+        }
+        if (e.key === 'settings') {
+          resetAgentSession();
+          loadPetName();
         }
       });
     });

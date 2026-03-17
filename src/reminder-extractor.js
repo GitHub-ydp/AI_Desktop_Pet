@@ -374,6 +374,11 @@ class ReminderExtractor {
     let targetHour = parseInt(hour);
     let targetMinute = minute ? parseInt(minute) : 0;
 
+    // 校验时间范围，避免"25点"之类静默溢出
+    if (targetHour < 0 || targetHour > 23 || targetMinute < 0 || targetMinute > 59) {
+      return null;
+    }
+
     const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), targetHour, targetMinute, 0);
 
     // 如果目标时间已过，默认是明天

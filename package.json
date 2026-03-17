@@ -1,7 +1,7 @@
 {
   "name": "ai-desktop-pet",
   "version": "1.0.0",
-  "description": "AI Desktop Pet - An intelligent desktop companion powered by AI",
+  "description": "AI桌宠 - An intelligent desktop companion powered by AI",
   "main": "main.js",
   "scripts": {
     "start": "node scripts/run-electron.js",
@@ -36,7 +36,7 @@
   },
   "build": {
     "appId": "com.ai.desktop.pet",
-    "productName": "AI Desktop Pet",
+    "productName": "AI桌宠",
     "directories": {
       "output": "dist"
     },

@@ -8,10 +8,10 @@ user-invocable: false
 用户需要打开网页链接时调用。
 
 ## 参数
-- url (string, 必须): 要打开的 URL（必须是 https://）
+- url (string, 必须): 要打开的 URL（支持 http:// 和 https:// 协议）
 
 ## 安全限制
-- 仅允许 https:// 协议
+- 支持 http:// 和 https:// 协议
 - 禁止 file:// 和 javascript: 协议
 
 ## 示例

@@ -193,11 +193,14 @@ class MemoryMainProcess {
   // 后台批量嵌入迁移
   async _startBackgroundMigration() {
     if (!this.memoryLayerManager || !this.embeddingEngine || !this.embeddingEngine.isReady()) return;
+    if (this._isMigrating) return;  // 防并发重入
 
     const config = MEMORY_CONFIG.localEmbedding?.migration || {};
 
     // 延迟 10 秒后开始，避免影响启动
     setTimeout(async () => {
+      if (this._isMigrating) return;
+      this._isMigrating = true;
       try {
         const result = await this.memoryLayerManager.migrateHistoryEmbeddings({
           batchSize: config.batchSize || 50,
@@ -206,6 +209,8 @@ class MemoryMainProcess {
         console.log(`[Memory] 历史嵌入迁移完成: ${result.processed}/${result.total}`);
       } catch (error) {
         console.error('[Memory] 历史嵌入迁移失败:', error.message);
+      } finally {
+        this._isMigrating = false;
       }
     }, 10000);
   }

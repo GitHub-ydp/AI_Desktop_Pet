@@ -5,7 +5,7 @@ metadata: {"dangerous": false, "confirm": false, "category": "search"}
 user-invocable: false
 ---
 ## 何时调用
-用户询问需要联网查询的实时信息、新闻、知识时调用。
+用户询问需要联网查询的实时信息、新闻、知识时调用。包括查询今日新闻、热点、时事资讯。
 注意：天气查询请使用 weather_get，不要用 web_search。
 
 ## 参数

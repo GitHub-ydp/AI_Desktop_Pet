@@ -1,7 +1,7 @@
 ---
 name: file_write
 description: 写入或创建文本文件
-metadata: {"dangerous": false, "confirm": false, "category": "file"}
+metadata: {"dangerous": false, "confirm": true, "category": "file"}
 user-invocable: false
 ---
 ## 何时调用
@@ -14,8 +14,7 @@ user-invocable: false
 
 ## 安全限制
 - 禁止写入系统目录
-- 执行前需用户确认
-- 自动备份已存在的文件
+- 执行前需用户确认（文件覆盖为不可逆操作）
 
 ## 示例
 用户: "帮我创建一个 todo.txt" -> file_write({ path: "~/Desktop/todo.txt", content: "待办事项\n1. ..." })

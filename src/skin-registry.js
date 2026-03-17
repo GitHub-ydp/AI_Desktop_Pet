@@ -99,12 +99,13 @@ class SkinRegistry {
       description: '玩耍状态'
     };
     animations.thinking = {
-      file: defaultIdleFile,
-      loop: true,
+      file: pickDefault('玩球.json', '举腿.json', defaultIdleFile),
+      loop: false,
       priority: 9,
       transitions: ['idle', 'talking'],
       triggers: ['question_asked', 'processing'],
       minDisplayTime: 2000,
+      onComplete: 'idle',
       description: '思考状态'
     };
     animations.talking = {

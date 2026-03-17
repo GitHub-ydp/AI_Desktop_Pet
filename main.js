@@ -2212,6 +2212,8 @@ function createChildWindow(options) {
   // 通知主窗口：子窗口已打开
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('child-window-state', 'opened');
+    // 子窗口打开时取消主窗口置顶，避免子窗口盖住其他应用
+    mainWindow.setAlwaysOnTop(false);
   }
 
   // 窗口关闭时从Map中移除
@@ -2220,6 +2222,10 @@ function createChildWindow(options) {
     // 通知主窗口：子窗口已关闭
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('child-window-state', 'closed');
+    }
+    // 所有子窗口关闭后恢复主窗口置顶
+    if (mainWindow && !mainWindow.isDestroyed() && childWindows.size === 0) {
+      mainWindow.setAlwaysOnTop(true);
     }
   });
 

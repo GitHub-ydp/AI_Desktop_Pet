@@ -763,6 +763,135 @@ LLM tool_call → SkillExecutor（路由）
 - `src/api.js` - 更新：task 意图时注入 Plan 系统提示
 - `index.html` - 更新：加载 plan-manager.js
 
+#### 2026-03 Agent 做事能力系统升级（P0→P3）
+
+本次升级分四个优先级批次完成，使 Agent 工具调用成功率和复杂任务完成率大幅提升。
+
+**涉及文件：**
+- `main-process/agent-runtime.js` - 核心改动（工具循环、并发、重试、预读、截断）
+- `main-process/skill-executor.js` - 新增 5 个原生技能处理器
+- `main.js` / `preload.js` - 新增 IPC handler 和桥接
+- `skills/grep-search/SKILL.md` - 新增
+- `skills/git-ops/SKILL.md` - 新增
+- `skills/multi-file-edit/SKILL.md` - 新增
+
+**P0 — 基础稳定性修复：**
+- 修复致命 Bug：`effectiveTools` 移除 `round === 0` 限制，每轮都传工具定义，多步任务不再必失败
+- `MAX_TOOL_ROUNDS` 按意图分级：`chat/vision=1`，`task/code=15`（原值：全局 3）
+- 新增 `MAX_EMPTY_TOOL_ROUNDS=2`：连续全部失败自动退出，防无限循环
+- `_truncateToolContent(toolResult, toolName)`：工具输出超 2000 字符自动截断，防上下文溢出
+- `bash_run` 失败时补充 `isError: true` + `exitCode` + `stderr`，LLM 可针对性重试
+
+**P1 — 任务完成质量提升：**
+- `_preFetchFileContext(intent, userText)`：task/code 意图时预读相关目录（桌面/提及路径），注入 system prompt
+- 代码文件写入后自动注入验证提示，引导 LLM 主动用 bash_run 运行验证
+- 轮次耗尽兜底：`finalText` 为空时强制追加无工具收尾调用，替代 fallback 文案
+- `file_write` 从 `_legacyMapping`（Python 层）迁移到原生 `_fileWrite`，消除静默失败
+- `file_read` 从 `_legacyMapping` 迁移到原生 `_fileRead`（已支持 `offset`/`limit` 行范围）
+
+**P2 — 交互与原子性：**
+- 任务中途可注入指令：`pendingInjections` Map + `injectMessage(runId, text)` 方法，每轮循环顶部消费
+- IPC handler `agent:inject-message` + preload 桥接 `injectMessage`
+- `multi_file_edit` 技能：原子化编辑最多 10 个文件，预检→备份→写入→失败全部回滚
+- 安全工具（非 mutating）改为 `Promise.all` 并发执行，变更工具保持串行+审批
+
+**P3 — 代码理解与项目感知：**
+- `grep_search` 技能：正则搜索目录内所有文件内容，返回匹配行+上下文，支持文件名过滤
+- `git_ops` 技能：status/diff/log/branch/commit 五种操作，支持指定仓库路径
+- `_buildFileTree(rootPath, maxDepth, maxItems)`：层级文件树构建，过滤 node_modules/.git 等无关目录
+- `_truncateToolContent` 语义升级：超长 content 保留头 30 行 + 尾 10 行，而非硬截断前 N 字符
+- `_executeToolWithRetry`：网络类工具（web_search/web_fetch/weather_get）自动重试，捕获 throw 型网络异常
+
+**当前内置技能总览（18 个）：**
+| 技能 | 层 | 类型 |
+|------|----|------|
+| bash_run | Node 原生 | 高危+确认 |
+| file_read | Node 原生 | 安全 |
+| file_write | Node 原生 | 危险+确认 |
+| file_edit | Node 原生 | 危险+确认 |
+| file_list | Node 原生 | 安全 |
+| file_search | Node 原生 | 安全 |
+| multi_file_edit | Node 原生 | 危险+确认 |
+| grep_search | Node 原生 | 安全 |
+| git_ops | Node 原生 | 安全（commit除外） |
+| memory_search | Node 原生 | 安全 |
+| web_search | Node 原生 | 安全 |
+| web_fetch | Node 原生 | 安全 |
+| weather_get | Node 原生 | 安全 |
+| open_app | Node 原生 | 危险+确认 |
+| open_url | Node 原生 | 安全 |
+| clipboard_set | Node 原生 | 安全 |
+| reminder_create | Node 原生 | 安全 |
+| screenshot_ocr | Node 原生 | 安全 |
+
+**Agent 架构关键参数：**
+```javascript
+MAX_TOOL_ROUNDS_BY_INTENT = { chat:1, vision:1, task:15, code:15 }
+MAX_EMPTY_TOOL_ROUNDS = 2        // 连续全失败退出阈值
+_truncateToolContent MAX = 2000  // 工具输出字符上限
+_preFetchFileContext 目录数 = 2  // 最多预读目录数
+_buildFileTree maxItems = 60     // 文件树最多条目
+grep_search max_results = 50     // 搜索结果上限
+multi_file_edit 最大文件数 = 10
+```
+
+#### 2026-03 聊天窗口重设计（团队协作完善产品）
+
+**改造目标：** 从"AI工具"转向"有温度的数字生命"
+
+**涉及文件：**
+- `windows/chat-window.html` - 聊天窗口全面重设计
+- `main-process/agent-runtime.js` - P0 Bug 修复
+- `src/theme-manager.js` - 默认主题改为 lazyCat（暖色）
+
+**主要改动：**
+1. **移除 240px 侧边栏** → 改为 58px 紧凑顶栏（左侧宠物头像+名字+心情条，右侧设置/历史/最小化/关闭）
+2. **全新空状态设计** → Lottie 动画居中 + 暖心问候语 + 4 个快捷回复气泡按钮
+3. **打字等待动画** → 从 "正在思考中..." 文本改为三点弹跳动画 + 斜体文字
+4. **简化工具栏** → 只保留截图+上传，隐藏未实现的语音/视频按钮
+5. **默认暖色主题** → theme-manager.js 默认改为 `lazyCat`（深暖棕+琥珀橙）
+6. **宠物名称中文注入** → agent-runtime.js 宠物名用中文 prompt，避免混语言
+7. **记忆系统 try-catch** → 两处 addConversation 调用增加容错，防止存储失败导致聊天崩溃
+8. **快捷回复功能** → `sendQuickMsg()` 函数支持点击快捷按钮直接发送消息
+
+**团队角色（本轮）：**
+- 设计师分析：23个UX问题，重点：空状态/侧边栏/气泡对比度/加载状态
+- 开发者分析：5个P0 Bug（DOM泄漏/无try-catch/无stream/宠物名混语言/历史10条）
+- 测试员：下一轮验证
+
+**待处理（P1 下一轮）：**
+- 消息气泡对比度（bubble-bg 在 lazyCat 主题下的可读性）
+- 消息时间戳显示
+- 右键消息菜单（复制、重新生成）
+- 气泡最大宽度优化 `max-width: min(520px, 85%)`
+
+#### 2026-03 网络搜索系统彻底修复
+
+**根本原因分析（经实机测试）：**
+- DuckDuckGo Instant API (`api.duckduckgo.com`) 对新闻/趣闻类查询返回空结果（只适合知识卡片）
+- `_searchDuckDuckGoHtml` 正则 `class="result__body"` 与实际 class `"links_main links_deep result__body"` 不匹配，导致 0 个 block 被解析
+- DDG HTML 跳转 URL 格式为 `//duckduckgo.com/l/?uddg=ENCODED_URL`，旧代码未解码直接使用
+- `html.duckduckgo.com` **在中国可正常访问且返回 10 条真实结果**（Bing HTML/RSS、Google News RSS 均不可用）
+- 意图分类遗漏：「今天的新闻」无任务关键词 → chat 意图 → MAX_TOOL_ROUNDS=1，搜索失败无法重试
+
+**修复内容：**
+- `main-process/skill-executor.js`：
+  - `_fetchTextUrl`：User-Agent 从 `AI-Desktop-Pet/1.0` 改为真实 Chrome UA，添加 Accept-Language
+  - `_searchDuckDuckGoHtml`（重写）：直接匹配 `class="result__a"` 链接，解码 uddg URL，与 snippets 数组对齐提取摘要
+  - `_webSearch`：降级链改为 DDG HTML（主力）→ DDG Instant（知识补充）→ Google News RSS（新闻备用）
+  - 删除 `_searchBingHtml` 和 `_searchBingNewsRss`（Bing 需要 JS 渲染或 Cookie，静态 HTTP 请求无效）
+  - `_looksLikeNewsQuery`：扩展匹配词（趣闻/资讯/最新/today/news 等）
+- `main-process/agent-runtime.js`：
+  - 新增 `search` 意图：`MAX_TOOL_ROUNDS_BY_INTENT.search = 3`
+  - `classifyIntent`：添加搜索意图检测（新闻/热点/趣闻/天气/查一下 等关键词 → search），优先级低于 task/code
+  - 意图顺序调整：先检测 vision，再 task/code，再 search，最后 chat
+
+**搜索降级链（当前）：**
+```
+html.duckduckgo.com → DDG Instant API → Google News RSS（新闻类）
+```
+**关键数字：** html.duckduckgo.com 实测返回 10 条中文搜索结果，URL 经 uddg 解码为真实链接
+
 ### 重要提醒
 - 必须回复我中文
 - 每次重大改动，都要更新CLAUDE.md文件，保证后续开发顺利

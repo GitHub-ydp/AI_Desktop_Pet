@@ -672,9 +672,13 @@
       
       if (payload.type === 'milestone') {
         renderMilestone(payload.data || {}, petMeta);
-        return;
+      } else {
+        renderWeekly(payload.data || {}, petMeta);
       }
-      renderWeekly(payload.data || {}, petMeta);
+
+      setTimeout(() => {
+        window.__shareCardReady = true;
+      }, 600);
     });
   </script>
 </body>

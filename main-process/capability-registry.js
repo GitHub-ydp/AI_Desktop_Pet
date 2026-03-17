@@ -23,6 +23,7 @@ function normalizeToolResult(result, source, actualName) {
   if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'success')) {
     const ok = !!result.success;
     const data = Object.prototype.hasOwnProperty.call(result, 'result') ? result.result : result;
+    const rawError = result.originalError || result.error || null;
     return {
       ok,
       summary: ok
@@ -36,7 +37,7 @@ function normalizeToolResult(result, source, actualName) {
         source,
         toolName: actualName,
         durationMs: result.duration || null,
-        error: result.error || null
+        error: rawError
       }
     };
   }
@@ -60,6 +61,16 @@ function normalizeToolResult(result, source, actualName) {
 function sanitizeToolName(name) {
   return String(name || '').replace(/[^a-zA-Z0-9_-]/g, '_');
 }
+
+const SHADOWED_WORKFLOW_TOOLS = new Set([
+  'file_ops_read_file',
+  'file_ops_write_file',
+  'file_ops_list_files',
+  'file_ops_search_files',
+  'system_ops_open_app',
+  'system_ops_open_url',
+  'system_ops_set_clipboard'
+]);
 
 class CapabilityRegistry {
   constructor(options = {}) {
@@ -99,6 +110,7 @@ class CapabilityRegistry {
     if (this.workflowManager) {
       for (const tool of this.workflowManager.getToolDefinitions()) {
         const name = tool.function.name;
+        if (SHADOWED_WORKFLOW_TOOLS.has(name)) continue;
         if (seen.has(name)) continue;
         seen.add(name);
         this.aliasToActual.set(name, name);

@@ -5,7 +5,7 @@ metadata: {"requires": {"os": ["win32"]}, "dangerous": true, "confirm": true, "t
 user-invocable: false
 ---
 ## 何时调用
-用户要求执行系统命令、打开程序、管理文件、查询系统信息时调用。
+用户要求执行系统命令、管理文件、查询系统信息时调用。当文件操作技能无法满足需求时才使用此技能，不要用于基本文件操作。
 
 ## 参数
 - command (string, 必须): 要执行的 PowerShell 命令
@@ -18,6 +18,6 @@ user-invocable: false
 - 所有命令执行前需用户确认
 
 ## 示例
-用户: "帮我打开计算器" -> bash_run({ command: "Start-Process calc.exe" })
+用户: "帮我打开计算器" -> bash_run({ command: "calc.exe" })
 用户: "查看 D 盘剩余空间" -> bash_run({ command: "Get-PSDrive D | Select-Object Used,Free" })
 用户: "当前目录有哪些文件" -> bash_run({ command: "Get-ChildItem | Format-Table Name,Length,LastWriteTime" })
