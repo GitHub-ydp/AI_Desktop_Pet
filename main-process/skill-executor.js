@@ -248,17 +248,18 @@ class SkillExecutor {
 
       let stdout = '';
       let stderr = '';
+      const MAX_OUTPUT = 1024 * 1024; // 1MB 上限，防无限累积
 
       proc.stdout.on('data', (chunk) => {
         const text = chunk.toString();
-        stdout += text;
         if (streamCallback) streamCallback({ type: 'stdout', text });
+        if (stdout.length < MAX_OUTPUT) stdout += text;
       });
 
       proc.stderr.on('data', (chunk) => {
         const text = chunk.toString();
-        stderr += text;
         if (streamCallback) streamCallback({ type: 'stderr', text });
+        if (stderr.length < MAX_OUTPUT) stderr += text;
       });
 
       const timer = setTimeout(() => {
@@ -568,11 +569,18 @@ class SkillExecutor {
 
   // reminder_create：创建提醒
   async _reminderCreate(args) {
-    const { content, remindAt, repeat } = args;
+    const { content, repeat } = args;
+    let { remindAt } = args;
 
     if (!content || !remindAt) {
       return { success: false, error: '缺少 content 或 remindAt 参数' };
     }
+
+    const remindAtMs = Number(remindAt);
+    if (!Number.isFinite(remindAtMs) || remindAtMs <= Date.now()) {
+      return { success: false, error: 'remindAt 必须是有效的未来时间戳（Unix毫秒）' };
+    }
+    remindAt = remindAtMs;
 
     if (!this.memorySystem) {
       return { success: false, error: '记忆系统未初始化' };
@@ -618,7 +626,9 @@ class SkillExecutor {
     }
   }
 
-  // web_search：网络搜索
+  // web_search：多级降级搜索
+  // 经过实测：html.duckduckgo.com 在本机可达（中国可用）且返回真实结果
+  // Bing HTML / Bing News RSS 需要 JS 渲染或 Cookie，静态 HTML 请求无有效结果
   async _webSearch(args) {
     const { query, maxResults = 5 } = args;
 
@@ -628,12 +638,41 @@ class SkillExecutor {
 
     try {
       const limit = Math.max(1, Math.min(10, Number(maxResults) || 5));
-      const instantResults = await this._safeSearch(() => this._searchDuckDuckGoInstant(query, limit));
-      let results = instantResults.length >= limit
-        ? instantResults
-        : await this._safeSearch(() => this._searchDuckDuckGoHtml(query, limit, instantResults));
+      if (this._looksLikeWeiboHotQuery(query)) {
+        const hotResults = await this._safeSearch(() => this._searchWeiboHotSearch(limit));
+        if (hotResults.length > 0) {
+          return {
+            success: true,
+            result: {
+              count: hotResults.length,
+              results: hotResults,
+              mode: 'ranking',
+              note: 'Structured ranking results can be answered directly without fetching every item page.'
+            }
+          };
+        }
+      }
+      const isNews = this._looksLikeNewsQuery(query);
+      let results = [];
 
-      if (results.length < limit && this._looksLikeNewsQuery(query)) {
+      // 阶段 1：DuckDuckGo HTML（主力，静态 HTML 无 JS 依赖，经实测可用）
+      results = await this._safeSearch(() => this._searchDuckDuckGoHtml(query, limit));
+
+      // 阶段 2：DuckDuckGo Instant Answer（知识卡片补充，对新闻类查询通常无结果）
+      if (results.length < limit) {
+        results = await this._safeSearch(() => this._searchDuckDuckGoInstant(query, limit, results), results);
+      }
+
+      // 阶段 3：人民网 RSS（新闻类，始终追加以保证有今日实时内容）
+      // 注意：不用 results.length < limit 做门控，确保今日热点混入结果
+      if (isNews) {
+        const rssLimit = limit + 5; // 先多取再截，保证多样性
+        results = await this._safeSearch(() => this._searchPeopleNewsRss(query, rssLimit, results), results);
+        results = this._dedupeSearchResults(results);
+      }
+
+      // 阶段 4：Google News RSS（新闻类最终备用）
+      if (results.length < limit && isNews) {
         results = await this._safeSearch(() => this._searchGoogleNewsRss(query, limit, results), results);
       }
 
@@ -642,7 +681,7 @@ class SkillExecutor {
         result: {
           count: results.length,
           results,
-          note: results.length === 0 ? '未找到明确的网页结果，请尝试换更具体的关键词。' : undefined
+          note: results.length === 0 ? '未找到网页结果，可能是网络问题或该内容暂无公开索引。' : undefined
         }
       };
     } catch (error) {
@@ -681,7 +720,7 @@ class SkillExecutor {
     }
 
     try {
-      const html = await this._fetchTextUrl(parsedUrl.toString(), 0);
+      const html = await this._fetchTextUrl(parsedUrl.toString(), 0, 8000);
       const extracted = this._extractReadableHtml(html);
       return {
         success: true,
@@ -696,7 +735,7 @@ class SkillExecutor {
     }
   }
 
-  async _searchDuckDuckGoInstant(query, maxResults) {
+  async _searchDuckDuckGoInstant(query, maxResults, seedResults = []) {
     const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
     const data = await new Promise((resolve, reject) => {
       const req = https.get(url, { timeout: 10000 }, (res) => {
@@ -717,7 +756,7 @@ class SkillExecutor {
       });
     });
 
-    const results = [];
+    const results = Array.isArray(seedResults) ? [...seedResults] : [];
     if (data.Abstract) {
       results.push({
         title: data.Heading || '摘要',
@@ -745,27 +784,81 @@ class SkillExecutor {
     return this._dedupeSearchResults(results).slice(0, maxResults);
   }
 
+  // DuckDuckGo HTML 搜索（经实测：html.duckduckgo.com 返回静态 HTML，含 10 条结果）
+  // 修复：旧正则匹配 class="result__body" 但实际 class 为 "links_main links_deep result__body"
+  //       DDG 链接格式为 //duckduckgo.com/l/?uddg=ENCODED_URL 需要解码
   async _searchDuckDuckGoHtml(query, maxResults, seedResults = []) {
     const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const html = await this._fetchTextUrl(url, 0);
     const results = Array.isArray(seedResults) ? [...seedResults] : [];
-    const blocks = html.match(/<div class="result__body">[\s\S]*?<\/div>\s*<\/div>/gi) || [];
 
-    for (const block of blocks) {
-      if (results.length >= maxResults) break;
-      const titleMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-      if (!titleMatch) continue;
-      const snippetMatch = block.match(/<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>|<div[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/div>/i);
-      const rawUrl = this._decodeHtmlEntities(titleMatch[1]);
-      const title = this._decodeHtmlEntities(titleMatch[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
-      const snippetRaw = snippetMatch ? (snippetMatch[1] || snippetMatch[2] || '') : '';
-      const snippet = this._decodeHtmlEntities(String(snippetRaw).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+    // 直接从 class="result__a" 链接提取（无需依赖外层块正则）
+    const titleLinks = [...html.matchAll(/<a[^>]*\bclass="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)];
+    const snippets = [...html.matchAll(/<a[^>]*\bclass="result__snippet"[^>]*>([\s\S]*?)<\/a>|<div[^>]*\bclass="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/div>/gi)];
+
+    for (let i = 0; i < titleLinks.length && results.length < maxResults; i++) {
+      const href = this._decodeHtmlEntities(titleLinks[i][1]);
+      // 解码 DDG 跳转链接：//duckduckgo.com/l/?uddg=REAL_URL
+      const uddgMatch = href.match(/[?&]uddg=([^&]+)/);
+      let realUrl = uddgMatch
+        ? decodeURIComponent(uddgMatch[1])
+        : href.startsWith('//') ? 'https:' + href : href;
+      if (!realUrl.startsWith('http')) continue;
+      const title = this._decodeHtmlEntities(titleLinks[i][2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
       if (!title) continue;
-      results.push({
-        title,
-        snippet,
-        url: rawUrl
-      });
+      const snippetRaw = snippets[i] ? (snippets[i][1] || snippets[i][2] || '') : '';
+      const snippet = this._decodeHtmlEntities(String(snippetRaw).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+      results.push({ title, snippet, url: realUrl });
+    }
+
+    return this._dedupeSearchResults(results).slice(0, maxResults);
+  }
+
+  // 人民网 RSS — 国内直连稳定，每日实时 100 条，实测 HTTP 200（2026-03-17）
+  // 三个频道：政治/社会/国际，结合覆盖当日主要新闻
+  async _searchPeopleNewsRss(query, maxResults, seedResults = []) {
+    const feeds = [
+      'http://www.people.com.cn/rss/society.xml',  // 社会（趣闻/生活最相关）
+      'http://www.people.com.cn/rss/politics.xml', // 政治/国内
+      'http://www.people.com.cn/rss/world.xml',    // 国际
+    ];
+    const results = Array.isArray(seedResults) ? [...seedResults] : [];
+    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+
+    for (const feedUrl of feeds) {
+      if (results.length >= maxResults) break;
+      try {
+        const xml = await this._fetchTextUrl(feedUrl, 0);
+        itemRegex.lastIndex = 0;
+        let match;
+        while ((match = itemRegex.exec(xml)) !== null && results.length < maxResults) {
+          const item = match[1];
+          const title = this._decodeHtmlEntities(
+            (item.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i)?.[1]
+              || item.match(/<title>([\s\S]*?)<\/title>/i)?.[1]
+              || '').replace(/\s+/g, ' ').trim()
+          );
+          const rawUrl = this._decodeHtmlEntities(
+            (item.match(/<link>([\s\S]*?)<\/link>/i)?.[1] || '').trim()
+          );
+          const description = this._decodeHtmlEntities(
+            (item.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i)?.[1]
+              || item.match(/<description>([\s\S]*?)<\/description>/i)?.[1]
+              || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+          );
+          const pubDate = this._decodeHtmlEntities(
+            (item.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1] || '').trim()
+          );
+          if (!title) continue;
+          results.push({
+            title,
+            snippet: [description.slice(0, 120), pubDate].filter(Boolean).join(' | '),
+            url: rawUrl
+          });
+        }
+      } catch {
+        // 单个 feed 失败不影响其他
+      }
     }
 
     return this._dedupeSearchResults(results).slice(0, maxResults);
@@ -799,6 +892,83 @@ class SkillExecutor {
     return this._dedupeSearchResults(results).slice(0, maxResults);
   }
 
+  async _searchWeiboHotSearch(maxResults, seedResults = []) {
+    let results = Array.isArray(seedResults) ? [...seedResults] : [];
+
+    results = await this._safeSearch(() => this._searchWeiboHotSearchHtml(maxResults, results), results);
+    if (results.length >= maxResults) {
+      return this._dedupeSearchResults(results).slice(0, maxResults);
+    }
+
+    results = await this._safeSearch(() => this._searchWeiboHotSearchAjax(maxResults, results), results);
+    return this._dedupeSearchResults(results).slice(0, maxResults);
+  }
+
+  async _searchWeiboHotSearchHtml(maxResults, seedResults = []) {
+    const html = await this._fetchTextUrl('https://s.weibo.com/top/summary?cate=realtimehot', 0, 10000);
+    const results = Array.isArray(seedResults) ? [...seedResults] : [];
+    const rows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+
+    for (const rowMatch of rows) {
+      if (results.length >= maxResults) break;
+      const rowHtml = rowMatch[1];
+      const linkMatch = rowHtml.match(/<td[^>]*class="td-02"[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+      if (!linkMatch) continue;
+
+      const rank = (rowHtml.match(/class="td-01(?: ranktop)?"[^>]*>\s*(\d+)/i)?.[1] || '').trim();
+      const title = this._decodeHtmlEntities(linkMatch[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+      if (!title || /公告|主持人|话题榜/i.test(title)) continue;
+
+      const rawUrl = this._decodeHtmlEntities(linkMatch[1]).trim();
+      const url = rawUrl.startsWith('http')
+        ? rawUrl
+        : `https://s.weibo.com${rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`}`;
+      const hotValue = this._decodeHtmlEntities(
+        (rowHtml.match(/<span[^>]*>\s*(\d+(?:\.\d+)?万?)\s*<\/span>/i)?.[1] || '').trim()
+      );
+
+      results.push({
+        title: rank ? `${rank}. ${title}` : title,
+        snippet: [rank ? `Rank ${rank}` : '', hotValue ? `Hot ${hotValue}` : '', 'Source: Weibo realtime hot search']
+          .filter(Boolean)
+          .join(' | '),
+        url
+      });
+    }
+
+    return this._dedupeSearchResults(results).slice(0, maxResults);
+  }
+
+  async _searchWeiboHotSearchAjax(maxResults, seedResults = []) {
+    const body = await this._fetchTextUrl('https://weibo.com/ajax/side/hotSearch', 0, 10000);
+    const data = JSON.parse(body);
+    const list = Array.isArray(data?.data?.realtime) ? data.data.realtime : [];
+    const results = Array.isArray(seedResults) ? [...seedResults] : [];
+
+    for (const item of list) {
+      if (results.length >= maxResults) break;
+      const word = String(item?.word || '').trim();
+      if (!word) continue;
+
+      const rank = String(item?.rank || item?.realpos || '').trim();
+      const hotValue = String(item?.num || item?.raw_hot || item?.hotvalue || '').trim();
+      const scheme = String(item?.word_scheme || '').trim();
+      const url = scheme
+        ? `https://s.weibo.com/weibo?q=${encodeURIComponent(scheme)}`
+        : `https://s.weibo.com/weibo?q=${encodeURIComponent(word)}`;
+
+      results.push({
+        title: rank ? `${rank}. ${word}` : word,
+        snippet: [rank ? `Rank ${rank}` : '', hotValue ? `Hot ${hotValue}` : '', 'Source: Weibo hot search API']
+          .filter(Boolean)
+          .join(' | '),
+        url
+      });
+    }
+
+    return this._dedupeSearchResults(results).slice(0, maxResults);
+  }
+
   _dedupeSearchResults(results = []) {
     const deduped = [];
     const seen = new Set();
@@ -816,7 +986,11 @@ class SkillExecutor {
   }
 
   _looksLikeNewsQuery(query) {
-    return /(新闻|热点|热搜|要闻|快讯|国际|国内|今日|今天|latest news|breaking news|headline)/i.test(String(query || ''));
+    return /(新闻|热点|热搜|要闻|快讯|国际|国内|今日|今天|最新|趣闻|资讯|事件|发生了什么|latest news|breaking news|headline|news|today)/i.test(String(query || ''));
+  }
+
+  _looksLikeWeiboHotQuery(query) {
+    return /(微博).*(热搜|热榜|热度榜|热门榜)|((热搜|热榜).*(微博))/i.test(String(query || ''));
   }
 
   async _fileList(args = {}) {
@@ -829,7 +1003,12 @@ class SkillExecutor {
       return { success: false, error: safetyCheck.reason };
     }
 
-    const stat = await fs.stat(rootPath);
+    let stat;
+    try {
+      stat = await fs.stat(rootPath);
+    } catch (e) {
+      return { success: false, error: `路径不存在或无权访问: ${rootPath}` };
+    }
     if (!stat.isDirectory()) {
       return { success: false, error: `目录不存在: ${rootPath}` };
     }
@@ -839,7 +1018,12 @@ class SkillExecutor {
 
     await this._walkDirectory(rootPath, async (fullPath, entry, relativePath) => {
       if (!matcher.test(entry.name)) return;
-      const entryStat = await fs.stat(fullPath);
+      let entryStat;
+      try {
+        entryStat = await fs.stat(fullPath);
+      } catch (e) {
+        return; // 无权访问或符号链接失效，跳过该条目
+      }
       files.push({
         name: entry.name,
         path: fullPath,
@@ -870,7 +1054,12 @@ class SkillExecutor {
       return { success: false, error: safetyCheck.reason };
     }
 
-    const stat = await fs.stat(rootPath);
+    let stat;
+    try {
+      stat = await fs.stat(rootPath);
+    } catch (e) {
+      return { success: false, error: `路径不存在或无权访问: ${rootPath}` };
+    }
     if (!stat.isDirectory()) {
       return { success: false, error: `目录不存在: ${rootPath}` };
     }
@@ -881,7 +1070,12 @@ class SkillExecutor {
     await this._walkDirectory(rootPath, async (fullPath, entry, relativePath) => {
       if (entry.isDirectory()) return;
       if (!matcher.test(entry.name)) return;
-      const entryStat = await fs.stat(fullPath);
+      let entryStat;
+      try {
+        entryStat = await fs.stat(fullPath);
+      } catch (e) {
+        return; // 无权访问或符号链接失效，跳过该条目
+      }
       files.push({
         name: entry.name,
         path: fullPath,
@@ -1207,7 +1401,7 @@ class SkillExecutor {
     };
   }
 
-  _fetchTextUrl(url, redirectCount = 0) {
+  _fetchTextUrl(url, redirectCount = 0, timeoutMs = 15000) {
     if (redirectCount > 5) {
       return Promise.reject(new Error('重定向过多'));
     }
@@ -1216,10 +1410,12 @@ class SkillExecutor {
       const parsedUrl = new URL(url);
       const client = parsedUrl.protocol === 'http:' ? http : https;
       const req = client.get(parsedUrl, {
-        timeout: 15000,
+        timeout: timeoutMs,
         headers: {
-          'User-Agent': 'AI-Desktop-Pet/1.0',
-          Accept: 'text/html,application/xhtml+xml'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.7',
+          'Accept-Encoding': 'identity'
         }
       }, (res) => {
         const statusCode = res.statusCode || 0;
@@ -1227,7 +1423,7 @@ class SkillExecutor {
         if ([301, 302, 303, 307, 308].includes(statusCode) && res.headers.location) {
           res.resume();
           const nextUrl = new URL(res.headers.location, parsedUrl).toString();
-          resolve(this._fetchTextUrl(nextUrl, redirectCount + 1));
+          resolve(this._fetchTextUrl(nextUrl, redirectCount + 1, timeoutMs));
           return;
         }
 
@@ -1365,6 +1561,9 @@ class SkillExecutor {
     };
 
     const candidate = aliases[appName] || appName;
+    if (!/^[\w\-.]+$/.test(candidate)) {
+      return '';  // 跳过不合法的候选名，防止命令注入
+    }
     return new Promise((resolve) => {
       exec(`where ${candidate}`, { windowsHide: true }, (error, stdout) => {
         if (error || !stdout) {

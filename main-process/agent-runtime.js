@@ -1,8 +1,18 @@
 const { randomUUID } = require('crypto');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const MAX_TOOL_ROUNDS = 3;
+const MAX_TOOL_ROUNDS = 15;   // 全局上限（保底）
+const MAX_TOOL_ROUNDS_BY_INTENT = {
+  chat:   1,   // 纯聊天不需要工具循环
+  vision: 1,   // 视觉任务单轮
+  search: 8,   // 搜索查询：1-2次搜索 + 3-4次 fetch + 总结，最多 8 轮
+  task:   15,  // 任务执行最多 15 轮
+  code:   15   // 代码任务最多 15 轮
+};
+const MAX_EMPTY_TOOL_ROUNDS = 2;  // 连续全部失败超过此数自动退出，防无限循环
+const CODE_FILE_EXTENSIONS = /\.(js|ts|py|sh|ps1|bat|jsx|tsx|go|rs|java|cpp|c)$/i;
 const APPROVAL_TIMEOUT_MS = 30000;
 const RAW_HISTORY_WINDOW_MESSAGES = 8;
 const SUMMARY_RECENT_MESSAGE_WINDOW = 4;
@@ -23,11 +33,16 @@ function classifyIntent(text, attachments) {
   if (attachments && attachments.length > 0) {
     return 'vision';
   }
-  if (/(提醒|创建|删除|移动|复制|重命名|打开|执行|运行|安装|下载|上传|整理|写入|修改|编辑|命令|shell|bash|powershell|代码|脚本)/.test(input)) {
-    return /(代码|脚本|函数|bug|调试|正则|sql|api|编程)/.test(input) ? 'code' : 'task';
-  }
   if (/(截图|图片|照片|看图|ocr|识别|图中)/.test(input)) {
     return 'vision';
+  }
+  // 搜索/查询意图（新闻、实时信息、百科查询）— 先于 task 判断，防止被"查看/搜索"等通用词吞噬
+  if (/(新闻|热点|热搜|趣闻|要闻|资讯|最新|今天.*?(是什么|发生|有什么|怎么样)|今日|百科|天气|几点|多少度|是谁|是什么|查一下|帮我查|了解一下|latest|news|weather|search)/.test(input)) {
+    return 'search';
+  }
+  // 代码/任务意图（文件操作、命令执行等）
+  if (/(提醒|创建|新建|删除|移动|复制|重命名|打开|执行|运行|安装|下载|上传|整理|写入|修改|编辑|读取|查看|显示|统计|搜索|查找|命令|shell|bash|powershell|代码|脚本)/.test(input)) {
+    return /(代码|脚本|函数|bug|调试|正则|sql|api|编程)/.test(input) ? 'code' : 'task';
   }
   return 'chat';
 }
@@ -67,39 +82,53 @@ function updatePlanStep(plan, id, status) {
 }
 
 function parseDSMLToolCalls(content) {
-  if (!content || !content.includes('<~DSML')) {
+  if (!content || (!content.includes('<~DSML') && !content.includes('<｜DSML｜'))) {
     return [];
   }
 
   const toolCalls = [];
-  const invokeRegex = /<~DSML~invoke\s+name="([^"]+)">([\s\S]*?)<\/~DSML~invoke>/g;
-  let match;
-
-  while ((match = invokeRegex.exec(content)) !== null) {
-    const toolName = match[1];
-    const paramsBlock = match[2];
-    const args = {};
-    const paramRegex = /<~DSML~parameter\s+name="([^"]+)"(?:\s+string="true")?>([^<]*)<\/~DSML~parameter>/g;
-    let paramMatch;
-
-    while ((paramMatch = paramRegex.exec(paramsBlock)) !== null) {
-      const paramName = paramMatch[1];
-      const raw = paramMatch[2];
-      try {
-        args[paramName] = JSON.parse(raw);
-      } catch {
-        args[paramName] = raw;
-      }
+  const formats = [
+    {
+      invokeRegex: /<~DSML~invoke\s+name="([^"]+)">([\s\S]*?)<\/~DSML~invoke>/g,
+      paramRegex: /<~DSML~parameter\s+name="([^"]+)"(?:\s+string="(true|false)")?>([^<]*)<\/~DSML~parameter>/g
+    },
+    {
+      invokeRegex: /<｜DSML｜invoke\s+name="([^"]+)">([\s\S]*?)<\/｜DSML｜invoke>/g,
+      paramRegex: /<｜DSML｜parameter\s+name="([^"]+)"(?:\s+string="(true|false)")?>([^<]*)<\/｜DSML｜parameter>/g
     }
+  ];
 
-    toolCalls.push({
-      id: `dsml_${randomUUID()}`,
-      type: 'function',
-      function: {
-        name: toolName,
-        arguments: JSON.stringify(args)
+  for (const format of formats) {
+    let match;
+    while ((match = format.invokeRegex.exec(content)) !== null) {
+      const toolName = match[1];
+      const paramsBlock = match[2];
+      const args = {};
+      let paramMatch;
+
+      while ((paramMatch = format.paramRegex.exec(paramsBlock)) !== null) {
+        const paramName = paramMatch[1];
+        const raw = paramMatch[3];
+        if (paramMatch[2] === 'true') {
+          args[paramName] = raw;
+          continue;
+        }
+        try {
+          args[paramName] = JSON.parse(raw);
+        } catch {
+          args[paramName] = raw;
+        }
       }
-    });
+
+      toolCalls.push({
+        id: `dsml_${randomUUID()}`,
+        type: 'function',
+        function: {
+          name: toolName,
+          arguments: JSON.stringify(args)
+        }
+      });
+    }
   }
 
   return toolCalls;
@@ -256,6 +285,7 @@ class AgentRuntime {
     this.abortControllers = new Map();
     this.sessionQueues = new Map();
     this.pendingApprovals = new Map();
+    this.pendingInjections = new Map();
   }
 
   initialize() {
@@ -406,6 +436,7 @@ class AgentRuntime {
           reason: 'cancelled'
         }
       });
+      this.pendingInjections.delete(runId);
       return { ok: true };
     }
 
@@ -439,8 +470,17 @@ class AgentRuntime {
         reason: 'cancelled'
       }
     });
+    this.pendingInjections.delete(runId);
     this._finishRun(run.sessionId, runId);
     return { ok: true };
+  }
+
+  injectMessage(runId, text) {
+    if (!this.pendingInjections.has(runId)) {
+      this.pendingInjections.set(runId, []);
+    }
+    this.pendingInjections.get(runId).push(String(text || '').trim());
+    return true;
   }
 
   wait({ runId, timeoutMs = 90000 }) {
@@ -506,6 +546,16 @@ class AgentRuntime {
 
     const controller = new AbortController();
     this.abortControllers.set(runId, controller);
+
+    // 全局 5 分钟超时保护，防止任务卡死
+    const globalTimeout = setTimeout(() => {
+      if (!controller.signal.aborted) {
+        console.warn(`[AgentRuntime] run ${runId} 超时（5分钟），强制取消`);
+        controller.abort();
+        this._failRun(run, 'global_timeout', '任务执行超时（5分钟）');
+      }
+    }, 5 * 60 * 1000);
+    controller.signal.addEventListener('abort', () => clearTimeout(globalTimeout), { once: true });
 
     const session = this.sessionStore.getSession(run.sessionId);
     const personality = session?.metadata?.personality || 'healing';
@@ -615,8 +665,12 @@ class AgentRuntime {
         });
 
         if (this.memorySystem) {
-          await this.memorySystem.addConversation('user', run.sourceText, { personality });
-          await this.memorySystem.addConversation('assistant', finalText, { personality });
+          try {
+            await this.memorySystem.addConversation('user', run.sourceText, { personality });
+            await this.memorySystem.addConversation('assistant', finalText, { personality });
+          } catch (memErr) {
+            console.warn('[AgentRuntime] memory save failed (non-fatal):', memErr.message);
+          }
         }
 
         const completedEvent = this.eventBus.publish({
@@ -639,6 +693,7 @@ class AgentRuntime {
     }
 
     const memoryContext = await this._buildMemoryContext(intent, run.sourceText);
+    const fileContext = await this._preFetchFileContext(intent, run.sourceText);
 
     const hasAttachments = Array.isArray(run.attachments) && run.attachments.length > 0;
     const availableTools = !hasAttachments ? this.capabilityRegistry.listTools() : [];
@@ -646,17 +701,35 @@ class AgentRuntime {
       personality,
       intent,
       memoryContext,
+      fileContext,
       sessionId: run.sessionId,
       userText: run.sourceText,
       attachments: run.attachments
     });
 
     let finalText = '';
+    let pendingFinalText = '';
     let round = 0;
     const toolOutcomes = [];
+    let directReply = null; // web_search 失败时绕过 LLM，直接用此文案作最终回复
 
     try {
-      while (round < MAX_TOOL_ROUNDS) {
+      const maxRounds = MAX_TOOL_ROUNDS_BY_INTENT[intent] ?? MAX_TOOL_ROUNDS;
+      let emptyToolRounds = 0;   // 连续全部失败轮次计数
+
+      while (round < maxRounds && !directReply) {
+        const injections = this.pendingInjections.get(runId) || [];
+        if (injections.length > 0) {
+          const injected = injections.shift();
+          messages.push({ role: 'user', content: `[用户插入指令] ${injected}` });
+          this.eventBus.publish({
+            sessionId: run.sessionId,
+            runId,
+            type: 'message.injected',
+            payload: { text: injected }
+          });
+        }
+
         if (plan && round === 0) {
           plan = updatePlanStep(plan, 1, 'done');
           this.eventBus.publish({
@@ -667,8 +740,8 @@ class AgentRuntime {
           });
         }
 
-        // 第二轮起已有工具结果，不再传工具定义，强制 LLM 生成文本总结而非重复调用工具
-        const effectiveTools = round === 0 && activeRoute.supportsTools ? availableTools : [];
+        // 每轮都传工具定义，LLM 自主决定何时停止调用（修复：原 round===0 限制导致多步任务必失败）
+        const effectiveTools = activeRoute.supportsTools ? availableTools : [];
         let providerResult;
         try {
           providerResult = await this._streamProviderResponse({
@@ -691,9 +764,13 @@ class AgentRuntime {
           }
           throw providerError;
         }
+        const roundContent = (providerResult.content || '').trim();
         if (providerResult.toolCalls.length === 0) {
-          finalText = providerResult.content.trim();
+          finalText = roundContent;
           break;
+        }
+        if (roundContent) {
+          pendingFinalText = roundContent;
         }
 
         if (plan) {
@@ -712,7 +789,91 @@ class AgentRuntime {
           tool_calls: providerResult.toolCalls
         });
 
-        for (const toolCall of providerResult.toolCalls) {
+        // 分组：安全工具并发执行，变更工具保持串行+确认流程
+        const safeToolCalls = providerResult.toolCalls.filter(
+          (tc) => !this.capabilityRegistry.isMutating(tc.function.name)
+        );
+        const mutatingToolCalls = providerResult.toolCalls.filter(
+          (tc) => this.capabilityRegistry.isMutating(tc.function.name)
+        );
+
+        // 安全工具并发执行
+        if (safeToolCalls.length > 0) {
+          // 先依次发布 started 事件（保持顺序）
+          for (const toolCall of safeToolCalls) {
+            let toolArgs = {};
+            try { toolArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { toolArgs = {}; }
+            this.eventBus.publish({
+              sessionId: run.sessionId,
+              runId,
+              type: 'tool.started',
+              payload: { toolName: toolCall.function.name, args: toolArgs }
+            });
+          }
+
+          // 并发执行
+          const safeResults = await Promise.all(safeToolCalls.map(async (toolCall) => {
+            const toolName = toolCall.function.name;
+            let toolArgs = {};
+            try { toolArgs = JSON.parse(toolCall.function.arguments || '{}'); } catch { toolArgs = {}; }
+            const toolResult = await this._executeToolWithRetry(toolName, toolArgs, {
+              context: { sessionId: run.sessionId, personality },
+              onStream: (chunk) => {
+                this.eventBus.publish({
+                  sessionId: run.sessionId,
+                  runId,
+                  type: 'tool.delta',
+                  payload: { toolName, chunk, toolCallId: toolCall.id }
+                });
+              }
+            });
+            return { toolCall, toolName, toolArgs, toolResult };
+          }));
+
+          // 按原始顺序处理结果（保证 tool_call_id 匹配）
+          for (const { toolCall, toolName, toolArgs, toolResult } of safeResults) {
+            this.eventBus.publish({
+              sessionId: run.sessionId,
+              runId,
+              type: 'tool.completed',
+              payload: { toolName, ok: toolResult.ok, summary: toolResult.summary, audit: toolResult.audit }
+            });
+            toolOutcomes.push({
+              toolName,
+              ok: toolResult.ok,
+              summary: toolResult.summary,
+              data: toolResult.data,
+              audit: toolResult.audit
+            });
+
+            // web_search 失败时直接设置回复文案
+            if (toolName === 'web_search' && !toolResult.ok) {
+              directReply = this._buildSearchFailureReply(toolResult);
+            }
+
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: this._truncateToolContent(toolResult, toolName)
+            });
+
+            if (toolResult.ok && (toolName === 'file_write' || toolName === 'file_edit')) {
+              const writtenPath = toolResult.data?.path || toolArgs?.path || '';
+              const isCodeFile = CODE_FILE_EXTENSIONS.test(writtenPath);
+              if (isCodeFile) {
+                messages.push({
+                  role: 'system',
+                  content: `文件 ${writtenPath} 已写入。如果需要验证结果，可以用 bash_run 运行它或执行相关测试命令。`
+                });
+              }
+            }
+          }
+
+          if (directReply) break;
+        }
+
+        // 变更工具串行执行（保留原有审批逻辑）
+        for (const toolCall of mutatingToolCalls) {
           const toolName = toolCall.function.name;
           let toolArgs = {};
           try {
@@ -763,7 +924,7 @@ class AgentRuntime {
             }
           });
 
-          const toolResult = await this.capabilityRegistry.execute(toolName, toolArgs, {
+          const toolResult = await this._executeToolWithRetry(toolName, toolArgs, {
             context: {
               sessionId: run.sessionId,
               personality
@@ -800,19 +961,70 @@ class AgentRuntime {
             audit: toolResult.audit
           });
 
+          // web_search 失败时直接设置回复文案，绕过 LLM 自由发挥
+          if (toolName === 'web_search' && !toolResult.ok) {
+            directReply = this._buildSearchFailureReply(toolResult);
+            break; // 跳出 for 循环；while 条件 !directReply 将阻止下一轮
+          }
+
           messages.push({
             role: 'tool',
             tool_call_id: toolCall.id,
-            content: JSON.stringify(toolResult.ok
-              ? (toolResult.data == null ? { ok: true, summary: toolResult.summary } : toolResult.data)
-              : { error: toolResult.summary })
+            content: this._truncateToolContent(toolResult, toolName)
           });
+
+          if (toolResult.ok && (toolName === 'file_write' || toolName === 'file_edit')) {
+            const writtenPath = toolResult.data?.path || toolArgs?.path || '';
+            const isCodeFile = CODE_FILE_EXTENSIONS.test(writtenPath);
+            if (isCodeFile) {
+              messages.push({
+                role: 'system',
+                content: `文件 ${writtenPath} 已写入。如果需要验证结果，可以用 bash_run 运行它或执行相关测试命令。`
+              });
+            }
+          }
+        }
+
+        // 连续空轮防护：全部工具失败则计数，超过阈值退出防止无限循环
+        const roundToolCalls = providerResult.toolCalls || [];
+        const roundSuccessCount = toolOutcomes.slice(-roundToolCalls.length).filter((o) => o.ok).length;
+        if (roundToolCalls.length > 0 && roundSuccessCount === 0) {
+          emptyToolRounds += 1;
+          if (emptyToolRounds >= MAX_EMPTY_TOOL_ROUNDS) {
+            console.warn('[AgentRuntime] 连续工具调用全失败，退出防止无限循环');
+            break;
+          }
+        } else {
+          emptyToolRounds = 0;
         }
 
         round += 1;
       }
 
-      if (!finalText) {
+      if (!directReply && !finalText && toolOutcomes.length > 0) {
+        try {
+          messages.push({
+            role: 'user',
+            content: '请用中文简洁总结刚才完成的操作和结果。'
+          });
+          const summaryResult = await this._streamProviderResponse({
+            route: activeRoute,
+            messages,
+            tools: [],
+            run,
+            signal: controller.signal
+          });
+          finalText = (summaryResult.content || '').trim();
+        } catch {
+          // 收尾失败则继续走 fallback
+        }
+      }
+
+      if (directReply) {
+        finalText = directReply; // ???????????? LLM
+      } else if (!finalText && pendingFinalText && toolOutcomes.length === 0) {
+        finalText = pendingFinalText;
+      } else if (!finalText) {
         finalText = this._buildFallbackFinalText({ run, toolOutcomes });
       }
 
@@ -842,12 +1054,12 @@ class AgentRuntime {
       });
 
       if (this.memorySystem) {
-        await this.memorySystem.addConversation('user', run.sourceText, {
-          personality
-        });
-        await this.memorySystem.addConversation('assistant', finalText, {
-          personality
-        });
+        try {
+          await this.memorySystem.addConversation('user', run.sourceText, { personality });
+          await this.memorySystem.addConversation('assistant', finalText, { personality });
+        } catch (memErr) {
+          console.warn('[AgentRuntime] memory save failed (non-fatal):', memErr.message);
+        }
       }
 
       const completedEvent = this.eventBus.publish({
@@ -883,17 +1095,51 @@ class AgentRuntime {
         this._failRun(run, 'runtime_error', error.message);
       }
     } finally {
+      clearTimeout(globalTimeout);
       this.abortControllers.delete(runId);
     }
   }
 
-  _buildMessages({ personality, intent, memoryContext, sessionId, userText, attachments = null }) {
+  _buildMessages({ personality, intent, memoryContext, fileContext = '', sessionId, userText, attachments = null }) {
     let systemPrompt = buildPersonalityPrompt(personality);
+    const session = this.sessionStore.getSession(sessionId);
+    const petName = session?.metadata?.petName || '';
+    if (petName) {
+      // 用中文注入宠物名称，避免中文名嵌入英文 prompt 导致语言混乱
+      systemPrompt = `你的名字是「${petName}」，主人这样叫你，被问名字时请用这个名字回答。\n\n${systemPrompt}`;
+    }
+    // 注入当前日期，防止 LLM 使用训练数据中的历史日期
+    const _now = new Date();
+    const _todayStr = `${_now.getFullYear()}年${String(_now.getMonth() + 1).padStart(2, '0')}月${String(_now.getDate()).padStart(2, '0')}日`;
+    systemPrompt += `\n\n当前日期：${_todayStr}。`;
     if (intent === 'task' || intent === 'code') {
-      systemPrompt += ' Use tools when needed. Keep tool results grounded in the actual output.';
+      systemPrompt += '\n\n工具调用规范：\n'
+        + '1. 优先使用工具完成任务，不要猜测文件内容或命令结果\n'
+        + '2. 文件过长时（返回 _truncated:true）请用 offset/limit 参数分段读取\n'
+        + '3. 写入代码文件后，主动用 bash_run 验证运行结果\n'
+        + '4. 工具调用失败时，根据错误信息调整参数或换方案重试\n'
+        + '完成任务后用中文简洁总结实际完成的内容和结果。';
+    }
+    if (intent === 'search') {
+      systemPrompt += '\n\n【搜索强制规范 — 必须严格遵守】\n'
+        + '• 询问今日新闻/热点/趣闻时：直接调用 web_search 获取实时结果。\n'
+        + '• 其他搜索：用简短关键词（不含年份）调用 web_search，最多 2 次。\n'
+        + '• 搜索后【必须】对最相关的 URL 逐个调用 web_fetch 读取真实内容。\n'
+        + '  - fetch 超时或失败时立刻换下一个，至少尝试 3 个 URL。\n'
+        + '• 根据 fetch 到的真实内容作答，不允许只凭搜索摘要回答。\n'
+        + '【禁止】连续多次 web_search 却不调用 web_fetch。';
+    }
+    if (intent === 'search') {
+      systemPrompt += '\nAdditional search handling:\n'
+        + '- For leaderboard queries like Weibo hot search, if web_search already returns a structured ranking list, answer directly from that list and do not force web_fetch for every item.\n'
+        + '- Do not keep changing keywords for the same leaderboard query.\n'
+        + '- If repeated search/fetch attempts fail, stop and explain the failure instead of looping until timeout.\n';
     }
     if (memoryContext && memoryContext.trim()) {
       systemPrompt += `\n\nRelevant memory:\n${memoryContext.trim()}`;
+    }
+    if (fileContext && fileContext.trim()) {
+      systemPrompt += `\n\n当前文件上下文：\n${fileContext.trim()}`;
     }
 
     const latestCompletedRun = this.sessionStore.getLatestCompletedRun(sessionId);
@@ -907,7 +1153,6 @@ class AgentRuntime {
       { role: 'user', content: this._buildUserContent(userText, attachments) }
     ];
   }
-
   _buildUserContent(userText, attachments = null) {
     const normalizedText = String(userText || '').trim();
     const imageAttachments = Array.isArray(attachments)
@@ -970,6 +1215,74 @@ class AgentRuntime {
     }
   }
 
+  async _preFetchFileContext(intent, userText) {
+    if (intent !== 'task' && intent !== 'code') return '';
+
+    const sourceText = String(userText || '');
+    const mentionedPaths = [];
+    const desktopPath = resolveDesktopPath(this.getDesktopPath);
+
+    if (/桌面|desktop/i.test(sourceText)) {
+      mentionedPaths.push({ dir: desktopPath, depth: 1 });
+    }
+
+    const pathMatches = sourceText.match(/[A-Za-z]:[\\/][^\s"'，。！？]+/g) || [];
+    for (const rawPath of pathMatches) {
+      const normalized = rawPath.replace(/\//g, '\\').replace(/[\\]+$/, '');
+      const dirPath = path.extname(normalized) ? path.dirname(normalized) : normalized;
+      if (!mentionedPaths.find((item) => item.dir === dirPath)) {
+        mentionedPaths.push({ dir: dirPath, depth: 2 });
+      }
+    }
+
+    if (mentionedPaths.length === 0) return '';
+
+    const sections = [];
+
+    for (const { dir: dirPath, depth } of mentionedPaths.slice(0, 2)) {
+      try {
+        const tree = await this._buildFileTree(dirPath, depth, 60);
+        if (tree.length > 0) {
+          sections.push(`目录 ${dirPath}:\n${tree.join('\n')}`);
+        }
+      } catch {
+        // 跳过不可读目录
+      }
+    }
+
+    return sections.join('\n\n');
+  }
+
+  async _buildFileTree(rootPath, maxDepth, maxItems) {
+    const lines = [];
+    const queue = [{ dir: rootPath, prefix: '', depth: 0 }];
+    let count = 0;
+
+    while (queue.length > 0 && count < maxItems) {
+      const { dir, prefix, depth } = queue.shift();
+      let entries;
+      try {
+        entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      const filtered = entries
+        .filter((entry) => !entry.name.startsWith('.') && !['node_modules', '__pycache__', 'dist', '.git'].includes(entry.name))
+        .slice(0, 20);
+
+      for (const entry of filtered) {
+        if (count >= maxItems) break;
+        const icon = entry.isDirectory() ? '' : '';
+        lines.push(`${prefix}${icon} ${entry.name}`);
+        count += 1;
+        if (entry.isDirectory() && depth < maxDepth - 1) {
+          queue.push({ dir: path.join(dir, entry.name), prefix: `${prefix}  `, depth: depth + 1 });
+        }
+      }
+    }
+    return lines;
+  }
   _buildProviderHeaders(route) {
     const headers = {
       Authorization: `Bearer ${route.apiKey}`,
@@ -1019,21 +1332,153 @@ class AgentRuntime {
       || message.includes('504');
   }
 
+  _buildSearchFailureReply(toolResult) {
+    return [
+      toolResult.summary,
+      toolResult.audit?.error && toolResult.audit.error !== toolResult.summary
+        ? `底层错误: ${toolResult.audit.error}`
+        : ''
+    ].filter(Boolean).join('\n');
+  }
+
+  // 可重试工具配置（仅网络类工具，非网络错误不重试）
+  _truncateToolContent(toolResult, toolName) {
+    const MAX_CHARS = 2000;
+
+    let raw;
+    if (!toolResult.ok) {
+      raw = {
+        error: toolResult.summary,
+        isError: true,
+        ...(toolName === 'bash_run' && toolResult.data ? {
+          exitCode: toolResult.data.exitCode,
+          stderr: String(toolResult.data.stderr || '').slice(0, 500),
+          stdout: String(toolResult.data.stdout || '').slice(0, 200)
+        } : {})
+      };
+    } else {
+      raw = toolResult.data == null
+        ? { ok: true, summary: toolResult.summary }
+        : toolResult.data;
+    }
+
+    const jsonStr = JSON.stringify(raw);
+    if (jsonStr.length <= MAX_CHARS) return jsonStr;
+
+    if (raw && typeof raw.content === 'string') {
+      const lines = raw.content.split('\n');
+      const totalLines = lines.length;
+      const omittedLines = Math.max(0, totalLines - 40);
+      const buildCompressed = (lineLimit = null) => {
+        const trimLine = (line) => {
+          if (!lineLimit || line.length <= lineLimit) return line;
+          return `${line.slice(0, lineLimit)}...`;
+        };
+        const headLines = lines.slice(0, 30).map(trimLine).join('\n');
+        const tailLines = lines.slice(-10).map(trimLine).join('\n');
+        return {
+          ...raw,
+          content: `${headLines}\n\n... [省略中间 ${omittedLines} 行] ...\n\n${tailLines}`,
+          _compressed: true,
+          _totalLines: totalLines
+        };
+      };
+
+      const compressed = buildCompressed();
+      const compressedStr = JSON.stringify(compressed);
+      if (compressedStr.length <= MAX_CHARS * 1.2) return compressedStr;
+
+      const compactCompressed = buildCompressed(80);
+      const compactCompressedStr = JSON.stringify(compactCompressed);
+      if (compactCompressedStr.length <= MAX_CHARS * 1.2) return compactCompressedStr;
+
+      const ultraCompactCompressed = buildCompressed(40);
+      const ultraCompactCompressedStr = JSON.stringify(ultraCompactCompressed);
+      if (ultraCompactCompressedStr.length <= MAX_CHARS * 1.2) return ultraCompactCompressedStr;
+
+      const summaryCompressed = {
+        ...raw,
+        content: `前30行预览:\n${lines.slice(0, 30).map((line) => line.slice(0, 40)).join('\n')}\n\n... [省略中间 ${omittedLines} 行] ...\n\n尾10行预览:\n${lines.slice(-10).map((line) => line.slice(0, 40)).join('\n')}`,
+        _compressed: true,
+        _totalLines: totalLines
+      };
+      const summaryCompressedStr = JSON.stringify(summaryCompressed);
+      if (summaryCompressedStr.length <= MAX_CHARS * 1.2) return summaryCompressedStr;
+    }
+
+    return JSON.stringify({
+      _truncated: true,
+      _originalLength: jsonStr.length,
+      _preview: jsonStr.slice(0, 1500),
+      summary: toolResult.summary || '内容过长已截断，可用 offset/limit 参数分段读取'
+    });
+  }
+
+  async _executeToolWithRetry(toolName, toolArgs, options) {
+    const RETRYABLE_TOOLS = {
+      web_search:  { maxRetries: 2, delayMs: 1000 },
+      web_fetch:   { maxRetries: 2, delayMs: 1000 },
+      weather_get: { maxRetries: 1, delayMs: 500 }
+    };
+
+    const retryConfig = RETRYABLE_TOOLS[toolName];
+    if (!retryConfig) {
+      return await this.capabilityRegistry.execute(toolName, toolArgs, options);
+    }
+
+    let lastResult = null;
+    let lastError = null;
+    for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, retryConfig.delayMs));
+        console.warn(`[AgentRuntime] ${toolName} 第${attempt + 1}次重试`);
+      }
+      let result;
+      try {
+        result = await this.capabilityRegistry.execute(toolName, toolArgs, options);
+      } catch (error) {
+        lastError = error;
+        if (!this._isRetryableProviderError(error)) {
+          throw error;
+        }
+        continue;
+      }
+      if (result.ok) return result;
+      const err = String(result.summary || result.audit?.error || '').toLowerCase();
+      const isNet = /fetch failed|timed? ?out|econnreset|enotfound|network|网络|超时|连接/.test(err);
+      if (!isNet) return result;   // 非网络错误不重试
+      lastResult = result;
+    }
+    if (!lastResult && lastError) {
+      throw lastError;
+    }
+    return {
+      ...lastResult,
+      summary: `${lastResult.summary}（已重试 ${retryConfig.maxRetries} 次）`
+    };
+  }
+
   _buildFallbackFinalText({ run, toolOutcomes = [] }) {
     const successfulOutcomes = toolOutcomes.filter((item) => item && item.ok);
     if (successfulOutcomes.length === 0) {
-      return '\u4efb\u52a1\u5df2\u5b8c\u6210\u3002';
+      const failedOutcomes = toolOutcomes.filter((item) => item && item.ok === false);
+      const lastFailure = failedOutcomes[failedOutcomes.length - 1];
+      const failureSummary = String(lastFailure?.summary || '').trim();
+      if (failureSummary) {
+        return `任务失败：${failureSummary}`;
+      }
+      return toolOutcomes.length > 0 ? '任务失败。' : '任务已完成。';
     }
 
     const lastOutcome = successfulOutcomes[successfulOutcomes.length - 1];
     const detail = this._formatToolOutcomeSummary(lastOutcome);
     if (successfulOutcomes.length === 1) {
-      return detail ? `\u5df2\u5b8c\u6210\uff1a${detail}` : '\u64cd\u4f5c\u5df2\u5b8c\u6210\u3002';
+      return detail ? `已完成：${detail}` : '操作已完成。';
     }
     if (detail) {
-      return `\u5df2\u5b8c\u6210 ${successfulOutcomes.length} \u4e2a\u64cd\u4f5c\u3002\u6700\u540e\u4e00\u6b65\uff1a${detail}`;
+      return `已完成 ${successfulOutcomes.length} 个操作。最后一步：${detail}`;
     }
-    return `\u5df2\u5b8c\u6210 ${successfulOutcomes.length} \u4e2a\u64cd\u4f5c\u3002`;
+    return `已完成 ${successfulOutcomes.length} 个操作。`;
   }
 
   _formatToolOutcomeSummary(outcome) {
@@ -1060,12 +1505,12 @@ class AgentRuntime {
         return data.content.trim().slice(0, 240);
       }
       if (Array.isArray(data.files) && data.files.length > 0) {
-        return `\u8fd4\u56de\u4e86 ${data.files.length} \u4e2a\u6587\u4ef6\u7ed3\u679c`;
+        return `返回了 ${data.files.length} 个文件结果`;
       }
     }
 
     if (outcome.toolName) {
-      return `\u5df2\u6267\u884c ${outcome.toolName}`;
+      return `已执行 ${outcome.toolName}`;
     }
     return '';
   }
@@ -1373,6 +1818,7 @@ class AgentRuntime {
   }
 
   _finishRun(sessionId, runId) {
+    this.pendingInjections.delete(runId);
     const queueState = this._getOrCreateQueueState(sessionId);
     if (queueState.activeRunId === runId) {
       queueState.activeRunId = null;
