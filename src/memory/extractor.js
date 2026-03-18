@@ -171,14 +171,14 @@ ${content}
 }`;
 
     try {
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'qwen3.5-plus',
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 500,
           temperature: 0.3

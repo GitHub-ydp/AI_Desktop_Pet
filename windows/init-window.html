@@ -115,16 +115,24 @@
     /* 步骤标签 */
     .step-labels {
       display: flex;
-      justify-content: space-between;
-      padding: 0 6px 8px;
+      justify-content: center;
+      padding: 0 20px 8px;
       flex-shrink: 0;
+    }
+
+    .step-label-spacer {
+      flex: 1;
+      max-width: 56px;
     }
 
     .step-label {
       font-size: 10px;
       color: var(--text-muted);
       text-align: center;
-      width: 56px;
+      width: 28px;
+      display: flex;
+      justify-content: center;
+      white-space: nowrap;
       transition: color 0.25s;
     }
 
@@ -494,6 +502,9 @@
       font-size: 13px;
       font-weight: 600;
       transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .btn:hover {
@@ -532,8 +543,11 @@
   </div>
   <div class="step-labels">
     <div class="step-label active" id="label1">认识你</div>
+    <div class="step-label-spacer"></div>
     <div class="step-label" id="label2">选宠物</div>
+    <div class="step-label-spacer"></div>
     <div class="step-label" id="label3">性格</div>
+    <div class="step-label-spacer"></div>
     <div class="step-label" id="label4">配置</div>
   </div>
 
@@ -603,7 +617,6 @@
         </div>
       </div>
       <div class="pet-anim-note">目前仅猫咪支持 Lottie 动画，其他宠物以 Emoji 形式展示</div>
-      </div>
 
       <div class="form-row" id="petNameGroup">
         <label class="label" for="initPetName">给宠物起个名字 *</label>
@@ -643,53 +656,21 @@
       </div>
     </div>
 
-    <!-- Step 4 -->
-    <div class="step-panel" id="step4">
-      <div class="step-header">
-        <h2>配置 AI 能力（可选）</h2>
-        <p>填入 DeepSeek API Key 后，宠物将具备真正的 AI 对话能力。</p>
-      </div>
-
-      <div class="form-row">
-        <label class="label" for="initApiKey">DeepSeek API Key</label>
-        <div class="input-with-toggle">
-          <input id="initApiKey" class="text-input" type="password" placeholder="sk-...">
-          <button class="toggle-btn" type="button" onclick="toggleApiKeyVisibility()" title="显示/隐藏">
-            <span id="eyeIcon">👁</span>
-          </button>
-        </div>
-        <button class="test-btn" type="button" onclick="testApiKey()">测试连接</button>
-        <div class="test-result" id="testResult"></div>
-      </div>
-
-      <div class="skip-hint">
-        没有 API Key？可以先跳过，宠物会使用内置的默认回复。之后在设置 → API Key 管理 中随时添加。
-      </div>
-
-      <div class="api-guide">
-        <div class="api-guide-title">如何获取 DeepSeek API Key？</div>
-        <ol>
-          <li>访问 <a onclick="openDeepSeekSignup()">platform.deepseek.com</a>，注册账号</li>
-          <li>进入「API Keys」页面，点击「创建 API Key」</li>
-          <li>复制 <code>sk-...</code> 开头的密钥粘贴到上方输入框</li>
-        </ol>
-        <div class="guide-note">新用户有免费赠送额度，够用很久~</div>
-      </div>
-    </div>
+    <!-- Step 4 (API Key) 已移除 — 使用内置 AI 服务，开箱即用 -->
 
   </div>
 
   <div class="footer">
     <div class="footer-left">
       <button class="btn" id="skipBtn" type="button" onclick="skipInit()">跳过向导</button>
-      <button class="btn" id="prevBtn" type="button" onclick="prevStep()" style="display:none">上一步</button>
+      <button class="btn" id="prevBtn" type="button" onclick="prevStep()" style="display:none;">上一步</button>
     </div>
     <button class="btn btn-primary" id="nextBtn" type="button" onclick="nextStep()">下一步</button>
   </div>
 
   <script>
     let currentStep = 1;
-    const totalSteps = 4;
+    const totalSteps = 3;
 
     const formData = {
       name: '',
@@ -697,8 +678,7 @@
       birthday: '',
       petEmoji: '🐱',
       petName: '',
-      personality: 'healing',
-      apiKey: ''
+      personality: 'healing'
     };
 
     document.querySelector('.gender-btn[data-gender=""]').classList.add('selected');
@@ -721,53 +701,7 @@
       formData.personality = card.dataset.personality;
     }
 
-    function openDeepSeekSignup() {
-      if (window.electron && window.electron.openExternalUrl) {
-        window.electron.openExternalUrl('https://platform.deepseek.com/api_keys');
-      }
-    }
-
-    function toggleApiKeyVisibility() {
-      const input = document.getElementById('initApiKey');
-      const icon = document.getElementById('eyeIcon');
-      if (input.type === 'password') {
-        input.type = 'text';
-        icon.textContent = '🙈';
-      } else {
-        input.type = 'password';
-        icon.textContent = '👁';
-      }
-    }
-
-    async function testApiKey() {
-      const key = document.getElementById('initApiKey').value.trim();
-      const resultEl = document.getElementById('testResult');
-      if (!key) {
-        resultEl.className = 'test-result fail';
-        resultEl.textContent = '请先填写 API Key';
-        return;
-      }
-      resultEl.className = 'test-result loading';
-      resultEl.textContent = '正在测试连接...';
-      try {
-        if (window.electron && window.electron.testProviderAPIKey) {
-          const result = await window.electron.testProviderAPIKey('deepseek', key);
-          if (result && result.success) {
-            resultEl.className = 'test-result success';
-            resultEl.textContent = '连接成功！AI 功能已就绪。';
-          } else {
-            resultEl.className = 'test-result fail';
-            resultEl.textContent = `连接失败：${result && result.error ? result.error : '请检查 Key 是否正确'}`;
-          }
-        } else {
-          resultEl.className = 'test-result fail';
-          resultEl.textContent = '测试功能不可用（调试模式）';
-        }
-      } catch (err) {
-        resultEl.className = 'test-result fail';
-        resultEl.textContent = `测试出错：${err.message || '未知错误'}`;
-      }
-    }
+    // API Key 相关函数已移除 — 使用内置 AI 服务
 
     function validateCurrentStep() {
       if (currentStep === 1) {
@@ -864,7 +798,6 @@
       formData.name = document.getElementById('initName').value.trim();
       formData.birthday = document.getElementById('initBirthday').value;
       formData.petName = document.getElementById('initPetName').value.trim();
-      formData.apiKey = document.getElementById('initApiKey').value.trim();
 
       const detail = {
           name: formData.name,
@@ -873,9 +806,7 @@
           interests: '',
           petEmoji: formData.petEmoji,
           petName: formData.petName,
-          personality: formData.personality,
-          apiKey: formData.apiKey,
-          apiKeySet: !!formData.apiKey
+          personality: formData.personality
         };
       if (window.electron && window.electron.sendSettingsChange) {
         window.electron.sendSettingsChange({ type: 'init-completed', detail });

@@ -1,14 +1,8 @@
 // Renderer chat API shim.
-// 注意：chatWithAI 主要作为 chat:send relay 的处理函数被调用。
-// 聊天窗口已自行处理 PetAgent 路径；这里直接走 DeepSeek HTTP 降级。
+// 使用内置 Qwen API，无需用户配置 API Key。
 
-// 直接调用 DeepSeek API
-async function directDeepSeekChat(userMessage, personality, chatHistory = []) {
-  const apiKey = await window.electron?.getProviderAPIKey?.('deepseek');
-  if (!apiKey) {
-    throw new Error('no deepseek api key');
-  }
-
+// 直接调用内置 Qwen API
+async function directQwenChat(userMessage, personality, chatHistory = []) {
   const basePrompt = window.PersonalityPrompts?.getPersonalityPrompt?.(personality)
     || '你是一个可爱的桌面宠物助手，请用中文简短回复。';
   let systemPrompt = basePrompt;
@@ -20,7 +14,7 @@ async function directDeepSeekChat(userMessage, personality, chatHistory = []) {
   } catch (e) {}
   const messages = [{ role: 'system', content: systemPrompt }];
 
-  // 附带最近 10 条历史（来自 app-vanilla.js 的 state.chatHistory）
+  // 附带最近 10 条历史
   const recent = Array.isArray(chatHistory) ? chatHistory.slice(-10) : [];
   for (const h of recent) {
     messages.push({
@@ -35,7 +29,18 @@ async function directDeepSeekChat(userMessage, personality, chatHistory = []) {
 
   let resp;
   try {
-    resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    // 通过 IPC 获取内置 API 配置
+    const route = await window.PetModelRouter?.getRoute?.('chat');
+    const endpoint = route?.endpoint || 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+    const model = route?.model || 'qwen3.5-plus';
+
+    // 通过主进程获取内置 key
+    const apiKey = await window.electron?.getBuiltinAPIKey?.();
+    if (!apiKey) {
+      throw new Error('builtin api key unavailable');
+    }
+
+    resp = await fetch(endpoint, {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -43,7 +48,7 @@ async function directDeepSeekChat(userMessage, personality, chatHistory = []) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model,
         messages,
         max_tokens: 500,
         temperature: 0.8
@@ -55,7 +60,7 @@ async function directDeepSeekChat(userMessage, personality, chatHistory = []) {
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => resp.status);
-    throw new Error(`DeepSeek API error: ${resp.status} ${text}`);
+    throw new Error(`Qwen API error: ${resp.status} ${text}`);
   }
 
   const data = await resp.json();
@@ -68,23 +73,17 @@ async function chatWithAI(userMessage, personality, chatHistory = []) {
   }
 
   try {
-    const reply = await directDeepSeekChat(userMessage, personality, chatHistory);
+    const reply = await directQwenChat(userMessage, personality, chatHistory);
     if (reply) return reply;
     throw new Error('empty reply');
   } catch (error) {
-    console.warn('[API] directDeepSeekChat failed:', error.message);
-    // 区分"未配置 API Key"和其他错误，给出明确的引导而非模糊提示
-    if (error.message === 'no deepseek api key') {
-      return '还没有配置 API Key 哦~\n点击菜单 → 设置 → API Key 管理，填入 DeepSeek Key 就能开始聊天啦！';
-    }
+    console.warn('[API] directQwenChat failed:', error.message);
     return '遇到了点问题，请稍后再试~';
   }
 }
 
 window.PetAPI = {
   chatWithAI,
-  isConfigured: async () => {
-    const apiKey = await window.electron?.getProviderAPIKey?.('deepseek');
-    return !!apiKey;
-  }
+  // 内置 API 始终可用
+  isConfigured: async () => true
 };

@@ -38,10 +38,12 @@ AI回复：{aiResponse}
 
 class FactExtractorLLM {
   constructor(config = {}) {
-    this.apiKey = config.apiKey || '';
-    this.apiHost = config.apiHost || 'api.deepseek.com';
-    this.apiPath = config.apiPath || '/v1/chat/completions';
-    this.model = config.model || 'deepseek-chat';
+    // 优先使用内置 API 配置
+    const BUILTIN_API = require('./builtin-api');
+    this.apiKey = config.apiKey || BUILTIN_API.apiKey;
+    this.apiHost = config.apiHost || BUILTIN_API.factExtraction.apiHost;
+    this.apiPath = config.apiPath || BUILTIN_API.factExtraction.apiPath;
+    this.model = config.model || BUILTIN_API.factExtraction.model;
 
     // 累积缓冲区：收集多轮对话后批量提取
     this._buffer = [];

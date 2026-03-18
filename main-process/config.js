@@ -75,13 +75,13 @@ const MEMORY_CONFIG = {
     confidence: 0.7
   },
 
-  // LLM 事实提取器配置
+  // LLM 事实提取器配置（使用内置 Qwen API）
   factExtraction: {
     enabled: true,
     bufferThreshold: 3,    // 累积 N 轮对话后批量提取
-    model: 'deepseek-chat',
-    apiHost: 'api.deepseek.com',
-    apiPath: '/v1/chat/completions'
+    model: 'qwen3.5-plus',
+    apiHost: 'dashscope.aliyuncs.com',
+    apiPath: '/compatible-mode/v1/chat/completions'
   },
 
   // 记忆分层配置

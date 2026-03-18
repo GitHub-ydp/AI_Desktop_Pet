@@ -9,10 +9,10 @@ const PROVIDER_OPTIONS = [
   { id: 'tesseract', name: 'Tesseract（本地）', models: 'tesseract' }
 ];
 const SCENE_DEFINITIONS = [
-  { id: 'chat', label: '聊天', description: '普通对话与陪伴交流。', defaultProvider: 'deepseek', defaultModel: 'deepseek-chat' },
-  { id: 'agent', label: 'Agent', description: '任务规划、工具调用、执行型请求。', defaultProvider: 'deepseek', defaultModel: 'deepseek-chat' },
-  { id: 'vision', label: '视觉', description: '看图、截图理解、图像分析。', defaultProvider: 'deepseek', defaultModel: 'deepseek-chat' },
-  { id: 'translate', label: '翻译', description: '文本翻译与截图翻译。', defaultProvider: 'deepseek', defaultModel: 'deepseek-chat' },
+  { id: 'chat', label: '聊天', description: '普通对话与陪伴交流。', defaultProvider: 'qwen', defaultModel: 'qwen3.5-plus' },
+  { id: 'agent', label: 'Agent', description: '任务规划、工具调用、执行型请求。', defaultProvider: 'qwen', defaultModel: 'qwen3.5-plus' },
+  { id: 'vision', label: '视觉', description: '看图、截图理解、图像分析。', defaultProvider: 'qwen', defaultModel: 'qwen3.5-plus' },
+  { id: 'translate', label: '翻译', description: '文本翻译与截图翻译。', defaultProvider: 'qwen', defaultModel: 'qwen3.5-plus' },
   { id: 'ocr', label: 'OCR', description: '文字识别。', defaultProvider: 'tesseract', defaultModel: 'tesseract' }
 ];
 const DEFAULT_SCENE_CONFIG = Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, {
@@ -636,83 +636,8 @@ function onSceneApiKeyModeChange(sceneId, enabled) {
   persistSceneConfig();
 }
 
-async function refreshCredentialSettings() {
-  providerKeyInfo = window.electron && window.electron.getAllProviderAPIKeys
-    ? await window.electron.getAllProviderAPIKeys()
-    : {};
-  sceneKeyStatusMap = window.electron && window.electron.getAllSceneKeyStatuses
-    ? await window.electron.getAllSceneKeyStatuses(llmSceneConfig)
-    : {};
-  renderSceneTabs();
-  renderScenePanel();
-  renderProviderKeyRows(providerKeyInfo);
-}
-
-async function saveSceneApiKey(sceneId) {
-  const input = document.getElementById('scene-key-input');
-  const key = input ? input.value.trim() : '';
-  if (!key) {
-    showToast('请先输入场景专属 API Key', true);
-    return;
-  }
-  try {
-    const result = await window.electron.saveSceneAPIKey(sceneId, key);
-    if (result && result.success) {
-      input.value = '';
-      showToast(`已保存 ${getSceneDefinition(sceneId).label} 场景 Key`);
-      await refreshCredentialSettings();
-    } else {
-      showToast(`保存失败：${result?.error || '未知错误'}`, true);
-    }
-  } catch (error) {
-    console.error('[Settings] saveSceneApiKey failed:', error);
-    showToast('保存场景 Key 失败', true);
-  }
-}
-
-async function testSceneApiKey(sceneId) {
-  try {
-    const result = await window.electron.testSceneAPIKey(sceneId, llmSceneConfig);
-    if (result && result.success) showToast(`${getSceneDefinition(sceneId).label} 测试通过`);
-    else showToast(`${getSceneDefinition(sceneId).label} 测试失败：${result?.error || '未知错误'}`, true);
-  } catch (error) {
-    console.error('[Settings] testSceneApiKey failed:', error);
-    showToast('场景测试失败', true);
-  }
-}
-
-async function saveApiKey(provider) {
-  const input = document.getElementById(`apikey-${provider}`);
-  const key = input ? input.value.trim() : '';
-  if (!key) {
-    showToast('请先输入 Provider API Key', true);
-    return;
-  }
-  try {
-    const result = await window.electron.saveProviderAPIKey(provider, key);
-    if (result && result.success) {
-      input.value = '';
-      showToast(`已保存 ${provider} 默认 API Key`);
-      await refreshCredentialSettings();
-    } else {
-      showToast(`保存失败：${result?.error || '未知错误'}`, true);
-    }
-  } catch (error) {
-    console.error('[Settings] saveApiKey failed:', error);
-    showToast('保存 Provider API Key 失败', true);
-  }
-}
-
-async function testApiKey(provider) {
-  try {
-    const result = await window.electron.testProviderAPIKey(provider);
-    if (result && result.success) showToast(`${provider} 测试通过`);
-    else showToast(`${provider} 测试失败：${result?.error || '未知错误'}`, true);
-  } catch (error) {
-    console.error('[Settings] testApiKey failed:', error);
-    showToast('Provider 测试失败', true);
-  }
-}
+// API Key 管理函数已移除 — 使用内置 AI 服务
+async function refreshCredentialSettings() {}
 
 function getCurrentThemeId() {
   if (!window.ThemeManager) return THEME_FALLBACK_ID;

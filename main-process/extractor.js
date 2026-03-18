@@ -173,14 +173,16 @@ ${content}
 }`;
 
     try {
-      const response = await this.makeHttpsRequest('api.deepseek.com', '/v1/chat/completions', {
+      const BUILTIN_API = require('./builtin-api');
+      const apiKey = this.apiKey || BUILTIN_API.apiKey;
+      const response = await this.makeHttpsRequest('dashscope.aliyuncs.com', '/compatible-mode/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'qwen3.5-plus',
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 500,
           temperature: 0.3

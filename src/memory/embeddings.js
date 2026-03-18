@@ -98,7 +98,7 @@ class EmbeddingService {
 
   // 调用嵌入 API
   async callEmbeddingAPI(text) {
-    const url = 'https://api.deepseek.com/v1/embeddings';
+    const url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings';
 
     for (let attempt = 0; attempt < this.config.retryAttempts; attempt++) {
       try {

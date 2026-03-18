@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-AI Desktop Pet 是一个基于 Electron 的桌面应用，实现了一个 AI 驱动的虚拟桌面宠物。宠物可以在桌面上拖动，通过 DeepSeek AI API 与用户进行对话。
+AI Desktop Pet 是一个基于 Electron 的桌面应用，实现了一个 AI 驱动的虚拟桌面宠物。宠物可以在桌面上拖动，通过内置 Qwen AI 与用户进行对话。
 
 **技术栈:** Electron + 原生 JavaScript（项目中存在 Vue 3 依赖，但目前未使用）
 
@@ -891,6 +891,49 @@ multi_file_edit 最大文件数 = 10
 html.duckduckgo.com → DDG Instant API → Google News RSS（新闻类）
 ```
 **关键数字：** html.duckduckgo.com 实测返回 10 条中文搜索结果，URL 经 uddg 解码为真实链接
+
+#### 2026-03 内置 API Key + 切换 Qwen（重大架构简化）
+
+**改造目标：** 从"用户自带 API Key"转向"内置 AI 服务，开箱即用"，为后续订阅套餐模式做准备。
+
+**涉及文件：**
+- `main-process/builtin-api.js` - **新增**：集中式内置 API 配置（Qwen 3.5 Plus，单一数据源）
+- `main-process/model-router.js` - **重写**：从 300 行多 provider 路由简化为 70 行，所有意图统一走内置 API
+- `main-process/config.js` - **更新**：事实提取从 DeepSeek 改为 Qwen
+- `main-process/fact-extractor.js` - **更新**：默认使用内置 API 配置
+- `main-process/extractor.js` - **更新**：API 端点从 DeepSeek 改为 Qwen
+- `main-process/embeddings.js` - **更新**：远程嵌入端点更新（实际使用本地 ONNX）
+- `main.js` - **大幅删减**：移除 ~250 行 API Key 管理代码（readApiKeysFile/writeApiKeysFile/saveProviderApiKey/maskApiKey/syncMemoryApiKey/getSceneCredential 等）；移除所有 API Key IPC handlers；getSceneConfig/getTaskSceneConfig 简化为直接返回内置配置
+- `preload.js` - **精简**：移除 10+ 个 API Key 桥接方法，新增 `getBuiltinAPIKey` 单一桥接
+- `src/api.js` - **重写**：从 DeepSeek 直连改为通过内置 Qwen API 路由
+- `src/storage.js` - **更新**：默认场景配置从 DeepSeek 改为 Qwen
+- `src/settings-window-utils.js` - **更新**：默认场景配置从 DeepSeek 改为 Qwen
+- `src/settings-window-runtime.js` - **精简**：移除 API Key CRUD 函数
+- `src/app-vanilla.js` - **精简**：移除初始化向导中的 API Key 保存逻辑
+- `windows/settings-window.html` - **重设计**："AI 模型"→"AI 引擎"信息卡，移除整个 API Key 管理面板
+- `windows/init-window.html` - **精简**：从 4 步向导缩减为 3 步（移除 API Key 配置步骤）
+- `src/memory/extractor.js` - **更新**：渲染端事实提取改用 Qwen
+- `src/memory/embeddings.js` - **更新**：渲染端嵌入端点更新
+
+**关键设计决策：**
+- **内置 API**: `main-process/builtin-api.js` 是所有 AI 调用的唯一凭证来源
+- **模型**: Qwen 3.5 Plus（全模态：文本+视觉+工具调用）
+- **端点**: `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`（OpenAI 兼容格式）
+- **用户不再需要**: 配置任何 API Key、选择 Provider、管理场景密钥
+- **删除文件/功能**: `api-keys.json` 读写、`PROVIDER_ENV_KEY_MAP`、`OPENAI_COMPAT_PROVIDERS`、多 provider 降级链、场景专属 Key、Provider 测试连通性
+- **保留兼容**: `dotenv` 加载保留（其他功能可能用）、`llmSceneConfig` 变量保留（内部消费者可能引用）
+
+**API 调用链路（简化后）：**
+```
+用户消息 → agent-runtime.classifyIntent()
+         → modelRouter.route(intent) → BUILTIN_API.getRoute(scene)
+         → HTTP 调用 dashscope.aliyuncs.com
+```
+
+**迁移影响：**
+- 已有用户的 `api-keys.json` 不会被删除，但不再读取
+- 设置面板 AI Key 管理区域替换为引擎信息展示
+- 初始化向导减少一步，体验更流畅
 
 ### 重要提醒
 - 必须回复我中文

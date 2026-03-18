@@ -284,7 +284,7 @@ function openInitModal() {
 
 // 处理初始化完成
 async function handleInitCompleted(event) {
-  const { name, gender, birthday, interests, petEmoji, petName, personality, apiKey, apiKeySet } = event.detail;
+  const { name, gender, birthday, interests, petEmoji, petName, personality } = event.detail;
 
   // 同步宠物选择
   if (petEmoji) {
@@ -306,17 +306,7 @@ async function handleInitCompleted(event) {
     }
   }
 
-  // 保存 API Key
-  if (apiKeySet && apiKey) {
-    try {
-      if (window.electron && window.electron.saveProviderAPIKey) {
-        await window.electron.saveProviderAPIKey('deepseek', apiKey);
-        console.log('[Init] DeepSeek API key saved');
-      }
-    } catch (err) {
-      console.error('[Init] Failed to save API key:', err);
-    }
-  }
+  // API Key 已内置，无需用户保存
 
   // 构建用户信息消息
   let userInfoMessage = `我叫${name}`;

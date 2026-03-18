@@ -100,7 +100,7 @@ class EmbeddingService {
 
   // 调用嵌入 API
   async callEmbeddingAPI(text) {
-    const url = 'https://api.deepseek.com/v1/embeddings';
+    const url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings';
 
     // DeepSeek 可能没有嵌入 API，直接使用 fallback
     // 如果将来支持，可以取消注释下面的代码
@@ -151,7 +151,7 @@ class EmbeddingService {
     }
 
     // DeepSeek 支持批量嵌入 API
-    const url = 'https://api.deepseek.com/v1/embeddings';
+    const url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings';
 
     // 批次处理（DeepSeek 单次最多支持多少条需要确认，这里假设 20 条）
     const MAX_BATCH_SIZE = 20;

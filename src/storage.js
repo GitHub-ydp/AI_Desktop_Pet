@@ -15,10 +15,10 @@ const DEFAULT_INTIMACY_WIDGET_OFFSET = {
 };
 
 const DEFAULT_LLM_SCENE_CONFIG = {
-  chat: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
-  agent: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
-  vision: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
-  translate: { provider: 'deepseek', model: 'deepseek-chat', apiKeyMode: 'provider-fallback' },
+  chat: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
+  agent: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
+  vision: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
+  translate: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
   ocr: { provider: 'tesseract', model: 'tesseract', apiKeyMode: 'provider-fallback' }
 };
 
