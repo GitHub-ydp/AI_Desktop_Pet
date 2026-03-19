@@ -8,6 +8,32 @@ AI Desktop Pet 是一个基于 Electron 的桌面应用，实现了一个 AI 驱
 
 **技术栈:** Electron + 原生 JavaScript（项目中存在 Vue 3 依赖，但目前未使用）
 
+## 当前阶段性目标（完成后删除此节）
+
+> 总体规划：[商业化评估与阶段性目标](./docs/market-evaluation-and-roadmap.md)
+> 执行计划：[Sprint 商业化第一阶段](./docs/plans/2026-03-19-sprint-commercialization-phase1.md)
+
+**阶段一：商业化基础（P0，4-6 周，3 个 Sprint）：**
+
+Sprint 1（第 1-2 周）— 后端网关 + 账号：
+- [ ] A1: `server/` 后端服务（Express + SQLite + JWT + SSE 代理）
+- [ ] A2: 客户端改造（`builtin-api.js` 删 Key，改用 JWT）
+- [ ] A3: 登录/注册界面 `windows/auth-window.html`
+
+Sprint 2（第 3-4 周）— 订阅套餐 + 支付：
+- [ ] B1: 后端套餐管理 + 支付回调
+- [ ] B2: 客户端套餐选择界面 + 配额耗尽引导
+
+Sprint 3（第 5-6 周）— 部署上线：
+- [ ] C1: 云服务器部署（HTTPS）
+- [ ] C2: 短信验证码接入
+- [ ] C3: 客户端体验完善
+- [ ] C4: 安全审查（0 处 API Key 泄漏）
+
+**致命风险提醒：** 当前 API Key 硬编码在 `builtin-api.js`（客户端），反编译即可提取。**未建网关前禁止公开发布。**
+
+**团队分工：** Claude=计划+验收，Codex=实施，Gemini=美工，老板=测试+转达
+
 ## 常用命令
 
 ### 开发

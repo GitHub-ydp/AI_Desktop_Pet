@@ -280,6 +280,7 @@ class AgentRuntime {
     this.modelRouter = options.modelRouter;
     this.getSceneConfig = options.getSceneConfig || (() => ({}));
     this.getDesktopPath = options.getDesktopPath || null;
+    this.getAuthToken = options.getAuthToken || (() => '');
     this.onSummaryEvent = options.onSummaryEvent || null;
 
     this.abortControllers = new Map();
@@ -566,8 +567,8 @@ class AgentRuntime {
     const routeAttempts = this._buildRouteAttempts(intent, route);
     let activeRoute = routeAttempts.shift() || route;
 
-    if (!activeRoute.apiKey && activeRoute.provider !== 'tesseract') {
-      this._failRun(run, 'missing_api_key', 'API key is not configured for the selected model');
+    if (!this._hasRouteCredential(activeRoute)) {
+      this._failRun(run, 'missing_auth_token', 'Authentication is required for the selected model');
       return;
     }
 
@@ -1284,10 +1285,13 @@ class AgentRuntime {
     return lines;
   }
   _buildProviderHeaders(route) {
+    const authToken = route?.authToken || this.getAuthToken();
     const headers = {
-      Authorization: `Bearer ${route.apiKey}`,
       'Content-Type': 'application/json'
     };
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
 
     if (route.provider === 'openrouter') {
       headers['HTTP-Referer'] = 'https://ai-desktop-pet.local';
@@ -1307,7 +1311,6 @@ class AgentRuntime {
 
     for (const route of [primaryRoute, ...fallbackChain]) {
       if (!route || !route.provider || !route.endpoint) continue;
-      if (!route.apiKey && route.provider !== 'tesseract') continue;
       const key = `${route.provider}:${route.model}:${route.endpoint}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -1315,6 +1318,16 @@ class AgentRuntime {
     }
 
     return attempts;
+  }
+
+  _hasRouteCredential(route) {
+    if (!route) {
+      return false;
+    }
+    if (route.provider === 'tesseract') {
+      return true;
+    }
+    return Boolean(route.authToken || this.getAuthToken());
   }
 
   _isRetryableProviderError(error) {
@@ -1521,7 +1534,8 @@ class AgentRuntime {
       messages,
       stream: true,
       max_tokens: 1200,
-      temperature: 0.7
+      temperature: 0.7,
+      enable_thinking: false
     };
 
     if (route.supportsTools && tools.length > 0) {
@@ -1682,7 +1696,7 @@ class AgentRuntime {
       sceneConfig: this.getSceneConfig()
     });
 
-    if (!summaryRoute || !summaryRoute.apiKey || summaryRoute.provider === 'tesseract') {
+    if (!summaryRoute || !this._hasRouteCredential(summaryRoute) || summaryRoute.provider === 'tesseract') {
       return previousSummary;
     }
 

@@ -522,6 +522,17 @@ function initSettingsIpc() {
     } else if (data.type === 'pet-name') {
       state.settings.petName = typeof data.petName === 'string' ? data.petName : state.settings.petName;
       saveData();
+    } else if (data.type === 'auth-signed-in') {
+      if (typeof data.accessToken === 'string' && data.accessToken.trim()) {
+        localStorage.setItem('auth_token', data.accessToken.trim());
+      }
+      localStorage.removeItem('guest_mode');
+    } else if (data.type === 'auth-signed-out') {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('guest_mode');
+    } else if (data.type === 'auth-guest') {
+      localStorage.removeItem('auth_token');
+      localStorage.setItem('guest_mode', '1');
     } else if (data.type === 'reset') {
       window.PetStorage.resetAllData();
       loadData();

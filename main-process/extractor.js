@@ -174,7 +174,10 @@ ${content}
 
     try {
       const BUILTIN_API = require('./builtin-api');
-      const apiKey = this.apiKey || BUILTIN_API.apiKey;
+      const apiKey = this.apiKey || '';
+      if (!apiKey) {
+        return [];
+      }
       const response = await this.makeHttpsRequest('dashscope.aliyuncs.com', '/compatible-mode/v1/chat/completions', {
         method: 'POST',
         headers: {

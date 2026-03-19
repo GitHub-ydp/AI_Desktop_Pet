@@ -38,11 +38,10 @@ AI回复：{aiResponse}
 
 class FactExtractorLLM {
   constructor(config = {}) {
-    // 优先使用内置 API 配置
     const BUILTIN_API = require('./builtin-api');
-    this.apiKey = config.apiKey || BUILTIN_API.apiKey;
-    this.apiHost = config.apiHost || BUILTIN_API.factExtraction.apiHost;
-    this.apiPath = config.apiPath || BUILTIN_API.factExtraction.apiPath;
+    this.apiKey = config.apiKey || '';
+    this.apiHost = config.apiHost || '';
+    this.apiPath = config.apiPath || '';
     this.model = config.model || BUILTIN_API.factExtraction.model;
 
     // 累积缓冲区：收集多轮对话后批量提取

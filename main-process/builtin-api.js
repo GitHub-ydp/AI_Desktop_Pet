@@ -6,16 +6,15 @@ const BUILTIN_API = {
   // 主模型：Qwen3.5-plus（全模态）
   provider: 'qwen',
   model: 'qwen3.5-plus',
-  endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-  apiKey: 'sk-e3c0a6a4b24440ff8de691b0294364ca',
+  gatewayUrl: 'http://localhost:3000/api/v1',
+  endpoint: 'http://localhost:3000/api/v1/chat/completions',
   supportsTools: true,
   supportsVision: true,
 
-  // 事实提取使用同一模型
+  // 事实提取和主对话都通过后端网关
   factExtraction: {
     model: 'qwen3.5-plus',
-    apiHost: 'dashscope.aliyuncs.com',
-    apiPath: '/compatible-mode/v1/chat/completions'
+    endpoint: 'http://localhost:3000/api/v1/chat/completions'
   },
 
   // 获取完整路由对象（兼容 agent-runtime 的 route 格式）
@@ -24,9 +23,8 @@ const BUILTIN_API = {
       provider: this.provider,
       model: this.model,
       endpoint: this.endpoint,
-      apiKey: this.apiKey,
       scene: scene || 'chat',
-      credentialSource: 'builtin',
+      credentialSource: 'gateway',
       supportsTools: this.supportsTools
     };
   }

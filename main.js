@@ -1,6 +1,8 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen } = require('electron');
 const path = require('path');
+const http = require('http');
 const fsSync = require('fs');
+const { spawn } = require('child_process');
 const MemoryMainProcess = require('./main-process/memory');
 const { ScreenshotManager } = require('./main-process/screenshot');
 const { ShareCardManager } = require('./main-process/share-card');
@@ -54,6 +56,12 @@ console.log('[Main Process] dotenv loaded');
 const BUILTIN_API = require('./main-process/builtin-api');
 console.log(`[Main Process] 内置 API: ${BUILTIN_API.provider}/${BUILTIN_API.model}`);
 
+const BACKEND_SERVER_PORT = 3000;
+const BACKEND_SERVER_ENTRY = path.join('server', 'src', 'index.js');
+const BACKEND_HEALTH_URL = `http://127.0.0.1:${BACKEND_SERVER_PORT}/health`;
+const BACKEND_HEALTH_TIMEOUT_MS = 20000;
+const BACKEND_HEALTH_RETRY_INTERVAL_MS = 500;
+
 let mainWindow = null;
 let tray = null;
 let memorySystem = null;
@@ -97,6 +105,9 @@ let intimacyWindow = null;
 let intimacyWindowReady = false;
 let pendingIntimacyPayload = null;
 let intimacyWidgetVisible = false;
+let backendServerProcess = null;
+let backendServerStartedByApp = false;
+let backendServerStartupPromise = null;
 let legacyChatSessionId = null;
 let screenshotIPCHandlersRegistered = false;
 const SCREENSHOT_SHORTCUT = 'CommandOrControl+Shift+A';
@@ -204,8 +215,8 @@ function getTaskSceneConfig(scene, options = {}) {
   const config = getSceneConfig(scene);
   return {
     ...config,
-    apiKey: BUILTIN_API.apiKey,
-    credentialSource: 'builtin',
+    authToken: getStoredAuthToken(),
+    credentialSource: 'gateway',
     requireImage: !!options.requireImage
   };
 }
@@ -214,17 +225,19 @@ function getAvailableTaskSceneConfigs(sceneNames, options = {}) {
   const { requireImage = false } = options;
   return [...new Set(sceneNames.filter(Boolean))].map(scene => ({
     ...getSceneConfig(scene),
-    apiKey: BUILTIN_API.apiKey,
-    credentialSource: 'builtin',
+    authToken: getStoredAuthToken(),
+    credentialSource: 'gateway',
     requireImage
   }));
 }
 
-function getOpenAICompatibleHeaders(provider, apiKey) {
+function getOpenAICompatibleHeaders(provider, authToken) {
   const headers = {
-    'Authorization': `Bearer ${apiKey}`,
     'Content-Type': 'application/json'
   };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
 
   if (provider === 'openrouter') {
     headers['HTTP-Referer'] = 'https://ai-desktop-pet.local';
@@ -291,18 +304,35 @@ function extractAssistantText(payload) {
 }
 
 async function requestOpenAICompatibleCompletion(config, messages, options = {}) {
-  const payload = await fetchJsonWithTimeout(config.providerMeta.endpoint, {
-    method: 'POST',
-    headers: getOpenAICompatibleHeaders(config.provider, config.apiKey),
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      temperature: options.temperature ?? 0.1,
-      max_tokens: options.maxTokens ?? 1200,
-      // 关闭思考模式（qwen3 等模型支持，其他模型忽略此参数）
-      enable_thinking: false
-    })
-  }, options.timeoutMs ?? 45000);
+  const authToken = config.authToken || getStoredAuthToken();
+  if (!authToken) {
+    createAuthWindow();
+    throw new Error('请先登录后再试');
+  }
+
+  let payload;
+  try {
+    payload = await fetchJsonWithTimeout(config.providerMeta.endpoint, {
+      method: 'POST',
+      headers: getOpenAICompatibleHeaders(config.provider, authToken),
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        temperature: options.temperature ?? 0.1,
+        max_tokens: options.maxTokens ?? 1200,
+        // 关闭思考模式（qwen3 等模型支持，其他模型忽略此参数）
+        enable_thinking: false
+      })
+    }, options.timeoutMs ?? 45000);
+  } catch (error) {
+    if (/^401\b/.test(String(error.message || ''))) {
+      clearStoredAuthToken();
+      broadcastSettingsChange({ type: 'auth-signed-out' });
+      createAuthWindow();
+      throw new Error('登录已失效，请重新登录');
+    }
+    throw error;
+  }
 
   const text = extractAssistantText(payload);
   if (!text) {
@@ -538,6 +568,9 @@ function normalizeAppConfig(data = {}) {
   if (typeof data.weatherDefaultCity === 'string' && data.weatherDefaultCity.trim()) {
     normalized.weatherDefaultCity = data.weatherDefaultCity.trim();
   }
+  if (typeof data.authToken === 'string' && data.authToken.trim()) {
+    normalized.authToken = data.authToken.trim();
+  }
 
   return normalized;
 }
@@ -566,6 +599,287 @@ function updateAppConfig(patch = {}) {
   });
   writeAppConfig(nextConfig);
   return nextConfig;
+}
+
+function broadcastSettingsChange(payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('settings:change', payload);
+  }
+  childWindows.forEach((window) => {
+    if (!window || window.isDestroyed()) return;
+    window.webContents.send('settings:change', payload);
+  });
+}
+
+function getStoredAuthToken() {
+  const config = readAppConfig();
+  return typeof config.authToken === 'string' ? config.authToken.trim() : '';
+}
+
+function setStoredAuthToken(token) {
+  const authToken = typeof token === 'string' ? token.trim() : '';
+  if (!authToken) {
+    clearStoredAuthToken();
+    return '';
+  }
+
+  updateAppConfig({ authToken });
+  return authToken;
+}
+
+function clearStoredAuthToken() {
+  const config = readAppConfig();
+  if (!config.authToken) {
+    return;
+  }
+
+  const nextConfig = { ...config };
+  delete nextConfig.authToken;
+  writeAppConfig(nextConfig);
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const segments = String(token || '').split('.');
+    if (segments.length < 2) {
+      return null;
+    }
+
+    const base64 = segments[1]
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(segments[1].length + ((4 - (segments[1].length % 4)) % 4), '=');
+
+    return JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
+  } catch (error) {
+    return null;
+  }
+}
+
+function hasValidStoredAuthToken() {
+  const authToken = getStoredAuthToken();
+  if (!authToken) {
+    return false;
+  }
+
+  const payload = decodeJwtPayload(authToken);
+  if (!payload || !payload.exp) {
+    return false;
+  }
+
+  const expiresAtMs = Number(payload.exp) * 1000;
+  if (!Number.isFinite(expiresAtMs)) {
+    return false;
+  }
+
+  return expiresAtMs > Date.now() + 5000;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function upsertEnvValue(content, key, value) {
+  const normalizedValue = typeof value === 'string' ? value.trim() : '';
+  if (!normalizedValue) {
+    return content;
+  }
+
+  const line = `${key}=${normalizedValue}`;
+  const pattern = new RegExp(`^${key}=.*$`, 'm');
+  if (pattern.test(content)) {
+    return content.replace(pattern, line);
+  }
+
+  const suffix = content.endsWith('\n') ? '' : '\n';
+  return `${content}${suffix}${line}\n`;
+}
+
+function resolveDashscopeApiKeyForServerEnv() {
+  const candidates = [
+    process.env.DASHSCOPE_API_KEY,
+    process.env.QWEN_API_KEY
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return '';
+}
+
+function ensureServerEnvFile() {
+  const serverEnvPath = path.join(__dirname, 'server', '.env');
+  if (fsSync.existsSync(serverEnvPath)) {
+    return;
+  }
+
+  const serverEnvExamplePath = path.join(__dirname, 'server', '.env.example');
+  if (!fsSync.existsSync(serverEnvExamplePath)) {
+    throw new Error(`Missing server env template: ${serverEnvExamplePath}`);
+  }
+
+  const dashscopeApiKey = resolveDashscopeApiKeyForServerEnv();
+  let content = fsSync.readFileSync(serverEnvExamplePath, 'utf-8');
+  content = upsertEnvValue(content, 'DASHSCOPE_API_KEY', dashscopeApiKey);
+  fsSync.writeFileSync(serverEnvPath, content, 'utf-8');
+
+  console.log('[Backend] Created server/.env from server/.env.example');
+  if (!dashscopeApiKey) {
+    console.warn('[Backend] server/.env was created without DASHSCOPE_API_KEY. Set DASHSCOPE_API_KEY or QWEN_API_KEY before using chat.');
+  }
+}
+
+function probeBackendHealthOnce(timeoutMs = 2000) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(BACKEND_HEALTH_URL, { timeout: timeoutMs }, (response) => {
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          resolve(true);
+          return;
+        }
+
+        const responseBody = Buffer.concat(chunks).toString('utf-8');
+        reject(new Error(`health check failed with status ${response.statusCode}: ${responseBody}`));
+      });
+    });
+
+    request.on('timeout', () => {
+      request.destroy(new Error(`health check timed out after ${timeoutMs}ms`));
+    });
+    request.on('error', reject);
+  });
+}
+
+async function waitForBackendHealth(timeoutMs = BACKEND_HEALTH_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+
+  while (Date.now() < deadline) {
+    try {
+      await probeBackendHealthOnce();
+      return;
+    } catch (error) {
+      lastError = error;
+      await sleep(BACKEND_HEALTH_RETRY_INTERVAL_MS);
+    }
+  }
+
+  throw new Error(`Backend health check did not pass within ${timeoutMs}ms${lastError ? `: ${lastError.message}` : ''}`);
+}
+
+async function ensureBackendServerReady() {
+  if (backendServerStartupPromise) {
+    return backendServerStartupPromise;
+  }
+
+  backendServerStartupPromise = (async () => {
+    ensureServerEnvFile();
+
+    try {
+      await waitForBackendHealth(1200);
+      console.log('[Backend] Reusing server already running on port 3000.');
+      return;
+    } catch (error) {
+      console.log('[Backend] No healthy local server detected, starting child process...');
+    }
+
+    let portInUseDetected = false;
+    const child = spawn('node', [BACKEND_SERVER_ENTRY], {
+      cwd: __dirname,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    });
+
+    backendServerProcess = child;
+    backendServerStartedByApp = true;
+
+    const logBackendOutput = (streamName, chunk) => {
+      const text = chunk.toString('utf-8');
+      const message = text.trimEnd();
+      if (!message) {
+        return;
+      }
+
+      console.log(`[Backend ${streamName}] ${message}`);
+      if (text.includes('EADDRINUSE')) {
+        portInUseDetected = true;
+      }
+    };
+
+    child.stdout.on('data', (chunk) => {
+      logBackendOutput('stdout', chunk);
+    });
+    child.stderr.on('data', (chunk) => {
+      logBackendOutput('stderr', chunk);
+    });
+
+    const exitBeforeHealthPromise = new Promise((resolve, reject) => {
+      child.once('error', (error) => {
+        backendServerStartedByApp = false;
+        if (backendServerProcess === child) {
+          backendServerProcess = null;
+        }
+        reject(error);
+      });
+
+      child.once('exit', (code, signal) => {
+        backendServerStartedByApp = false;
+        if (backendServerProcess === child) {
+          backendServerProcess = null;
+        }
+
+        if (portInUseDetected) {
+          console.log('[Backend] Port 3000 is already in use, waiting for health check on the existing service.');
+          return;
+        }
+
+        reject(new Error(`[Backend] Child process exited before health check passed (code=${code ?? 'null'}, signal=${signal ?? 'none'}).`));
+      });
+    });
+
+    try {
+      await Promise.race([
+        waitForBackendHealth(),
+        exitBeforeHealthPromise
+      ]);
+
+      if (portInUseDetected) {
+        console.log('[Backend] Health check passed through existing service on port 3000.');
+      } else {
+        console.log('[Backend] Health check passed after child process startup.');
+      }
+    } catch (error) {
+      if (portInUseDetected) {
+        throw new Error(`[Backend] Port 3000 is occupied, but health check still failed: ${error.message}`);
+      }
+      throw error;
+    }
+  })();
+
+  try {
+    await backendServerStartupPromise;
+  } finally {
+    backendServerStartupPromise = null;
+  }
+}
+
+function stopBackendServerProcess() {
+  if (!backendServerStartedByApp || !backendServerProcess || backendServerProcess.killed) {
+    return;
+  }
+
+  console.log('[Backend] Stopping child process...');
+  backendServerProcess.kill();
+  backendServerStartedByApp = false;
+  backendServerProcess = null;
 }
 
 function getWorkflowPythonPath() {
@@ -686,6 +1000,23 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+}
+
+function createAuthWindow() {
+  const authWindow = createChildWindow({
+    id: 'auth',
+    title: '登录 / 注册',
+    width: 400,
+    height: 500,
+    html: 'windows/auth-window.html'
+  });
+
+  if (authWindow && !authWindow.isDestroyed()) {
+    authWindow.show();
+    authWindow.focus();
+  }
+
+  return authWindow;
 }
 
 function getMenuWindowBounds() {
@@ -1233,8 +1564,15 @@ function setAutoLaunch() {
 
 // 应用启动
 app.whenReady().then(async () => {
+  await ensureBackendServerReady();
   console.log('App is ready, creating window...');
   createWindow();
+  if (!hasValidStoredAuthToken()) {
+    clearStoredAuthToken();
+    setTimeout(() => {
+      createAuthWindow();
+    }, 500);
+  }
   console.log('Creating tray...');
   createTray();
   console.log('Setting auto launch...');
@@ -1245,9 +1583,7 @@ app.whenReady().then(async () => {
 
   // 初始化记忆系统
   console.log('Initializing memory system...');
-  memorySystem = new MemoryMainProcess({
-    apiKey: BUILTIN_API.apiKey
-  });
+  memorySystem = new MemoryMainProcess({});
   // 先注册 IPC handlers，确保渲染进程的调用不会因初始化失败而无 handler
   memorySystem.registerIPCHandlers(ipcMain);
   ['memory:get-user-profile', 'memory:get-stats', 'memory:get-facts'].forEach((channel) => {
@@ -1383,6 +1719,7 @@ app.whenReady().then(async () => {
       modelRouter,
       getSceneConfig: () => llmSceneConfig,
       getDesktopPath: () => app.getPath('desktop'),
+      getAuthToken: () => getStoredAuthToken(),
       onSummaryEvent: (event) => {
         if (channelRegistry) {
           channelRegistry.emitSummary(event);
@@ -1838,7 +2175,10 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
-  globalShortcut.unregisterAll();
+  if (app.isReady()) {
+    globalShortcut.unregisterAll();
+  }
+  stopBackendServerProcess();
   // 关闭记忆系统
   if (memorySystem) {
     memorySystem.close();
@@ -1881,7 +2221,7 @@ function createChildWindow(options) {
 
   let childX, childY;
 
-  if (id === 'init') {
+  if (id === 'init' || id === 'auth') {
     const primaryDisplay = screen.getPrimaryDisplay();
     childX = primaryDisplay.workArea.x + Math.round((primaryDisplay.workArea.width - childW) / 2);
     childY = primaryDisplay.workArea.y + Math.round((primaryDisplay.workArea.height - childH) / 2);
@@ -2383,15 +2723,25 @@ ipcMain.on('settings:change', (event, payload) => {
     }
   } else if (payload && payload.type === 'llm-scene-config') {
     llmSceneConfig = normalizeLLMSceneConfig(payload.config);
+  } else if (payload && payload.type === 'auth-signed-in') {
+    if (payload.accessToken) {
+      setStoredAuthToken(payload.accessToken);
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  } else if (payload && payload.type === 'auth-signed-out') {
+    clearStoredAuthToken();
+  } else if (payload && payload.type === 'auth-guest') {
+    clearStoredAuthToken();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
   }
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('settings:change', payload);
-  }
-  childWindows.forEach((window) => {
-    if (!window || window.isDestroyed()) return;
-    window.webContents.send('settings:change', payload);
-  });
+  broadcastSettingsChange(payload);
 });
 
 // 菜单窗口宠物状态切换 -> 主窗口
@@ -2517,9 +2867,30 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
-// 获取内置 API 密钥（供渲染进程使用）
-ipcMain.handle('get-builtin-api-key', () => {
-  return BUILTIN_API.apiKey;
+ipcMain.handle('get-auth-token', () => {
+  if (!hasValidStoredAuthToken()) {
+    clearStoredAuthToken();
+    return null;
+  }
+  return getStoredAuthToken() || null;
+});
+
+ipcMain.handle('set-auth-token', (event, token) => {
+  const authToken = setStoredAuthToken(token);
+  return {
+    success: !!authToken,
+    authToken: authToken || null
+  };
+});
+
+ipcMain.handle('clear-auth-token', () => {
+  clearStoredAuthToken();
+  return { success: true };
+});
+
+ipcMain.handle('open-auth-window', () => {
+  createAuthWindow();
+  return { success: true };
 });
 
 ipcMain.handle('workflow:get-python-config', () => {
@@ -3513,11 +3884,21 @@ if (!gotTheLock) {
   console.log('[Main Process] Got single instance lock');
   app.on('second-instance', () => {
     console.log('[Main Process] Second instance detected, focusing main window');
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow();
+    }
     if (mainWindow) {
       if (mainWindow.isMinimized()) {
         mainWindow.restore();
       }
+      mainWindow.show();
       mainWindow.focus();
+    }
+    if (!hasValidStoredAuthToken()) {
+      clearStoredAuthToken();
+      if (app.isReady()) {
+        createAuthWindow();
+      }
     }
   });
 }

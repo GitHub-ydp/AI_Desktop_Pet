@@ -1,5 +1,5 @@
 // 模型路由器（简化版）
-// 使用内置 API 配置，所有场景统一走 Qwen
+// 所有场景统一走后端网关
 const BUILTIN_API = require('./builtin-api');
 
 const INTENT_TO_SCENE = {
@@ -30,7 +30,7 @@ class ModelRouter {
   getAvailableProviders() {
     return [{
       provider: BUILTIN_API.provider,
-      hasKey: true,
+      hasKey: false,
       defaultModel: BUILTIN_API.model,
       supportsTools: BUILTIN_API.supportsTools
     }];
@@ -44,8 +44,8 @@ class ModelRouter {
         model: result.model,
         endpoint: result.endpoint,
         scene: result.scene,
-        hasKey: true,
-        credentialSource: 'builtin',
+        hasKey: false,
+        credentialSource: 'gateway',
         supportsTools: result.supportsTools
       };
     });
@@ -55,7 +55,7 @@ class ModelRouter {
       return this.getFallbackChain(intent);
     });
 
-    console.log('[ModelRouter] IPC handlers registered (builtin API mode)');
+    console.log('[ModelRouter] IPC handlers registered (gateway mode)');
   }
 }
 

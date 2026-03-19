@@ -22,6 +22,7 @@ Thumbs.db
 # Environment
 .env
 .env.local
+server/.env
 
 # Debug
 *.map
@@ -29,3 +30,6 @@ Thumbs.db
 # Python cache
 __pycache__/
 *.pyc
+
+# Server runtime
+server/data/

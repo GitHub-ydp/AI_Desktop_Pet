@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 / 注册</title>
+  <style>
+    :root {
+      --bg: #1a1210;
+      --primary: #ffb347;
+      --primary-hover: #ff9e1a;
+      --secondary: #ff6b35;
+      --text: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.6);
+      --border: rgba(255, 179, 71, 0.2);
+      --border-bright: rgba(255, 179, 71, 0.55);
+      --bg-card: rgba(255, 255, 255, 0.05);
+      --input-field-bg: rgba(0, 0, 0, 0.25);
+      --radius: 12px;
+      --glow-sm: 0 0 10px rgba(255, 179, 71, 0.2);
+      --danger: #ff8f7a;
+      --success: #ffd27d;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .window-header {
+      height: 44px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-shrink: 0;
+      -webkit-app-region: drag;
+    }
+
+    .close-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-app-region: no-drag;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .close-btn:hover,
+    .close-btn:focus-visible {
+      border-color: var(--primary);
+      color: var(--primary);
+      outline: none;
+    }
+
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 0 32px 24px;
+      position: relative;
+      overflow-y: auto;
+    }
+
+    .illustration-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 4px;
+      margin-bottom: 14px;
+    }
+
+    .pet-illustration {
+      width: 70px;
+      height: 70px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 44px;
+      box-shadow: 0 8px 24px rgba(255, 107, 53, 0.3);
+      position: relative;
+      animation: float 4s ease-in-out infinite;
+    }
+
+    .pet-illustration::after {
+      content: '';
+      position: absolute;
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      border: 1.5px dashed var(--primary);
+      top: -8px;
+      left: -8px;
+      opacity: 0.5;
+      animation: spin 10s linear infinite;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    .welcome-text {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .welcome-text h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+
+    .welcome-text p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .helper-text {
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .helper-text strong {
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .field-label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .text-input {
+      width: 100%;
+      height: 46px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--input-field-bg);
+      color: var(--text);
+      padding: 0 16px;
+      outline: none;
+      font: inherit;
+      font-size: 14px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .text-input:focus,
+    .text-input:focus-visible {
+      border-color: var(--primary);
+      box-shadow: var(--glow-sm);
+    }
+
+    .text-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .vcode-wrapper .text-input {
+      padding-right: 108px;
+    }
+
+    .send-code-btn {
+      position: absolute;
+      right: 6px;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--primary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s;
+      font-weight: 600;
+    }
+
+    .send-code-btn:hover,
+    .send-code-btn:focus-visible {
+      background: rgba(255, 179, 71, 0.1);
+      outline: none;
+    }
+
+    .send-code-btn:disabled {
+      color: var(--text-muted);
+      cursor: not-allowed;
+      background: transparent;
+    }
+
+    .status-text {
+      min-height: 18px;
+      margin: 4px 0 6px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    .status-text[data-state="error"] {
+      color: var(--danger);
+    }
+
+    .status-text[data-state="success"] {
+      color: var(--success);
+    }
+
+    .submit-btn {
+      width: 100%;
+      height: 48px;
+      margin-top: 10px;
+      border-radius: var(--radius);
+      border: none;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+      box-shadow: 0 4px 12px rgba(255, 107, 53, 0.2);
+    }
+
+    .submit-btn:hover,
+    .submit-btn:focus-visible {
+      box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
+      opacity: 0.95;
+      outline: none;
+    }
+
+    .submit-btn:active {
+      transform: translateY(1px);
+    }
+
+    .submit-btn:disabled {
+      cursor: wait;
+      opacity: 0.75;
+    }
+
+    .footer-link {
+      margin-top: auto;
+      text-align: center;
+    }
+
+    .visitor-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+      transition: color 0.2s;
+    }
+
+    .visitor-btn:hover,
+    .visitor-btn:focus-visible {
+      color: var(--primary);
+      outline: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .pet-illustration,
+      .pet-illustration::after {
+        animation: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="window-header">
+    <button id="close-btn" class="close-btn" type="button" aria-label="关闭">×</button>
+  </div>
+
+  <div class="content-area">
+    <div class="illustration-container">
+      <div class="pet-illustration" aria-hidden="true">🐾</div>
+    </div>
+
+    <div class="welcome-text">
+      <h1>连接你的桌面宠物</h1>
+      <p>输入手机号和验证码，自动登录或注册</p>
+    </div>
+
+    <div class="helper-text">
+      开发期验证码固定为 <strong>1234</strong>，点击“获取验证码”仅做本地演示。
+    </div>
+
+    <div class="form-group">
+      <label class="field-label" for="phone-input">手机号</label>
+      <div class="input-wrapper">
+        <input
+          id="phone-input"
+          class="text-input"
+          type="tel"
+          inputmode="numeric"
+          autocomplete="tel"
+          placeholder="请输入手机号"
+          maxlength="11"
+          autofocus
+        >
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="field-label" for="code-input">验证码</label>
+      <div class="input-wrapper vcode-wrapper">
+        <input
+          id="code-input"
+          class="text-input"
+          type="text"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          spellcheck="false"
+          placeholder="请输入验证码"
+          maxlength="6"
+        >
+        <button id="send-code-btn" class="send-code-btn" type="button">获取验证码</button>
+      </div>
+    </div>
+
+    <div id="status-text" class="status-text" aria-live="polite"></div>
+
+    <button id="submit-btn" class="submit-btn" type="button">登录 / 注册</button>
+
+    <div class="footer-link">
+      <button id="visitor-btn" class="visitor-btn" type="button">先体验一下（游客身份）</button>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000/api/v1';
+    const phoneInput = document.getElementById('phone-input');
+    const codeInput = document.getElementById('code-input');
+    const sendCodeBtn = document.getElementById('send-code-btn');
+    const submitBtn = document.getElementById('submit-btn');
+    const visitorBtn = document.getElementById('visitor-btn');
+    const closeBtn = document.getElementById('close-btn');
+    const statusText = document.getElementById('status-text');
+
+    let countdown = 0;
+    let countdownTimer = null;
+
+    function normalizePhone(phone) {
+      return String(phone || '').replace(/\s+/g, '').trim();
+    }
+
+    function setStatus(message, state = 'info') {
+      statusText.textContent = message || '';
+      statusText.dataset.state = state;
+    }
+
+    function setSubmitting(submitting) {
+      submitBtn.disabled = submitting;
+      sendCodeBtn.disabled = submitting || countdown > 0;
+      visitorBtn.disabled = submitting;
+      submitBtn.textContent = submitting ? '处理中...' : '登录 / 注册';
+    }
+
+    function startCountdown() {
+      countdown = 60;
+      sendCodeBtn.disabled = true;
+      sendCodeBtn.textContent = `${countdown}s 后重试`;
+
+      countdownTimer = window.setInterval(() => {
+        countdown -= 1;
+        if (countdown <= 0) {
+          window.clearInterval(countdownTimer);
+          countdownTimer = null;
+          sendCodeBtn.disabled = false;
+          sendCodeBtn.textContent = '获取验证码';
+          return;
+        }
+        sendCodeBtn.textContent = `${countdown}s 后重试`;
+      }, 1000);
+    }
+
+    function validateInputs() {
+      const phone = normalizePhone(phoneInput.value);
+      const code = String(codeInput.value || '').trim();
+
+      if (!/^1\d{10}$/.test(phone)) {
+        setStatus('请输入正确的 11 位手机号。', 'error');
+        phoneInput.focus();
+        return null;
+      }
+
+      if (!code) {
+        setStatus('请输入验证码。', 'error');
+        codeInput.focus();
+        return null;
+      }
+
+      return { phone, code };
+    }
+
+    async function requestJson(path, payload) {
+      const response = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (error) {
+        data = null;
+      }
+
+      return { response, data };
+    }
+
+    async function closeAuthWindow() {
+      if (window.electron?.closeChildWindow) {
+        await window.electron.closeChildWindow('auth');
+      }
+    }
+
+    async function handleSendCode() {
+      const phone = normalizePhone(phoneInput.value);
+      if (!/^1\d{10}$/.test(phone)) {
+        setStatus('先输入正确的手机号，再获取验证码。', 'error');
+        phoneInput.focus();
+        return;
+      }
+
+      setStatus('开发期验证码固定为 1234。', 'success');
+      startCountdown();
+    }
+
+    async function handleSubmit() {
+      const form = validateInputs();
+      if (!form) {
+        return;
+      }
+
+      setSubmitting(true);
+      setStatus('正在登录...', 'info');
+
+      try {
+        let result = await requestJson('/auth/login', form);
+        if (result.response.status === 404) {
+          setStatus('账号不存在，正在自动注册...', 'info');
+          result = await requestJson('/auth/register', form);
+        }
+
+        if (!result.response.ok) {
+          const message = result.data?.error?.message || '登录失败，请稍后再试。';
+          throw new Error(message);
+        }
+
+        const accessToken = String(result.data?.accessToken || '').trim();
+        if (!accessToken) {
+          throw new Error('服务端未返回有效 token。');
+        }
+
+        if (window.electron?.setAuthToken) {
+          await window.electron.setAuthToken(accessToken);
+        }
+
+        localStorage.setItem('auth_token', accessToken);
+        localStorage.removeItem('guest_mode');
+
+        if (window.electron?.sendSettingsChange) {
+          window.electron.sendSettingsChange({
+            type: 'auth-signed-in',
+            accessToken,
+            user: result.data?.user || null
+          });
+        }
+
+        setStatus('登录成功，正在进入主界面...', 'success');
+        await closeAuthWindow();
+      } catch (error) {
+        setStatus(error.message || '登录失败，请稍后再试。', 'error');
+      } finally {
+        setSubmitting(false);
+      }
+    }
+
+    async function handleGuestMode() {
+      localStorage.removeItem('auth_token');
+      localStorage.setItem('guest_mode', '1');
+
+      if (window.electron?.clearAuthToken) {
+        await window.electron.clearAuthToken();
+      }
+
+      if (window.electron?.sendSettingsChange) {
+        window.electron.sendSettingsChange({ type: 'auth-guest' });
+      }
+
+      await closeAuthWindow();
+    }
+
+    closeBtn.addEventListener('click', () => {
+      void closeAuthWindow();
+    });
+
+    sendCodeBtn.addEventListener('click', () => {
+      void handleSendCode();
+    });
+
+    submitBtn.addEventListener('click', () => {
+      void handleSubmit();
+    });
+
+    visitorBtn.addEventListener('click', () => {
+      void handleGuestMode();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void handleSubmit();
+      }
+    });
+  </script>
+</body>
+</html>
