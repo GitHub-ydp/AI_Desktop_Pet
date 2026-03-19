@@ -78,7 +78,9 @@ function normalizeLLMSceneConfig(sceneConfig) {
     const model = typeof raw.model === 'string' && raw.model.trim()
       ? raw.model.trim()
       : fallback.model;
-    const apiKeyMode = raw.apiKeyMode === 'scene' ? 'scene' : 'provider-fallback';
+    const apiKeyMode = raw.apiKeyMode === 'scene'
+      ? 'scene'
+      : (raw.apiKeyMode === 'builtin' ? 'builtin' : 'provider-fallback');
     normalized[scene] = { provider, model, apiKeyMode };
   }
 

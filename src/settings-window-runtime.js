@@ -535,7 +535,9 @@ function normalizeSceneConfig(config) {
     normalized[sceneId] = {
       provider: typeof raw.provider === 'string' && raw.provider.trim() ? raw.provider.trim().toLowerCase() : fallback.provider,
       model: typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : fallback.model,
-      apiKeyMode: raw.apiKeyMode === 'scene' ? 'scene' : 'provider-fallback'
+      apiKeyMode: raw.apiKeyMode === 'scene'
+        ? 'scene'
+        : (raw.apiKeyMode === 'builtin' ? 'builtin' : 'provider-fallback')
     };
   }
   return normalized;

@@ -38,7 +38,7 @@
     }
 
     .window-header {
-      height: 44px;
+      height: 48px;
       padding: 0 14px;
       display: flex;
       align-items: center;
@@ -75,28 +75,28 @@
       flex: 1;
       display: flex;
       flex-direction: column;
-      padding: 0 32px 24px;
+      padding: 0 30px 24px;
       position: relative;
-      overflow-y: auto;
+      overflow: hidden;
     }
 
     .illustration-container {
       display: flex;
       justify-content: center;
       align-items: center;
-      margin-top: 4px;
-      margin-bottom: 14px;
+      margin-top: 10px;
+      margin-bottom: 16px;
     }
 
     .pet-illustration {
-      width: 70px;
-      height: 70px;
+      width: 62px;
+      height: 62px;
       background: linear-gradient(135deg, var(--primary), var(--secondary));
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 44px;
+      font-size: 38px;
       box-shadow: 0 8px 24px rgba(255, 107, 53, 0.3);
       position: relative;
       animation: float 4s ease-in-out infinite;
@@ -105,12 +105,12 @@
     .pet-illustration::after {
       content: '';
       position: absolute;
-      width: 84px;
-      height: 84px;
+      width: 74px;
+      height: 74px;
       border-radius: 50%;
       border: 1.5px dashed var(--primary);
-      top: -8px;
-      left: -8px;
+      top: -6px;
+      left: -6px;
       opacity: 0.5;
       animation: spin 10s linear infinite;
     }
@@ -121,34 +121,34 @@
 
     @keyframes float {
       0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-5px); }
+      50% { transform: translateY(-4px); }
     }
 
     .welcome-text {
       text-align: center;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
 
     .welcome-text h1 {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 700;
       color: var(--primary);
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       letter-spacing: 1px;
     }
 
     .welcome-text p {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--text-muted);
     }
 
     .helper-text {
-      margin-bottom: 12px;
-      padding: 8px 12px;
+      margin-bottom: 14px;
+      padding: 9px 12px;
       border-radius: 10px;
       background: var(--bg-card);
       border: 1px solid var(--border);
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-muted);
       line-height: 1.5;
     }
@@ -159,12 +159,12 @@
     }
 
     .form-group {
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
 
     .field-label {
       display: block;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       font-size: 12px;
       font-weight: 600;
       color: var(--primary);
@@ -178,7 +178,7 @@
 
     .text-input {
       width: 100%;
-      height: 46px;
+      height: 42px;
       border-radius: var(--radius);
       border: 1px solid var(--border);
       background: var(--input-field-bg);
@@ -201,19 +201,20 @@
     }
 
     .vcode-wrapper .text-input {
-      padding-right: 108px;
+      padding-right: 104px;
     }
 
     .send-code-btn {
       position: absolute;
-      right: 6px;
-      height: 34px;
-      padding: 0 12px;
+      right: 5px;
+      height: 30px;
+      min-width: 92px;
+      padding: 0 10px;
       border-radius: 8px;
       border: none;
       background: transparent;
       color: var(--primary);
-      font-size: 13px;
+      font-size: 12px;
       cursor: pointer;
       transition: background-color 0.2s, color 0.2s;
       font-weight: 600;
@@ -233,7 +234,7 @@
 
     .status-text {
       min-height: 18px;
-      margin: 4px 0 6px;
+      margin: 4px 0 8px;
       font-size: 12px;
       line-height: 1.5;
       color: var(--text-muted);
@@ -249,13 +250,13 @@
 
     .submit-btn {
       width: 100%;
-      height: 48px;
-      margin-top: 10px;
+      height: 42px;
+      margin-top: 8px;
       border-radius: var(--radius);
       border: none;
       background: linear-gradient(90deg, var(--primary), var(--secondary));
       color: #fff;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       cursor: pointer;
       transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
@@ -279,7 +280,7 @@
     }
 
     .footer-link {
-      margin-top: auto;
+      margin-top: 12px;
       text-align: center;
     }
 
@@ -287,7 +288,7 @@
       background: transparent;
       border: none;
       color: var(--text-muted);
-      font-size: 13px;
+      font-size: 12px;
       cursor: pointer;
       text-decoration: underline;
       text-underline-offset: 4px;
@@ -460,6 +461,14 @@
       }
     }
 
+    async function quitApp() {
+      if (window.electron?.quitApp) {
+        await window.electron.quitApp();
+        return;
+      }
+      await closeAuthWindow();
+    }
+
     async function handleSendCode() {
       const phone = normalizePhone(phoneInput.value);
       if (!/^1\d{10}$/.test(phone)) {
@@ -538,7 +547,7 @@
     }
 
     closeBtn.addEventListener('click', () => {
-      void closeAuthWindow();
+      void quitApp();
     });
 
     sendCodeBtn.addEventListener('click', () => {

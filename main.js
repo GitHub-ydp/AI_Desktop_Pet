@@ -108,6 +108,7 @@ let intimacyWidgetVisible = false;
 let backendServerProcess = null;
 let backendServerStartedByApp = false;
 let backendServerStartupPromise = null;
+let backendServerAvailable = false;
 let legacyChatSessionId = null;
 let screenshotIPCHandlersRegistered = false;
 const SCREENSHOT_SHORTCUT = 'CommandOrControl+Shift+A';
@@ -188,7 +189,9 @@ function normalizeLLMSceneConfig(config) {
     const model = typeof raw.model === 'string' && raw.model.trim()
       ? raw.model.trim()
       : fallback.model;
-    const apiKeyMode = raw.apiKeyMode === 'scene' ? 'scene' : 'provider-fallback';
+    const apiKeyMode = raw.apiKeyMode === 'scene'
+      ? 'scene'
+      : (raw.apiKeyMode === 'builtin' ? 'builtin' : 'provider-fallback');
     normalized[scene] = { provider, model, apiKeyMode };
   }
   return normalized;
@@ -780,11 +783,13 @@ async function ensureBackendServerReady() {
   }
 
   backendServerStartupPromise = (async () => {
+    backendServerAvailable = false;
     ensureServerEnvFile();
 
     try {
       await waitForBackendHealth(1200);
       console.log('[Backend] Reusing server already running on port 3000.');
+      backendServerAvailable = true;
       return;
     } catch (error) {
       console.log('[Backend] No healthy local server detected, starting child process...');
@@ -856,7 +861,9 @@ async function ensureBackendServerReady() {
       } else {
         console.log('[Backend] Health check passed after child process startup.');
       }
+      backendServerAvailable = true;
     } catch (error) {
+      backendServerAvailable = false;
       if (portInUseDetected) {
         throw new Error(`[Backend] Port 3000 is occupied, but health check still failed: ${error.message}`);
       }
@@ -880,6 +887,7 @@ function stopBackendServerProcess() {
   backendServerProcess.kill();
   backendServerStartedByApp = false;
   backendServerProcess = null;
+  backendServerAvailable = false;
 }
 
 function getWorkflowPythonPath() {
@@ -1003,11 +1011,16 @@ function createWindow() {
 }
 
 function createAuthWindow() {
+  if (!backendServerAvailable) {
+    console.warn('[Backend] Auth window skipped because local backend is unavailable.');
+    return null;
+  }
+
   const authWindow = createChildWindow({
     id: 'auth',
     title: '登录 / 注册',
     width: 400,
-    height: 500,
+    height: 560,
     html: 'windows/auth-window.html'
   });
 
@@ -1564,10 +1577,15 @@ function setAutoLaunch() {
 
 // 应用启动
 app.whenReady().then(async () => {
-  await ensureBackendServerReady();
+  try {
+    await ensureBackendServerReady();
+  } catch (error) {
+    backendServerAvailable = false;
+    console.warn('[Backend] Startup failed, continuing without local backend:', error.message);
+  }
   console.log('App is ready, creating window...');
   createWindow();
-  if (!hasValidStoredAuthToken()) {
+  if (backendServerAvailable && !hasValidStoredAuthToken()) {
     clearStoredAuthToken();
     setTimeout(() => {
       createAuthWindow();
@@ -2276,7 +2294,7 @@ function createChildWindow(options) {
   });
 
   // 通知主窗口：子窗口已打开
-  if (mainWindow && !mainWindow.isDestroyed()) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
     mainWindow.webContents.send('child-window-state', 'opened');
     // 子窗口打开时取消主窗口置顶，避免子窗口盖住其他应用
     mainWindow.setAlwaysOnTop(false);
@@ -2286,7 +2304,7 @@ function createChildWindow(options) {
   childWindow.on('closed', () => {
     childWindows.delete(id);
     // 通知主窗口：子窗口已关闭
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
       mainWindow.webContents.send('child-window-state', 'closed');
     }
     // 所有子窗口关闭后恢复主窗口置顶
@@ -2301,7 +2319,7 @@ function createChildWindow(options) {
 
 // IPC 通信处理
 function notifyMainWindowChildState(state) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
     mainWindow.webContents.send('child-window-state', state);
   }
 }
@@ -2867,6 +2885,11 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+ipcMain.handle('app:quit', () => {
+  app.quit();
+  return { success: true };
+});
+
 ipcMain.handle('get-auth-token', () => {
   if (!hasValidStoredAuthToken()) {
     clearStoredAuthToken();
@@ -2889,8 +2912,8 @@ ipcMain.handle('clear-auth-token', () => {
 });
 
 ipcMain.handle('open-auth-window', () => {
-  createAuthWindow();
-  return { success: true };
+  const authWindow = createAuthWindow();
+  return { success: !!authWindow, backendAvailable: backendServerAvailable };
 });
 
 ipcMain.handle('workflow:get-python-config', () => {

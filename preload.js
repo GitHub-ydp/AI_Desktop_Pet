@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electron', {
   moveWindow: (deltaX, deltaY) => ipcRenderer.invoke('move-window', deltaX, deltaY),
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   minimizeCurrentWindow: () => ipcRenderer.invoke('window:minimize-current'),
+  quitApp: () => ipcRenderer.invoke('app:quit'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAuthToken: () => ipcRenderer.invoke('get-auth-token'),
   setAuthToken: (token) => ipcRenderer.invoke('set-auth-token', token),

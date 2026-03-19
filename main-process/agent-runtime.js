@@ -1286,11 +1286,13 @@ class AgentRuntime {
   }
   _buildProviderHeaders(route) {
     const authToken = route?.authToken || this.getAuthToken();
+    const apiKey = route?.apiKey || '';
+    const bearerToken = apiKey || authToken;
     const headers = {
       'Content-Type': 'application/json'
     };
-    if (authToken) {
-      headers.Authorization = `Bearer ${authToken}`;
+    if (bearerToken) {
+      headers.Authorization = `Bearer ${bearerToken}`;
     }
 
     if (route.provider === 'openrouter') {
@@ -1327,7 +1329,7 @@ class AgentRuntime {
     if (route.provider === 'tesseract') {
       return true;
     }
-    return Boolean(route.authToken || this.getAuthToken());
+    return Boolean(route.apiKey || route.authToken || this.getAuthToken());
   }
 
   _isRetryableProviderError(error) {
