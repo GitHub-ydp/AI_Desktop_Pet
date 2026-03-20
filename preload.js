@@ -117,6 +117,14 @@ contextBridge.exposeInMainWorld('electron', {
 });
 
 // 暴露记忆系统 API 到渲染进程
+contextBridge.exposeInMainWorld('PetSubscription', {
+  openWindow: () => ipcRenderer.invoke('subscription:open-window'),
+  getPlans: () => ipcRenderer.invoke('subscription:get-plans'),
+  getStatus: () => ipcRenderer.invoke('subscription:get-status'),
+  createOrder: (plan, channel) => ipcRenderer.invoke('subscription:create-order', { plan, channel }),
+  checkOrder: (orderNo) => ipcRenderer.invoke('subscription:check-order', orderNo),
+});
+
 contextBridge.exposeInMainWorld('PetAgent', {
   isReady: () => ipcRenderer.invoke('agent:is-ready'),
   startSession: (payload) => ipcRenderer.invoke('agent:start-session', payload),

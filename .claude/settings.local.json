@@ -62,7 +62,14 @@
       "Bash(D:\\\\kaifa\\\\Anaconda\\\\envs\\\\main310\\\\python.exe:*)",
       "Bash(find:*)",
       "Bash(cd:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Skill(claude-hud:setup)",
+      "Read(//c/Users/Administrator/AppData/Roaming/npm/node_modules/bun/bin/**)",
+      "Read(//c/Users/Administrator/AppData/Roaming/npm/**)",
+      "Bash(command:*)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(netstat -ano)",
+      "Bash(curl:*)"
     ]
   }
 }

@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>&#35746;&#38405;&#22871;&#39184; - lazyCat</title>
+  <style>
+    :root {
+      --bg: #1a1210;
+      --primary: #ffb347;
+      --secondary: #ff6b35;
+      --text: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.62);
+      --border: rgba(255, 179, 71, 0.2);
+      --border-bright: rgba(255, 179, 71, 0.45);
+      --bg-card: rgba(255, 255, 255, 0.04);
+      --bg-card-hover: rgba(255, 255, 255, 0.08);
+      --radius: 12px;
+      --glow-sm: 0 4px 12px rgba(255, 179, 71, 0.15);
+      --glow-primary: 0 8px 22px rgba(255, 179, 71, 0.28);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 550px;
+      height: 520px;
+      overflow: hidden;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(255, 179, 71, 0.16), transparent 42%),
+        linear-gradient(180deg, #201612, #140e0c 42%, #120d0b 100%);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .window-header {
+      height: 48px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      -webkit-app-region: drag;
+      flex-shrink: 0;
+    }
+
+    .window-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .close-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-app-region: no-drag;
+      transition: all 0.2s ease;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+
+    .content-area {
+      flex: 1;
+      padding: 10px 24px 24px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .header-text {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .header-text h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      background: linear-gradient(90deg, var(--primary), #fff0d8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-text p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-bar strong {
+      color: #fff0d8;
+      font-weight: 700;
+    }
+
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .plan-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-height: 320px;
+      padding: 24px 16px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+    }
+
+    .plan-card:hover {
+      transform: translateY(-4px);
+      background: var(--bg-card-hover);
+      border-color: var(--border-bright);
+    }
+
+    .plan-card.current {
+      border-color: var(--primary);
+      background: rgba(255, 179, 71, 0.06);
+      box-shadow: var(--glow-sm);
+    }
+
+    .popular-tag {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 999px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 8px rgba(255, 107, 53, 0.3);
+    }
+
+    .plan-name {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    .plan-price {
+      margin-bottom: 10px;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 2px;
+      color: var(--primary);
+    }
+
+    .price-symbol { font-size: 14px; font-weight: 600; }
+    .price-amount { font-size: 28px; font-weight: 700; }
+    .price-period { font-size: 12px; color: var(--text-muted); }
+
+    .plan-limit {
+      margin-bottom: 16px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      flex: 1;
+      margin-bottom: 18px;
+    }
+
+    .feature-item {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      line-height: 1.5;
+    }
+
+    .feature-item::before {
+      content: "•";
+      color: var(--primary);
+      font-size: 16px;
+      line-height: 1;
+      margin-top: 1px;
+    }
+
+    .plan-btn {
+      width: 100%;
+      height: 38px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .plan-btn:hover:not(:disabled) {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .plan-btn.primary {
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      border: none;
+      color: #fff;
+      box-shadow: 0 4px 10px rgba(255, 107, 53, 0.2);
+    }
+
+    .plan-btn.primary:hover:not(:disabled) {
+      color: #fff;
+      opacity: 0.92;
+      box-shadow: 0 6px 15px rgba(255, 107, 53, 0.36);
+    }
+
+    .plan-btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .plan-btn.current-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: none;
+      color: var(--text-muted);
+    }
+
+    .footer-note {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .footer-note button {
+      border: none;
+      background: transparent;
+      color: var(--primary);
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .status-tip {
+      min-height: 20px;
+      margin-top: 10px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-tip.error {
+      color: #ffb6a1;
+    }
+
+    .status-tip.success {
+      color: #ffe7c2;
+    }
+
+    .payment-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .payment-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .payment-modal {
+      width: 336px;
+      background: linear-gradient(180deg, rgba(32, 22, 18, 0.98), rgba(19, 14, 12, 0.98));
+      border: 1px solid var(--border-bright);
+      border-radius: var(--radius);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: scale(0.94);
+      transition: transform 0.25s ease;
+      box-shadow: var(--glow-primary);
+    }
+
+    .payment-overlay.active .payment-modal {
+      transform: scale(1);
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 18px;
+      color: #fff4df;
+    }
+
+    .payment-tabs {
+      width: 100%;
+      display: flex;
+      background: var(--bg-card);
+      padding: 4px;
+      border-radius: 10px;
+      margin-bottom: 18px;
+    }
+
+    .pay-tab {
+      flex: 1;
+      height: 34px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .pay-tab.active {
+      background: var(--primary);
+      color: #1a1210;
+    }
+
+    .pay-card {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .pay-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .pay-value {
+      color: #fff0d8;
+      font-size: 14px;
+      font-weight: 600;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+
+    .pay-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--primary);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5); opacity: 0.5; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .payment-desc {
+      margin-bottom: 18px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .payment-actions {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .secondary-btn,
+    .primary-btn {
+      flex: 1;
+      height: 38px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .secondary-btn {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+    }
+
+    .secondary-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .primary-btn {
+      border: none;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      color: #1a1210;
+    }
+
+    .primary-btn:hover:not(:disabled) {
+      filter: brightness(1.04);
+    }
+
+    .primary-btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <div class="window-header">
+    <div class="window-title">&#128062; &#35746;&#38405;&#20013;&#24515;</div>
+    <button class="close-btn" type="button" aria-label="&#20851;&#38381;&#31383;&#21475;" onclick="closeWindow()">×</button>
+  </div>
+
+  <div class="content-area">
+    <div class="header-text">
+      <h1>&#36873;&#25321;&#20320;&#30340;&#38454;&#20276;&#22871;&#39184;</h1>
+      <p>&#35299;&#38145;&#26356;&#22810;&#23545;&#35805;&#39069;&#24230;&#12289;&#35760;&#24518;&#33021;&#21147;&#21644;&#21518;&#32493;&#39640;&#32423;&#21151;&#33021;</p>
+    </div>
+
+    <div class="status-bar">
+      <div id="currentPlanText">&#24403;&#21069;&#22871;&#39184;&#65306;<strong>&#21152;&#36733;&#20013;&#8230;</strong></div>
+      <div id="usageText">&#20170;&#26085;&#29992;&#37327;&#65306;<strong>-- / --</strong></div>
+    </div>
+
+    <div class="plans-grid" id="plansGrid"></div>
+
+    <div class="status-tip" id="statusTip"></div>
+    <p class="footer-note">&#25903;&#20184;&#36935;&#21040;&#38382;&#39064;&#65311;<button type="button" onclick="showSupportTip()">&#32852;&#31995;&#23458;&#26381;</button></p>
+  </div>
+
+  <div class="payment-overlay" id="paymentOverlay">
+    <div class="payment-modal">
+      <div class="modal-title" id="modalTitle">&#21019;&#24314;&#35746;&#21333;&#20013;&#8230;</div>
+
+      <div class="payment-tabs">
+        <button class="pay-tab active" type="button" data-channel="wechat" onclick="switchPay('wechat', this)">&#24494;&#20449;&#25903;&#20184;</button>
+        <button class="pay-tab" type="button" data-channel="alipay" onclick="switchPay('alipay', this)">&#25903;&#20184;&#23453;</button>
+      </div>
+
+      <div class="pay-card">
+        <div class="pay-label">&#35746;&#21333;&#21495;</div>
+        <div class="pay-value" id="orderNoText">--</div>
+      </div>
+
+      <div class="pay-card">
+        <div class="pay-label">&#24403;&#21069;&#29366;&#24577;</div>
+        <div class="pay-value" id="orderStatusText">&#24453;&#21019;&#24314;</div>
+      </div>
+
+      <div class="pay-status">
+        <div class="status-dot"></div>
+        <span id="payStatusHint">&#31561;&#24453;&#21019;&#24314;&#35746;&#21333;&#8230;</span>
+      </div>
+
+      <div class="payment-desc" id="paymentDesc">
+        &#24320;&#21457;&#26399;&#26242;&#19981;&#25509;&#30495;&#23454;&#25903;&#20184;&#12290;&#21019;&#24314;&#35746;&#21333;&#21518;&#65292;&#21487;&#36890;&#36807;&#21518;&#31471; <code>POST /subscription/notify</code> &#25163;&#21160;&#30830;&#35748;&#25903;&#20184;&#65292;&#20877;&#31561;&#24453;&#36825;&#37324;&#33258;&#21160;&#36718;&#35810;&#21319;&#32423;&#32467;&#26524;&#12290;
+      </div>
+
+      <div class="payment-actions">
+        <button class="secondary-btn" type="button" onclick="closePayment()">&#21462;&#28040;&#25903;&#20184;</button>
+        <button class="primary-btn" type="button" id="createOrderBtn" onclick="submitCurrentOrder()">&#21019;&#24314;&#35746;&#21333;</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TEXT = {
+      loading: '\u52a0\u8f7d\u4e2d\u2026',
+      currentPlanPrefix: '\u5f53\u524d\u5957\u9910\uff1a',
+      usagePrefix: '\u4eca\u65e5\u7528\u91cf\uff1a',
+      unlimited: '\u4e0d\u9650',
+      remaining: '\u5269\u4f59',
+      currentPlan: '\u5f53\u524d\u5957\u9910',
+      baseAvailable: '\u57fa\u7840\u53ef\u7528',
+      upgradeNow: '\u7acb\u5373\u5347\u7ea7',
+      upgradePlan: '\u5347\u7ea7\u5957\u9910',
+      popular: '\u6700\u53d7\u6b22\u8fce',
+      payTitlePrefix: '\u652f\u4ed8 \u00a5',
+      orderPending: 'pending',
+      payHintIdle: '\u8bf7\u9009\u62e9\u652f\u4ed8\u65b9\u5f0f\u5e76\u521b\u5efa\u8ba2\u5355',
+      payHintWaiting: '\u8ba2\u5355\u5df2\u521b\u5efa\uff0c\u7b49\u5f85\u652f\u4ed8\u786e\u8ba4\u2026',
+      payHintSuccess: '\u5347\u7ea7\u6210\u529f\uff0c\u6b63\u5728\u5173\u95ed\u7a97\u53e3\u2026',
+      createOrder: '\u521b\u5efa\u8ba2\u5355',
+      creatingOrder: '\u521b\u5efa\u4e2d\u2026',
+      orderCreatedTip: '\u8ba2\u5355\u5df2\u521b\u5efa\uff0c\u53ef\u4f7f\u7528 /subscription/notify \u624b\u52a8\u786e\u8ba4\u652f\u4ed8\u3002',
+      orderCreateFailed: '\u521b\u5efa\u8ba2\u5355\u5931\u8d25\uff1a',
+      supportTip: '\u5f00\u53d1\u671f\u53ef\u5148\u4f7f\u7528 /subscription/notify \u624b\u52a8\u786e\u8ba4\u652f\u4ed8\u3002',
+      backendNotReady: '\u5957\u9910\u670d\u52a1\u6682\u672a\u5c31\u7eea',
+      loadFailed: '\u52a0\u8f7d\u5931\u8d25\uff1a',
+      upgradeSuccess: '\u5347\u7ea7\u6210\u529f\uff0c\u65b0\u7684\u5957\u9910\u989d\u5ea6\u5df2\u751f\u6548\u3002',
+      dailyLimit: '\u6bcf\u65e5\u5bf9\u8bdd\uff1a',
+      times: '\u6b21',
+      month: '/\u6708',
+    };
+
+    const state = {
+      plans: [],
+      status: null,
+      selectedPlanId: '',
+      selectedChannel: 'wechat',
+      pendingOrderNo: '',
+      pendingTargetPlan: '',
+      pollingTimer: null,
+      paymentSuccessTimer: null,
+      creatingOrder: false,
+    };
+
+    function centsToPrice(price) {
+      return (Number(price || 0) / 100).toFixed(2);
+    }
+
+    function getDailyLimitText(plan) {
+      if (!plan || plan.dailyMessages === -1) {
+        return `${TEXT.dailyLimit}${TEXT.unlimited}`;
+      }
+      return `${TEXT.dailyLimit}${plan.dailyMessages} ${TEXT.times}`;
+    }
+
+    function getPlanActionLabel(planId, currentPlan) {
+      if (planId === currentPlan) {
+        return { text: TEXT.currentPlan, className: 'plan-btn current-btn', disabled: true };
+      }
+      if (planId === 'free') {
+        return { text: TEXT.baseAvailable, className: 'plan-btn', disabled: true };
+      }
+      return {
+        text: currentPlan === 'free' ? TEXT.upgradeNow : TEXT.upgradePlan,
+        className: planId === 'standard' ? 'plan-btn primary' : 'plan-btn',
+        disabled: false,
+      };
+    }
+
+    function setStatusTip(message, tone = '') {
+      const tip = document.getElementById('statusTip');
+      tip.textContent = message || '';
+      tip.className = `status-tip${tone ? ` ${tone}` : ''}`;
+    }
+
+    function updateStatusBar() {
+      const currentPlanText = document.getElementById('currentPlanText');
+      const usageText = document.getElementById('usageText');
+      const status = state.status;
+
+      if (!status) {
+        currentPlanText.innerHTML = `${TEXT.currentPlanPrefix}<strong>${TEXT.loading}</strong>`;
+        usageText.innerHTML = `${TEXT.usagePrefix}<strong>-- / --</strong>`;
+        return;
+      }
+
+      const currentPlan = state.plans.find((plan) => plan.id === status.currentPlan);
+      const dailyMessages = status.usage?.limit?.dailyMessages;
+      const remaining = status.usage?.limit?.remaining;
+      const used = status.usage?.today?.messageCount ?? 0;
+      const limitText = dailyMessages === -1 ? TEXT.unlimited : dailyMessages;
+      const remainingText = remaining === -1 ? TEXT.unlimited : remaining;
+
+      currentPlanText.innerHTML = `${TEXT.currentPlanPrefix}<strong>${currentPlan ? currentPlan.name : status.currentPlan}</strong>`;
+      usageText.innerHTML = `${TEXT.usagePrefix}<strong>${used} / ${limitText}</strong> · ${TEXT.remaining} ${remainingText}`;
+    }
+
+    function renderPlans() {
+      const grid = document.getElementById('plansGrid');
+      const currentPlan = state.status?.currentPlan || 'free';
+
+      grid.innerHTML = state.plans.map((plan) => {
+        const action = getPlanActionLabel(plan.id, currentPlan);
+        const featuresHtml = (plan.features || [])
+          .map((feature) => `<li class="feature-item">${feature}</li>`)
+          .join('');
+        const popularTag = plan.id === 'standard' ? `<div class="popular-tag">${TEXT.popular}</div>` : '';
+        const periodText = plan.period === 'monthly' ? TEXT.month : '';
+
+        return `
+          <section class="plan-card${plan.id === currentPlan ? ' current' : ''}">
+            ${popularTag}
+            <div class="plan-name">${plan.name}</div>
+            <div class="plan-price">
+              <span class="price-symbol">¥</span>
+              <span class="price-amount">${centsToPrice(plan.price)}</span>
+              <span class="price-period">${periodText}</span>
+            </div>
+            <div class="plan-limit">${getDailyLimitText(plan)}</div>
+            <ul class="feature-list">${featuresHtml}</ul>
+            <button
+              type="button"
+              class="${action.className}"
+              data-plan-id="${plan.id}"
+              ${action.disabled ? 'disabled' : ''}
+            >${action.text}</button>
+          </section>
+        `;
+      }).join('');
+
+      grid.querySelectorAll('[data-plan-id]').forEach((button) => {
+        button.addEventListener('click', () => {
+          openPayment(button.getAttribute('data-plan-id'));
+        });
+      });
+    }
+
+    function clearPolling() {
+      if (state.pollingTimer) {
+        clearInterval(state.pollingTimer);
+        state.pollingTimer = null;
+      }
+      if (state.paymentSuccessTimer) {
+        clearTimeout(state.paymentSuccessTimer);
+        state.paymentSuccessTimer = null;
+      }
+    }
+
+    async function loadPlansAndStatus() {
+      setStatusTip(TEXT.loading);
+      try {
+        const [plansResponse, statusResponse] = await Promise.all([
+          window.PetSubscription.getPlans(),
+          window.PetSubscription.getStatus(),
+        ]);
+
+        state.plans = Array.isArray(plansResponse?.plans) ? plansResponse.plans : [];
+        state.status = statusResponse || null;
+        renderPlans();
+        updateStatusBar();
+        setStatusTip('');
+      } catch (error) {
+        console.error('[subscription-window] load failed:', error);
+        setStatusTip(`${TEXT.loadFailed}${error.message || 'unknown_error'}`, 'error');
+      }
+    }
+
+    function switchPay(type, button) {
+      state.selectedChannel = type;
+      document.querySelectorAll('.pay-tab').forEach((tab) => {
+        tab.classList.toggle('active', tab === button);
+      });
+    }
+
+    function updatePaymentModal() {
+      const plan = state.plans.find((item) => item.id === state.selectedPlanId);
+      document.getElementById('modalTitle').textContent = plan
+        ? `${TEXT.payTitlePrefix}${centsToPrice(plan.price)}`
+        : TEXT.createOrder;
+      document.getElementById('orderNoText').textContent = state.pendingOrderNo || '--';
+      document.getElementById('orderStatusText').textContent = state.pendingOrderNo ? TEXT.orderPending : '--';
+      document.getElementById('payStatusHint').textContent = state.pendingOrderNo
+        ? TEXT.payHintWaiting
+        : TEXT.payHintIdle;
+      document.getElementById('createOrderBtn').textContent = state.creatingOrder ? TEXT.creatingOrder : TEXT.createOrder;
+      document.getElementById('createOrderBtn').disabled = state.creatingOrder;
+    }
+
+    function openPayment(planId) {
+      state.selectedPlanId = planId;
+      state.pendingOrderNo = '';
+      state.pendingTargetPlan = '';
+      state.creatingOrder = false;
+      updatePaymentModal();
+      document.getElementById('paymentOverlay').classList.add('active');
+      setStatusTip('');
+    }
+
+    function closePayment() {
+      document.getElementById('paymentOverlay').classList.remove('active');
+      state.pendingOrderNo = '';
+      state.pendingTargetPlan = '';
+      state.creatingOrder = false;
+      updatePaymentModal();
+      clearPolling();
+    }
+
+    async function submitCurrentOrder() {
+      if (!state.selectedPlanId || state.creatingOrder) {
+        return;
+      }
+
+      state.creatingOrder = true;
+      updatePaymentModal();
+      try {
+        const result = await window.PetSubscription.createOrder(
+          state.selectedPlanId,
+          state.selectedChannel
+        );
+
+        state.pendingOrderNo = result?.orderNo || '';
+        state.pendingTargetPlan = state.selectedPlanId;
+        document.getElementById('orderStatusText').textContent = result?.status || TEXT.orderPending;
+        document.getElementById('payStatusHint').textContent = TEXT.payHintWaiting;
+        setStatusTip(TEXT.orderCreatedTip);
+        updatePaymentModal();
+        startPolling();
+      } catch (error) {
+        console.error('[subscription-window] create order failed:', error);
+        setStatusTip(`${TEXT.orderCreateFailed}${error.message || 'unknown_error'}`, 'error');
+      } finally {
+        state.creatingOrder = false;
+        updatePaymentModal();
+      }
+    }
+
+    async function checkOrderStatus() {
+      if (!state.pendingOrderNo || !state.pendingTargetPlan) {
+        return;
+      }
+
+      try {
+        const status = await window.PetSubscription.checkOrder(state.pendingOrderNo);
+        state.status = status;
+        updateStatusBar();
+        renderPlans();
+
+        if (status?.currentPlan === state.pendingTargetPlan) {
+          clearPolling();
+          document.getElementById('orderStatusText').textContent = 'paid';
+          document.getElementById('payStatusHint').textContent = TEXT.payHintSuccess;
+          setStatusTip(TEXT.upgradeSuccess, 'success');
+
+          if (window.electron?.sendSettingsChange) {
+            window.electron.sendSettingsChange({
+              type: 'subscription-updated',
+              status,
+            });
+          }
+
+          state.paymentSuccessTimer = setTimeout(() => {
+            closeWindow();
+          }, 2000);
+        }
+      } catch (error) {
+        console.error('[subscription-window] check order failed:', error);
+      }
+    }
+
+    function startPolling() {
+      clearPolling();
+      state.pollingTimer = setInterval(() => {
+        void checkOrderStatus();
+      }, 3000);
+    }
+
+    function showSupportTip() {
+      setStatusTip(TEXT.supportTip);
+    }
+
+    function closeWindow() {
+      clearPolling();
+      if (window.electron?.closeChildWindow) {
+        window.electron.closeChildWindow('subscription');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updatePaymentModal();
+      void loadPlansAndStatus();
+    });
+  </script>
+</body>
+</html>

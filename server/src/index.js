@@ -1,8 +1,10 @@
 const express = require('express');
+
 const config = require('./config');
 const { initializeDatabase, closeDatabase } = require('./db/database');
 const authRoutes = require('./routes/auth');
 const chatRoutes = require('./routes/chat');
+const subscriptionRoutes = require('./routes/subscription');
 const userRoutes = require('./routes/user');
 
 initializeDatabase();
@@ -33,6 +35,7 @@ app.get('/health', (req, res) => {
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/chat', chatRoutes);
+app.use('/api/v1/subscription', subscriptionRoutes);
 app.use('/api/v1/user', userRoutes);
 
 app.use((req, res) => {

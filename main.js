@@ -344,6 +344,53 @@ async function requestOpenAICompatibleCompletion(config, messages, options = {})
   return text;
 }
 
+function getBackendApiUrl(pathname = '') {
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  return `http://127.0.0.1:${BACKEND_SERVER_PORT}/api/v1${normalizedPath}`;
+}
+
+async function requestBackendApi(pathname, options = {}) {
+  if (!backendServerAvailable) {
+    throw new Error('backend_unavailable');
+  }
+
+  const { method = 'GET', body, requireAuth = false, timeoutMs = 15000 } = options;
+  const headers = {};
+
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  if (requireAuth) {
+    const authToken = getStoredAuthToken();
+    if (!authToken) {
+      createAuthWindow();
+      throw new Error('auth_required');
+    }
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
+  try {
+    return await fetchJsonWithTimeout(
+      getBackendApiUrl(pathname),
+      {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      },
+      timeoutMs,
+    );
+  } catch (error) {
+    if (/^401\b/.test(String(error.message || ''))) {
+      clearStoredAuthToken();
+      broadcastSettingsChange({ type: 'auth-signed-out' });
+      createAuthWindow();
+      throw new Error('auth_required');
+    }
+    throw error;
+  }
+}
+
 async function runScreenshotOCR(dataURL) {
   if (typeof dataURL !== 'string' || !dataURL.startsWith('data:image/')) {
     throw new Error('无效的截图数据');
@@ -1030,6 +1077,28 @@ function createAuthWindow() {
   }
 
   return authWindow;
+}
+
+function createSubscriptionWindow() {
+  if (!backendServerAvailable) {
+    console.warn('[Backend] Subscription window skipped because local backend is unavailable.');
+    return null;
+  }
+
+  const subscriptionWindow = createChildWindow({
+    id: 'subscription',
+    title: '订阅套餐',
+    width: 550,
+    height: 520,
+    html: 'windows/subscription-window.html'
+  });
+
+  if (subscriptionWindow && !subscriptionWindow.isDestroyed()) {
+    subscriptionWindow.show();
+    subscriptionWindow.focus();
+  }
+
+  return subscriptionWindow;
 }
 
 function getMenuWindowBounds() {
@@ -2239,7 +2308,7 @@ function createChildWindow(options) {
 
   let childX, childY;
 
-  if (id === 'init' || id === 'auth') {
+  if (id === 'init' || id === 'auth' || id === 'subscription') {
     const primaryDisplay = screen.getPrimaryDisplay();
     childX = primaryDisplay.workArea.x + Math.round((primaryDisplay.workArea.width - childW) / 2);
     childY = primaryDisplay.workArea.y + Math.round((primaryDisplay.workArea.height - childH) / 2);
@@ -2914,6 +2983,38 @@ ipcMain.handle('clear-auth-token', () => {
 ipcMain.handle('open-auth-window', () => {
   const authWindow = createAuthWindow();
   return { success: !!authWindow, backendAvailable: backendServerAvailable };
+});
+
+ipcMain.handle('subscription:open-window', () => {
+  const subscriptionWindow = createSubscriptionWindow();
+  return { success: !!subscriptionWindow, backendAvailable: backendServerAvailable };
+});
+
+ipcMain.handle('subscription:get-plans', async () => {
+  return requestBackendApi('/subscription/plans');
+});
+
+ipcMain.handle('subscription:get-status', async () => {
+  return requestBackendApi('/subscription/status', { requireAuth: true });
+});
+
+ipcMain.handle('subscription:create-order', async (event, payload = {}) => {
+  return requestBackendApi('/subscription/create', {
+    method: 'POST',
+    requireAuth: true,
+    body: {
+      plan: payload.plan,
+      channel: payload.channel
+    }
+  });
+});
+
+ipcMain.handle('subscription:check-order', async (event, orderNo) => {
+  const status = await requestBackendApi('/subscription/status', { requireAuth: true });
+  return {
+    orderNo: String(orderNo || '').trim(),
+    ...status
+  };
 });
 
 ipcMain.handle('workflow:get-python-config', () => {

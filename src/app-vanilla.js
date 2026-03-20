@@ -979,6 +979,14 @@ async function sendChat(message, options = {}) {
       );
     }
 
+    if (reply === window.PetAPI?.quotaExceededMarker) {
+      showBubbleMessage('今天的对话次数已经用完啦～');
+      if (returnReply) {
+        throw new Error('quota_exceeded');
+      }
+      return;
+    }
+
     window.PetStorage.addChatMessage('assistant', reply);
     state.chatHistory = window.PetStorage.getChatHistory();
 
@@ -1009,6 +1017,11 @@ async function sendChat(message, options = {}) {
 
   } catch (error) {
     console.error('Chat error:', error);
+    if (String(error && error.message ? error.message : error || '') === 'quota_exceeded') {
+      showBubbleMessage('今天的对话次数已经用完啦～');
+      if (returnReply) throw error;
+      return;
+    }
     showBubbleMessage('抱歉，我出错了，请稍后再试~');
     if (returnReply) throw error;
   }

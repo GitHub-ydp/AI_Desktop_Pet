@@ -1,5 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+
 const config = require('../config');
 const { createUser, getUserByPhone, getUserById } = require('../services/user');
 

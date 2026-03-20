@@ -32,6 +32,24 @@ CREATE TABLE IF NOT EXISTS api_logs (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  order_no VARCHAR(64) UNIQUE NOT NULL,
+  plan VARCHAR(20) NOT NULL,
+  amount INTEGER NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending',
+  payment_channel VARCHAR(20),
+  payment_trade_no VARCHAR(128),
+  paid_at DATETIME,
+  expires_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_daily_usage_user_date ON daily_usage(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_api_logs_user_created_at ON api_logs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_order_no ON orders(order_no);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);

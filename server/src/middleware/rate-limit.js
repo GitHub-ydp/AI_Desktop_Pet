@@ -20,6 +20,7 @@ function rateLimitMiddleware(req, res, next) {
       error: {
         code: 'RATE_LIMITED',
         message: '请求过于频繁，请稍后再试。',
+        retryAfter: 60,
       },
     });
   }
@@ -43,7 +44,13 @@ function rateLimitMiddleware(req, res, next) {
     return res.status(403).json({
       error: {
         code: 'QUOTA_EXCEEDED',
-        message: '今日对话额度已用完，请明天再试或升级套餐。',
+        message: '今天的对话次数已经用完啦，请明天再来或升级套餐。',
+        usage: {
+          used: usage.messageCount,
+          limit: limits.dailyMessages,
+          remaining: remainingDailyMessages,
+        },
+        upgradeTip: '升级标准版后，每天可用 200 次对话额度。',
       },
     });
   }

@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>宠物的小窝</title>
+  <title>瀹犵墿鐨勫皬绐?/title>
   <script src="../src/theme-manager.js"></script>
   <script src="../src/plan-manager.js"></script>
   <script src="../assets/lib/lottie.min.js"></script>
@@ -230,6 +230,59 @@
       color: var(--text, #cff0ff);
       border-radius: 2px 12px 12px 12px;
     }
+    .quota-bubble {
+      padding: 0;
+      overflow: hidden;
+      max-width: 360px;
+    }
+    .quota-card {
+      padding: 16px 16px 14px;
+      background: linear-gradient(180deg, rgba(255, 179, 71, 0.12), rgba(0, 30, 55, 0.92));
+    }
+    .quota-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffd6a0;
+      margin-bottom: 8px;
+    }
+    .quota-desc {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text, #cff0ff);
+    }
+    .quota-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .quota-btn {
+      min-width: 104px;
+      height: 34px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border, rgba(0,255,240,0.3));
+      background: transparent;
+      color: var(--text, #cff0ff);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .quota-btn:hover {
+      border-color: var(--neon-cyan, #00fff0);
+      color: var(--neon-cyan, #00fff0);
+    }
+    .quota-btn.primary {
+      border: none;
+      background: linear-gradient(90deg, #ffb347, #ff6b35);
+      color: #1a1210;
+      box-shadow: 0 8px 18px rgba(255, 107, 53, 0.24);
+    }
+    .quota-btn.primary:hover {
+      color: #1a1210;
+      filter: brightness(1.05);
+      box-shadow: 0 10px 20px rgba(255, 107, 53, 0.34);
+    }
     .typing-wrap {
       display: none;
       align-items: center;
@@ -409,6 +462,14 @@
       outline: none;
       font-family: inherit;
       line-height: 1.5;
+    }
+    .input-box.is-quota-disabled {
+      border-color: rgba(255, 179, 71, 0.45);
+      box-shadow: 0 0 0 1px rgba(255, 179, 71, 0.12);
+    }
+    textarea#chatInput.is-quota-disabled {
+      color: rgba(255, 232, 204, 0.7);
+      cursor: not-allowed;
     }
     textarea#chatInput::placeholder { color: var(--text-muted, rgba(160,220,240,0.35)); }
     .input-footer {
@@ -655,9 +716,9 @@
     ::-webkit-scrollbar-thumb { background: var(--scrollbar, rgba(0,255,240,0.35)); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover, rgba(0,255,240,0.6)); }
 
-    /* ── Remotion-style spring entrance animations ──────────────────────────
-       cubic-bezier(0.22, 1, 0.36, 1) 模拟 Remotion spring { damping: 200 }
-       无反弹、自然减速，完全对齐 Remotion 的 smooth 预设              */
+    /* 鈹€鈹€ Remotion-style spring entrance animations 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+       cubic-bezier(0.22, 1, 0.36, 1) 妯℃嫙 Remotion spring { damping: 200 }
+       鏃犲弽寮广€佽嚜鐒跺噺閫燂紝瀹屽叏瀵归綈 Remotion 鐨?smooth 棰勮              */
     @keyframes msgSlideInLeft {
       from { opacity: 0; transform: translate(-40px, 10px) scale(0.86); }
       to   { opacity: 1; transform: translate(0, 0)        scale(1);    }
@@ -667,10 +728,10 @@
       to   { opacity: 1; transform: translate(0, 0)       scale(1);    }
     }
     .msg.ai   { animation: msgSlideInLeft  0.52s cubic-bezier(0.22, 1, 0.36, 1) both; will-change: transform, opacity; }
-    /* 动画完成后释放 GPU 图层 */
+    /* 鍔ㄧ敾瀹屾垚鍚庨噴鏀?GPU 鍥惧眰 */
     .msg.ai.anim-done { will-change: auto; }
 
-    /* ── 流式输出光标（Remotion 打字机 blinking cursor）─────────────────── */
+    /* 鈹€鈹€ 娴佸紡杈撳嚭鍏夋爣锛圧emotion 鎵撳瓧鏈?blinking cursor锛夆攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
     .streaming-cursor {
       display: inline-block;
       width: 2px;
@@ -691,12 +752,12 @@
 <body>
   <div class="window-header">
     <div class="header-pet-info">
-      <div class="header-avatar" id="headerAvatar">🐱</div>
+      <div class="header-avatar" id="headerAvatar">&#128049;</div>
       <div class="header-meta">
-        <span class="pet-name" id="petName">···</span>
+        <span class="pet-name" id="petName">&#25105;&#30340;&#23456;&#29289;</span>
         <div class="mood-mini-row">
           <div class="mood-bar"><div class="mood-fill" id="moodFill"></div></div>
-          <span class="mood-text" id="moodText">···</span>
+          <span class="mood-text" id="moodText">&#20170;&#22825;&#24515;&#24773;&#24456;&#22909;~</span>
           <span id="moodValue" style="display:none">80</span>
         </div>
       </div>
@@ -718,13 +779,13 @@
       <div class="messages-wrap" id="messagesWrap">
         <div class="empty-state" id="emptyState">
           <div class="empty-lottie" id="chatLottie"></div>
-          <p class="empty-greeting">嗨~ 今天过得怎么样？</p>
-          <p class="empty-sub">说说心里话，我都在听~</p>
+          <p class="empty-greeting">&#128075; &#20170;&#22825;&#36807;&#24471;&#24590;&#20040;&#26679;&#65311;</p>
+          <p class="empty-sub">&#35828;&#35828;&#24515;&#37324;&#35805;&#21543;&#65292;&#25105;&#37117;&#22312;&#21548;~</p>
           <div class="quick-chips">
-            <button class="quick-chip" type="button" onclick="sendQuickMsg('讲个笑话逗逗我')">😄 讲个笑话</button>
-            <button class="quick-chip" type="button" onclick="sendQuickMsg('今天发生了什么有趣的事')">💬 聊聊今天</button>
-            <button class="quick-chip" type="button" onclick="sendQuickMsg('帮我解解闷')">🌙 帮我解闷</button>
-            <button class="quick-chip" type="button" onclick="sendQuickMsg('你喜欢我吗')">💕 认识你</button>
+            <button class="quick-chip" type="button" onclick="sendQuickMsg('讲个笑话逗逗我')">&#128516; 讲个笑话</button>
+            <button class="quick-chip" type="button" onclick="sendQuickMsg('今天发生了什么有趣的事？')">&#128172; 聊聊今天</button>
+            <button class="quick-chip" type="button" onclick="sendQuickMsg('帮我解解闷')">&#129303; 帮我解闷</button>
+            <button class="quick-chip" type="button" onclick="sendQuickMsg('你喜欢我吗？')">&#128150; 认识你</button>
           </div>
         </div>
         <div class="typing-wrap" id="typingText">
@@ -801,18 +862,21 @@
     let agentSessionPersonality = sessionStorage.getItem('chatAgentPersonality') || null;
     let agentSessionPetName = sessionStorage.getItem('chatAgentPetName') || '';
     let agentStatusTimer = null;
+    let quotaExceededActive = false;
+    let quotaPromptWrapper = null;
+    let defaultChatPlaceholder = '';
 
-    // ── 终端风格打字机状态 ──────────────────────────────────────────────────────
-    // 设计：setTimeout 自调度（非 rAF），22ms/字符 ≈ 45字/秒
-    // 像 Mac 终端 cat 输出：匀速、机械感、每个字清晰可见
-    // lag > 40 时自动加速到 2字/tick，防止积压
-    let streamBuffer = '';        // 已接收完整文本
-    let streamDisplayed = 0;      // 已渲染字符数
-    let streamTimeout = null;     // setTimeout 句柄
-    let streamingTextNode = null; // bubble 内文字 div
-    let streamingCursorEl = null; // 光标 span
-    let isStreaming = false;       // 流式会话是否仍在进行
-    const TICK_MS = 22;           // 每 tick 间隔（ms），调大=更慢更清晰
+    // 鈹€鈹€ 缁堢椋庢牸鎵撳瓧鏈虹姸鎬?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // 璁捐锛歴etTimeout 鑷皟搴︼紙闈?rAF锛夛紝22ms/瀛楃 鈮?45瀛?绉?
+    // 鍍?Mac 缁堢 cat 杈撳嚭锛氬寑閫熴€佹満姊版劅銆佹瘡涓瓧娓呮櫚鍙
+    // lag > 40 鏃惰嚜鍔ㄥ姞閫熷埌 2瀛?tick锛岄槻姝㈢Н鍘?
+    let streamBuffer = '';        // 宸叉帴鏀跺畬鏁存枃鏈?
+    let streamDisplayed = 0;      // 宸叉覆鏌撳瓧绗︽暟
+    let streamTimeout = null;     // setTimeout 鍙ユ焺
+    let streamingTextNode = null; // bubble 鍐呮枃瀛?div
+    let streamingCursorEl = null; // 鍏夋爣 span
+    let isStreaming = false;       // 娴佸紡浼氳瘽鏄惁浠嶅湪杩涜
+    const TICK_MS = 22;           // 姣?tick 闂撮殧锛坢s锛夛紝璋冨ぇ=鏇存參鏇存竻鏅?
 
     function getStoredPetData() {
       try {
@@ -1096,7 +1160,6 @@
       div.textContent = text == null ? '' : String(text);
       return div.innerHTML;
     }
-
     function formatAssistantText(content) {
       const source = String(content || '').replace(/\r\n/g, '\n').trim();
       if (!source) {
@@ -1122,22 +1185,21 @@
       };
 
       for (let index = 0; index < lines.length; index += 1) {
-        const rawLine = lines[index];
-        const line = rawLine.trim();
+        const line = lines[index].trim();
 
         if (!line) {
           closeList();
           continue;
         }
 
-        const bulletMatch = line.match(/^(?:[-*•]|[0-9一二三四五六七八九十]+[.、:：])\s*(.+)$/);
+        const bulletMatch = line.match(/^(?:[-*]|\d+[.)])\s*(.+)$/);
         if (bulletMatch) {
           if (!listOpen) {
             html.push('<ul>');
             listOpen = true;
           }
-          let itemBody = formatInline(bulletMatch[1]);
-          itemBody = itemBody.replace(/^<strong>([^<]+)<\/strong>\s*[:：]\s*/, '<span class="news-tag">$1</span>');
+          const itemBody = formatInline(bulletMatch[1])
+            .replace(/^<strong>([^<]+)<\/strong>\s*[:：]\s*/, '<span class="news-tag">$1</span>');
           html.push(`<li>${itemBody}</li>`);
           continue;
         }
@@ -1151,8 +1213,7 @@
 
         const paragraphHtml = formatInline(line)
           .replace(/^<strong>([^<]+)<\/strong>\s*[:：]\s*/, '<span class="news-tag">$1</span>');
-        const paragraphClass = /想了解|可以再帮你|我可以再帮你|要不要|如果你想/.test(line) ? ' class="news-tail"' : '';
-        html.push(`<p${paragraphClass}>${paragraphHtml}</p>`);
+        html.push(`<p>${paragraphHtml}</p>`);
       }
 
       closeList();
@@ -1200,11 +1261,110 @@
 
       container.appendChild(messageNode.wrapper);
       container.scrollTop = 999999;
-      // 动画结束后释放 will-change GPU 图层
+      // 鍔ㄧ敾缁撴潫鍚庨噴鏀?will-change GPU 鍥惧眰
       messageNode.wrapper.addEventListener('animationend', () => {
         messageNode.wrapper.classList.add('anim-done');
       }, { once: true });
       return messageNode.bubble;
+    }
+
+    function isQuotaExceededSignal(value) {
+      const text = String(value || '').trim();
+      return text === 'quota_exceeded' || /QUOTA_EXCEEDED/.test(text);
+    }
+
+    function setQuotaInputState(disabled) {
+      const input = document.getElementById('chatInput');
+      const sendBtn = document.getElementById('sendBtn');
+      const inputBox = document.querySelector('.input-box');
+      if (!input || !sendBtn) return;
+
+      if (!defaultChatPlaceholder) {
+        defaultChatPlaceholder = input.getAttribute('placeholder') || '';
+      }
+
+      quotaExceededActive = !!disabled;
+      input.disabled = !!disabled;
+      input.classList.toggle('is-quota-disabled', !!disabled);
+      if (inputBox) {
+        inputBox.classList.toggle('is-quota-disabled', !!disabled);
+      }
+
+      if (disabled) {
+        input.value = '';
+        input.placeholder = '\u4eca\u65e5\u5bf9\u8bdd\u6b21\u6570\u5df2\u7528\u5b8c\u5566';
+        sendBtn.disabled = true;
+        clearPendingImageAttachment();
+      } else {
+        input.placeholder = defaultChatPlaceholder || '\u548c\u6211\u8bf4\u8bf4\u8bdd\u5427~';
+        sendBtn.disabled = isProcessing;
+      }
+
+      autoGrowTextarea();
+    }
+
+    function dismissQuotaExceededPrompt() {
+      if (quotaPromptWrapper && quotaPromptWrapper.parentNode) {
+        quotaPromptWrapper.parentNode.removeChild(quotaPromptWrapper);
+      }
+      quotaPromptWrapper = null;
+    }
+
+    async function openSubscriptionWindow() {
+      if (window.PetSubscription?.openWindow) {
+        const result = await window.PetSubscription.openWindow();
+        if (result && result.success) {
+          return;
+        }
+        if (result && result.backendAvailable === false) {
+          showToast('套餐服务还没准备好');
+          return;
+        }
+      }
+
+      showToast('套餐窗口正在接入中');
+    }
+
+    function showQuotaExceededPrompt() {
+      hideTyping();
+      clearAgentStatus();
+      setQuotaInputState(true);
+
+      const container = document.getElementById('messagesWrap');
+      const emptyState = document.getElementById('emptyState');
+      if (emptyState) emptyState.style.display = 'none';
+
+      if (quotaPromptWrapper && quotaPromptWrapper.isConnected) {
+        container.scrollTop = container.scrollHeight;
+        return;
+      }
+
+      const messageNode = createMessageNode('assistant', '');
+      const bubble = messageNode.bubble;
+      bubble.classList.add('quota-bubble');
+
+      const card = document.createElement('div');
+      card.className = 'quota-card';
+      card.innerHTML = `
+        <div class="quota-title">\ud83d\udc25 \u4eca\u5929\u7684\u5bf9\u8bdd\u6b21\u6570\u5df2\u7ecf\u7528\u5b8c\u5566\uff5e</div>
+        <div class="quota-desc">\u514d\u8d39\u7248\u6bcf\u5929\u53ef\u4ee5\u804a 30 \u6b21\u3002\u8981\u4e0d\u8981\u5148\u770b\u770b\u5957\u9910\uff0c\u6216\u8005\u660e\u5929\u518d\u6765\u627e\u6211\u73a9\u5462\uff1f</div>
+        <div class="quota-actions">
+          <button class="quota-btn primary" type="button" data-action="plans">\u67e5\u770b\u5957\u9910</button>
+          <button class="quota-btn" type="button" data-action="later">\u660e\u5929\u518d\u6765</button>
+        </div>
+      `;
+
+      card.querySelector('[data-action="plans"]').addEventListener('click', () => {
+        void openSubscriptionWindow();
+      });
+      card.querySelector('[data-action="later"]').addEventListener('click', () => {
+        dismissQuotaExceededPrompt();
+      });
+
+      bubble.replaceChildren(card);
+      container.appendChild(messageNode.wrapper);
+      quotaPromptWrapper = messageNode.wrapper;
+      container.scrollTop = container.scrollHeight;
     }
 
     function showTyping() {
@@ -1218,10 +1378,10 @@
       document.getElementById('typingText').style.display = 'none';
     }
 
-    // 快捷回复：直接发送预设消息
+    // 蹇嵎鍥炲锛氱洿鎺ュ彂閫侀璁炬秷鎭?
     function sendQuickMsg(text) {
       const input = document.getElementById('chatInput');
-      if (!input || isProcessing) return;
+      if (!input || isProcessing || quotaExceededActive) return;
       input.value = text;
       void sendMessage();
     }
@@ -1264,20 +1424,23 @@
 
     async function sendViaBasicChat(message) {
       if (!window.electron || !window.electron.sendChatMessage) {
-        throw new Error('聊天通道不可用');
+        throw new Error('chat_channel_unavailable');
       }
 
       const result = await window.electron.sendChatMessage(message);
       hideTyping();
       if (result && result.success) {
-        addMessage('assistant', result.reply || '好的~');
+        if (result.reply === window.PetAPI?.quotaExceededMarker || result.reply === '__QUOTA_EXCEEDED__') {
+          throw new Error('quota_exceeded');
+        }
+        addMessage('assistant', result.reply || '濂界殑~');
         return true;
       }
 
       throw new Error((result && result.error) ? result.error : 'basic_chat_failed');
     }
 
-    // ── 终端风格打字机核心 tick ────────────────────────────────────────────────
+    // 鈹€鈹€ 缁堢椋庢牸鎵撳瓧鏈烘牳蹇?tick 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
     function _tickStream() {
       streamTimeout = null;
       if (!streamingTextNode) return;
@@ -1285,7 +1448,7 @@
       const lag = streamBuffer.length - streamDisplayed;
 
       if (lag > 0) {
-        // lag > 40 时补速，防止服务器流速远快于显示速度时积压过多
+        // lag > 40 鏃惰ˉ閫燂紝闃叉鏈嶅姟鍣ㄦ祦閫熻繙蹇簬鏄剧ず閫熷害鏃剁Н鍘嬭繃澶?
         const step = lag > 40 ? 2 : 1;
         streamDisplayed = Math.min(streamDisplayed + step, streamBuffer.length);
         streamingTextNode.textContent = streamBuffer.slice(0, streamDisplayed);
@@ -1294,10 +1457,10 @@
         if (container) container.scrollTop = 999999;
         streamTimeout = setTimeout(_tickStream, TICK_MS);
       } else if (isStreaming) {
-        // 已追上 buffer，但流还没结束，等待下一个 delta
+        // 宸茶拷涓?buffer锛屼絾娴佽繕娌＄粨鏉燂紝绛夊緟涓嬩竴涓?delta
         streamTimeout = setTimeout(_tickStream, TICK_MS);
       }
-      // isStreaming=false 且 lag=0：全部显示完毕，自然停止
+      // isStreaming=false 涓?lag=0锛氬叏閮ㄦ樉绀哄畬姣曪紝鑷劧鍋滄
     }
 
     function appendAssistantDelta(delta) {
@@ -1312,22 +1475,22 @@
         streamingCursorEl = document.createElement('span');
         streamingCursorEl.className = 'streaming-cursor';
         streamingAssistantMessage.appendChild(streamingCursorEl);
-        streamTimeout = setTimeout(_tickStream, TICK_MS); // 启动，不再手动重启
+        streamTimeout = setTimeout(_tickStream, TICK_MS); // 鍚姩锛屼笉鍐嶆墜鍔ㄩ噸鍚?
       }
       streamBuffer += delta || '';
     }
 
     function finalizeStreamedAssistantMessage(finalText) {
       const text = finalText || '\u597d\u7684~';
-      // 标记流结束，tick 会自然排干 buffer 后停止
+      // 鏍囪娴佺粨鏉燂紝tick 浼氳嚜鐒舵帓骞?buffer 鍚庡仠姝?
       isStreaming = false;
       if (streamTimeout) { clearTimeout(streamTimeout); streamTimeout = null; }
-      // 移除光标
+      // 绉婚櫎鍏夋爣
       if (streamingCursorEl && streamingCursorEl.parentNode) {
         streamingCursorEl.parentNode.removeChild(streamingCursorEl);
         streamingCursorEl = null;
       }
-      // 直接在原节点写入最终文本，避免 DOM 跳变
+      // 鐩存帴鍦ㄥ師鑺傜偣鍐欏叆鏈€缁堟枃鏈紝閬垮厤 DOM 璺冲彉
       if (streamingTextNode) {
         setBubbleContent(streamingTextNode, text, true);
       } else if (streamingAssistantMessage) {
@@ -1336,7 +1499,7 @@
         setBubbleContent(fallbackTextNode, text, true);
         streamingAssistantMessage.replaceChildren(fallbackTextNode);
       } else {
-        // 降级：既无流式节点，正常添加
+        // 闄嶇骇锛氭棦鏃犳祦寮忚妭鐐癸紝姝ｅ父娣诲姞
         return addMessage('assistant', text);
       }
       const bubble = streamingAssistantMessage;
@@ -1404,7 +1567,7 @@
         activeAgentStream.close();
       }
       activeAgentStream = null;
-      // 停止 tick，清理流式状态
+      // 鍋滄 tick锛屾竻鐞嗘祦寮忕姸鎬?
       isStreaming = false;
       if (streamTimeout) { clearTimeout(streamTimeout); streamTimeout = null; }
       if (streamingCursorEl && streamingCursorEl.parentNode) {
@@ -1412,7 +1575,7 @@
         streamingCursorEl = null;
       }
       if (streamingTextNode && streamBuffer.length > streamDisplayed) {
-        // 确保剩余 buffer 全部显示
+        // 纭繚鍓╀綑 buffer 鍏ㄩ儴鏄剧ず
         setBubbleContent(streamingTextNode, streamBuffer, true);
       }
       streamingTextNode = null;
@@ -1427,6 +1590,7 @@
 
     async function sendMessage() {
       const input = document.getElementById('chatInput');
+      if (quotaExceededActive) return;
       const message = input.value.trim();
       const attachment = pendingImageAttachment;
       const attachments = attachment && attachment.type === 'image' ? [attachment] : null;
@@ -1510,7 +1674,7 @@
         }
 
         if (attachments) {
-          throw new Error('当前聊天通道暂不支持图片，请使用 Agent 模式。');
+          throw new Error('image_attachment_requires_agent');
         }
 
         await sendViaBasicChat(effectiveMessage);
@@ -1522,12 +1686,16 @@
         }
         if (window.PetAgent) finishAgentRun();
         hideTyping();
+        if (isQuotaExceededSignal(error && error.message ? error.message : error)) {
+          showQuotaExceededPrompt();
+          return;
+        }
         const errorText = String(error && error.message ? error.message : error || 'unknown_error').slice(0, 300);
         addMessage('assistant', `\u804a\u5929\u5931\u8d25\uff1a${errorText}`);
       } finally {
-        // 无论走哪条路径都确保解锁，finishAgentRun 已提前调用时再次设置也是安全的
+        // 鏃犺璧板摢鏉¤矾寰勯兘纭繚瑙ｉ攣锛宖inishAgentRun 宸叉彁鍓嶈皟鐢ㄦ椂鍐嶆璁剧疆涔熸槸瀹夊叏鐨?
         isProcessing = false;
-        document.getElementById('sendBtn').disabled = false;
+        document.getElementById('sendBtn').disabled = quotaExceededActive;
       }
     }
 
@@ -1567,8 +1735,8 @@
     function showApprovalDialog({ title, message, kind, approvalId = null, runId = null, requestId = null, preview = null }) {
       pendingApprovalDialog = { title, message, kind, approvalId, runId, requestId, preview };
       const overlay = document.getElementById('confirmOverlay');
-      overlay.querySelector('.confirm-title').textContent = title || '确认执行高风险操作';
-      document.getElementById('confirmMessage').textContent = message || '是否继续执行该操作？';
+      overlay.querySelector('.confirm-title').textContent = title || '\u786e\u8ba4\u6267\u884c\u9ad8\u98ce\u9669\u64cd\u4f5c';
+      document.getElementById('confirmMessage').textContent = message || '\u662f\u5426\u7ee7\u7eed\u6267\u884c\u8be5\u64cd\u4f5c\uff1f';
       renderApprovalDiff(preview);
       overlay.classList.add('show');
       setAgentStatus('\u7b49\u5f85\u4f60\u786e\u8ba4\u64cd\u4f5c...', 'attention');
@@ -1590,7 +1758,7 @@
           });
           setAgentStatus(approved ? '\u5df2\u786e\u8ba4\uff0c\u7ee7\u7eed\u6267\u884c\u4e2d...' : '\u5df2\u53d6\u6d88\u8be5\u64cd\u4f5c', approved ? 'working' : 'attention');
         } catch (error) {
-          addMessage('assistant', '审批提交失败，请重试。');
+          addMessage('assistant', '\u5ba1\u6279\u63d0\u4ea4\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5\u3002');
         }
         return;
       }
@@ -1604,27 +1772,33 @@
     function rejectSkillConfirm() { void resolveApprovalDialog(false); }
 
     function showAgentApproval(payload, runId) {
-      const summary = payload && payload.summary ? payload.summary : `批准执行工具 ${payload && payload.toolName ? payload.toolName : ''}`.trim();
-      const argsText = payload && payload.args ? `\n\n参数:\n${JSON.stringify(payload.args, null, 2)}` : '';
+      const summary = payload && payload.summary ? payload.summary : `\u51c6\u5907\u6267\u884c\u5de5\u5177 ${payload && payload.toolName ? payload.toolName : ''}`.trim();
+      const argsText = payload && payload.args ? `\n\n\u53c2\u6570:\n${JSON.stringify(payload.args, null, 2)}` : '';
       showApprovalDialog({
         kind: 'agent',
         approvalId: payload && payload.approvalId ? payload.approvalId : null,
         runId: runId || null,
-        title: '确认执行 Agent 操作',
+        title: '\u786e\u8ba4\u6267\u884c Agent \u64cd\u4f5c',
         message: `${summary}${argsText}`,
         preview: payload && payload.preview ? payload.preview : null
       });
     }
 
     async function loadPetName() {
-      const PET_NAMES = { '🐱': '猫咪', '🐶': '狗狗', '🐰': '兔兔', '🦊': '小狐', '🐻': '小熊' };
+      const PET_NAMES = {
+        '\ud83d\udc31': '\u732b\u54aa',
+        '\ud83d\udc36': '\u5c0f\u72d7',
+        '\ud83d\udc30': '\u5154\u5154',
+        '\ud83e\udd8a': '\u5c0f\u72d0\u72f8',
+        '\ud83d\udc3b': '\u5c0f\u718a',
+      };
       let name = '';
-      // 最高优先：用户在初始化向导中给宠物起的名字
+      // 鏈€楂樹紭鍏堬細鐢ㄦ埛鍦ㄥ垵濮嬪寲鍚戝涓粰瀹犵墿璧风殑鍚嶅瓧
       try {
         const settings = JSON.parse(localStorage.getItem('settings') || '{}');
         if (settings.petName) name = settings.petName;
       } catch (e) {}
-      // 第二优先：记忆系统 user_profile 中的 pet_name 字段
+      // 绗簩浼樺厛锛氳蹇嗙郴缁?user_profile 涓殑 pet_name 瀛楁
       if (!name) {
         try {
           if (window.electron && window.electron.getPetProfile) {
@@ -1638,34 +1812,40 @@
           }
         } catch (e) {}
       }
-      // 第三优先：emoji → 中文名
+      // 绗笁浼樺厛锛歟moji 鈫?涓枃鍚?
       if (!name) {
         try {
           const petData = JSON.parse(localStorage.getItem('pet_data') || '{}');
           name = PET_NAMES[petData.basePet] || '';
         } catch (e) {}
       }
-      document.getElementById('petName').textContent = name || '我的宠物';
+      document.getElementById('petName').textContent = name || '\u6211\u7684\u5ba0\u7269';
     }
 
     function updateMoodDisplay(mood) {
       const safeMood = Math.max(0, Math.min(100, Number.isFinite(Number(mood)) ? Number(mood) : 80));
       document.getElementById('moodValue').textContent = `${safeMood}`;
       document.getElementById('moodFill').style.width = `${safeMood}%`;
-      const texts = [[80,'今天心情很好~'],[60,'还不错哦'],[40,'有点无聊...'],[0,'心情低落中']];
+      const texts = [[80,'\u4eca\u5929\u5fc3\u60c5\u5f88\u597d~'],[60,'\u8fd8\u4e0d\u9519\u5462'],[40,'\u6709\u70b9\u65e0\u804a...'],[0,'\u5fc3\u60c5\u6709\u70b9\u4f4e\u843d']];
       const found = texts.find(([t]) => safeMood >= t);
-      document.getElementById('moodText').textContent = found ? found[1] : '心情低落中';
+      document.getElementById('moodText').textContent = found ? found[1] : '\u5fc3\u60c5\u6709\u70b9\u4f4e\u843d';
     }
 
     function initLottie() {
       const container = document.getElementById('chatLottie');
       if (!container) return;
 
-      // 根据当前宠物类型更新 header 头像 emoji
-      const PET_EMOJIS = { '🐱': '🐱', '🐶': '🐶', '🐰': '🐰', '🦊': '🦊', '🐻': '🐻' };
+      // 鏍规嵁褰撳墠瀹犵墿绫诲瀷鏇存柊 header 澶村儚 emoji
+      const PET_EMOJIS = {
+        '\ud83d\udc31': '\ud83d\udc31',
+        '\ud83d\udc36': '\ud83d\udc36',
+        '\ud83d\udc30': '\ud83d\udc30',
+        '\ud83e\udd8a': '\ud83e\udd8a',
+        '\ud83d\udc3b': '\ud83d\udc3b',
+      };
       try {
         const petData = JSON.parse(localStorage.getItem('pet_data') || '{}');
-        const emoji = PET_EMOJIS[petData.basePet] || '🐱';
+        const emoji = PET_EMOJIS[petData.basePet] || '\ud83d\udc31';
         const avatarEl = document.getElementById('headerAvatar');
         if (avatarEl) avatarEl.textContent = emoji;
       } catch (e) {}
@@ -1681,37 +1861,37 @@
         });
       } catch (e) {
         console.warn('[chat-window] lottie init failed:', e);
-        // 加载失败时 container 保持空白，不影响使用
+        // 鍔犺浇澶辫触鏃?container 淇濇寔绌虹櫧锛屼笉褰卞搷浣跨敤
       }
     }
 
     function goToSettings() {
       if (!window.electron || !window.electron.createChildWindow) return;
-      // 不关闭聊天窗口，并排打开设置，关闭设置后自然回到聊天
+      // 涓嶅叧闂亰澶╃獥鍙ｏ紝骞舵帓鎵撳紑璁剧疆锛屽叧闂缃悗鑷劧鍥炲埌鑱婂ぉ
       window.electron.createChildWindow({ id: 'settings', title: '设置', width: 910, height: 640, html: 'windows/settings-window.html' });
     }
 
     function goToHistory() {
       if (!window.electron || !window.electron.createChildWindow) return;
-      // 不关闭聊天窗口，并排打开历史，关闭历史后自然回到聊天
+      // 涓嶅叧闂亰澶╃獥鍙ｏ紝骞舵帓鎵撳紑鍘嗗彶锛屽叧闂巻鍙插悗鑷劧鍥炲埌鑱婂ぉ
       window.electron.createChildWindow({ id: 'history', title: '对话历史', width: 910, height: 640, html: 'windows/history-window.html' });
     }
 
     function goToTechPanel() {
       if (!window.electron || !window.electron.createChildWindow) return;
-      window.electron.createChildWindow({ id: 'skills-panel', title: '技术面板', width: 1180, height: 760, html: 'windows/skills-panel.html' });
+      window.electron.createChildWindow({ id: 'skills-panel', title: '\u6280\u80fd\u9762\u677f', width: 1180, height: 760, html: 'windows/skills-panel.html' });
     }
 
     async function handleScreenshot() {
       try {
         if (!window.PetScreenshot || !window.PetScreenshot.captureFullScreen) {
-          showToast('截图功能不可用');
+          showToast('\u622a\u56fe\u529f\u80fd\u4e0d\u53ef\u7528');
           return;
         }
         await window.PetScreenshot.captureFullScreen();
-        showToast('已触发截图');
+        showToast('\u5df2\u89e6\u53d1\u622a\u56fe');
       } catch (error) {
-        showToast('截图失败');
+        showToast('\u622a\u56fe\u5931\u8d25');
       }
     }
 
@@ -1724,6 +1904,10 @@
       const videoBtn = document.getElementById('videoBtn');
       const fileUploadInput = document.getElementById('fileUploadInput');
       const attachmentRemoveBtn = document.getElementById('attachmentRemoveBtn');
+
+      if (!defaultChatPlaceholder) {
+        defaultChatPlaceholder = input.getAttribute('placeholder') || '\u548c\u6211\u8bf4\u8bf4\u8bdd\u5427~';
+      }
 
       input.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
@@ -1742,7 +1926,7 @@
         try {
           await handleImagePaste(file);
         } catch (error) {
-          showToast('图片粘贴失败');
+          showToast('\u56fe\u7247\u7c98\u8d34\u5931\u8d25');
         }
       });
       sendBtn.addEventListener('click', () => void sendMessage());
@@ -1756,7 +1940,7 @@
         try {
           await handleFileSelection(file);
         } catch (error) {
-          showToast('文件添加失败');
+          showToast('\u6587\u4ef6\u6dfb\u52a0\u5931\u8d25');
         } finally {
           fileUploadInput.value = '';
         }
@@ -1785,7 +1969,7 @@
           showApprovalDialog({
             kind: 'skill',
             requestId: data.requestId,
-            title: '确认执行高风险操作',
+            title: '\u786e\u8ba4\u6267\u884c\u9ad8\u98ce\u9669\u64cd\u4f5c',
             message: data.message
           });
         });
@@ -1798,7 +1982,7 @@
       renderAttachmentPreview();
       initLottie();
       await loadPetName();
-      // 从 localStorage 读取实际心情值，而非硬编码
+      // 浠?localStorage 璇诲彇瀹為檯蹇冩儏鍊硷紝鑰岄潪纭紪鐮?
       try {
         const petData = JSON.parse(localStorage.getItem('pet_data') || '{}');
         updateMoodDisplay(typeof petData.mood === 'number' ? petData.mood : 80);
@@ -1806,7 +1990,7 @@
         updateMoodDisplay(80);
       }
 
-      // 监听设置窗口的心情变更广播
+      // 鐩戝惉璁剧疆绐楀彛鐨勫績鎯呭彉鏇村箍鎾?
       if (window.electron && window.electron.onSettingsChange) {
         window.electron.onSettingsChange((event, payload) => {
           if (payload && payload.type === 'mood' && typeof payload.mood === 'number') {
@@ -1824,7 +2008,7 @@
         });
       }
 
-      // 同时监听 localStorage 变化（跨窗口 storage 事件）
+      // 鍚屾椂鐩戝惉 localStorage 鍙樺寲锛堣法绐楀彛 storage 浜嬩欢锛?
       window.addEventListener('storage', (e) => {
         if (e.key === 'pet_data') {
           try {
@@ -1842,3 +2026,4 @@
   </script>
 </body>
 </html>
+

@@ -43,8 +43,25 @@ function createUser({ phone, nickname = '' }) {
   return getUserById(result.lastInsertRowid);
 }
 
+function updateUserSubscription(userId, subscriptionTier, subscriptionExpiresAt = null) {
+  const db = getDatabase();
+  db.prepare(
+    `
+      UPDATE users
+      SET
+        subscription_tier = ?,
+        subscription_expires_at = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `,
+  ).run(subscriptionTier, subscriptionExpiresAt, userId);
+
+  return getUserById(userId);
+}
+
 module.exports = {
   createUser,
   getUserById,
   getUserByPhone,
+  updateUserSubscription,
 };
