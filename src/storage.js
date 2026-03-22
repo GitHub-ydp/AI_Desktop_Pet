@@ -17,7 +17,7 @@ const DEFAULT_INTIMACY_WIDGET_OFFSET = {
 const DEFAULT_LLM_SCENE_CONFIG = {
   chat: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
   agent: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
-  vision: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
+  vision: { provider: 'qwen', model: 'qwen3-vl-plus', apiKeyMode: 'builtin' },
   translate: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
   ocr: { provider: 'tesseract', model: 'tesseract', apiKeyMode: 'provider-fallback' }
 };
@@ -39,7 +39,10 @@ const DEFAULTS = {
     welcomeOverlayDismissed: false,
     profileSetupCompleted: false,
     profilePromptDeferred: false,
-    petName: ''
+    petName: '',
+    userName: '',
+    userGender: '',
+    interests: []
   }
 };
 
@@ -81,7 +84,13 @@ function normalizeLLMSceneConfig(sceneConfig) {
     const apiKeyMode = raw.apiKeyMode === 'scene'
       ? 'scene'
       : (raw.apiKeyMode === 'builtin' ? 'builtin' : 'provider-fallback');
-    normalized[scene] = { provider, model, apiKeyMode };
+    normalized[scene] = {
+      provider,
+      model: scene === 'vision' && provider === 'qwen' && model === 'qwen3.5-plus'
+        ? DEFAULT_LLM_SCENE_CONFIG.vision.model
+        : model,
+      apiKeyMode
+    };
   }
 
   return normalized;

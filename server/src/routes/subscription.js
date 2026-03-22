@@ -107,6 +107,24 @@ router.post('/create', authMiddleware, (req, res) => {
   }
 
   const db = getDatabase();
+
+  // 幂等检查：60秒内同一用户同一套餐只允许一个 pending 订单
+  const recentPending = db.prepare(
+    `SELECT order_no FROM orders
+     WHERE user_id = ? AND plan = ? AND status = 'pending'
+       AND created_at > datetime('now', '-60 seconds')`
+  ).get(req.user.id, planId);
+
+  if (recentPending) {
+    return res.status(409).json({
+      error: {
+        code: 'ORDER_EXISTS',
+        message: '您有一个正在处理的订单，请稍后再试。',
+      },
+      orderNo: recentPending.order_no,
+    });
+  }
+
   const orderNo = generateOrderNo();
 
   db.prepare(

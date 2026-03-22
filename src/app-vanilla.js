@@ -269,8 +269,8 @@ function openInitModal() {
     window.electron.createChildWindow({
       id: 'init',
       title: '初始化设置',
-      width: 500,
-      height: 580,
+      width: 520,
+      height: 620,
       html: 'windows/init-window.html'
     });
 
@@ -284,7 +284,7 @@ function openInitModal() {
 
 // 处理初始化完成
 async function handleInitCompleted(event) {
-  const { name, gender, birthday, interests, petEmoji, petName, personality } = event.detail;
+  const { name, gender, birthday, interests, petEmoji, petName, personality, theme } = event.detail;
 
   // 同步宠物选择
   if (petEmoji) {
@@ -306,7 +306,25 @@ async function handleInitCompleted(event) {
     }
   }
 
-  // API Key 已内置，无需用户保存
+  // 保存用户资料到设置
+  if (name) {
+    window.PetStorage.updateSetting('userName', name);
+    state.settings.userName = name;
+  }
+  if (gender) {
+    window.PetStorage.updateSetting('userGender', gender);
+    state.settings.userGender = gender;
+  }
+  if (interests) {
+    const interestsArray = interests.split('、').filter(Boolean);
+    window.PetStorage.updateSetting('interests', interestsArray);
+    state.settings.interests = interestsArray;
+  }
+
+  // 应用主题选择
+  if (theme && window.ThemeManager) {
+    window.ThemeManager.save(theme);
+  }
 
   // 构建用户信息消息
   let userInfoMessage = `我叫${name}`;
@@ -372,6 +390,15 @@ async function handleInitCompleted(event) {
 
 // 处理跳过初始化
 function handleInitSkipped() {
+  // 设置安全默认值，防止未引导就出现空白信息
+  if (!state.settings.petName) {
+    window.PetStorage.updateSetting('petName', '小伙伴');
+    state.settings.petName = '小伙伴';
+  }
+  if (!state.settings.userName) {
+    window.PetStorage.updateSetting('userName', '主人');
+    state.settings.userName = '主人';
+  }
   showBubbleMessage('好的，我们可以慢慢了解~');
 }
 
@@ -728,8 +755,9 @@ function saveData() {
   if (persisted.welcomeOverlayDismissed) state.settings.welcomeOverlayDismissed = true;
   if (persisted.profileSetupCompleted) state.settings.profileSetupCompleted = true;
   if (persisted.profilePromptDeferred) state.settings.profilePromptDeferred = true;
-  // 防止外部模块写入的 petName 被 state.settings 中的空值覆盖
+  // 防止外部模块写入的 petName/userName 被 state.settings 中的空值覆盖
   if (persisted.petName && !state.settings.petName) state.settings.petName = persisted.petName;
+  if (persisted.userName && !state.settings.userName) state.settings.userName = persisted.userName;
 
   window.PetStorage.saveSettings(state.settings);
 }

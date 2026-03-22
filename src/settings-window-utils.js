@@ -4,7 +4,7 @@ function getSettingsSnapshot(storage) {
   const llmSceneConfig = settings.llmSceneConfig || {
     chat: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
     agent: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
-    vision: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
+    vision: { provider: 'qwen', model: 'qwen3-vl-plus', apiKeyMode: 'builtin' },
     translate: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
     ocr: { provider: 'tesseract', model: 'tesseract', apiKeyMode: 'provider-fallback' }
   };

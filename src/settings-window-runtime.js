@@ -63,6 +63,7 @@ function switchSection(sectionId) {
   document.querySelectorAll('.settings-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.section === sectionId));
   if (sectionId === 'memory') onMemoryPanelOpen();
   if (sectionId === 'ritual') loadRitualSettings();
+  if (sectionId === 'account') loadAccountInfo();
 }
 
 function parseRitualTime(value, fallbackHour, fallbackMinute) {
@@ -876,4 +877,102 @@ window.addEventListener('mood-updated', (event) => {
   const nextMood = typeof event.detail === 'object' ? event.detail?.mood : event.detail;
   if (event.detail && typeof event.detail === 'object' && event.detail.source === 'settings') return;
   syncMoodState(nextMood);
+});
+
+// === 我的账号：加载账号信息 ===
+async function loadAccountInfo() {
+  let phoneDisplay = '游客模式';
+  try {
+    const token = await window.electron.getAuthToken();
+    if (token && typeof token === 'string') {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        const phone = payload.phone || payload.mobile || payload.username || '';
+        if (phone && phone.length >= 7) phoneDisplay = phone.slice(0, 3) + '****' + phone.slice(-4);
+        else if (phone) phoneDisplay = phone;
+      }
+    }
+  } catch (e) { console.warn('[Account] 解码 JWT 失败', e); }
+  const phoneEl = document.getElementById('accountPhone');
+  if (phoneEl) phoneEl.textContent = phoneDisplay;
+
+  let status = null;
+  try {
+    if (window.PetSubscription && typeof window.PetSubscription.getStatus === 'function') {
+      status = await window.PetSubscription.getStatus();
+    }
+  } catch (e) { console.warn('[Account] 获取订阅状态失败', e); }
+
+  const PLAN_NAMES = { free: '免费版', standard: '标准版', pro: '专业版' };
+  const currentPlan = status?.currentPlan || 'free';
+  const planEl = document.getElementById('accountPlan');
+  if (planEl) planEl.textContent = PLAN_NAMES[currentPlan] || currentPlan;
+
+  const usageToday = status?.usage?.today?.messageCount ?? 0;
+  const dailyMessages = status?.usage?.limit?.dailyMessages ?? -1;
+  const usageTextEl = document.getElementById('accountUsageText');
+  const usageBarEl = document.getElementById('accountUsageBar');
+  if (usageTextEl) usageTextEl.textContent = dailyMessages === -1 ? `已用 ${usageToday} / 无限次` : `已用 ${usageToday} / 每日 ${dailyMessages} 次`;
+  if (usageBarEl) {
+    if (dailyMessages === -1) {
+      usageBarEl.style.width = '100%';
+      usageBarEl.style.background = 'var(--neon-cyan)';
+    } else {
+      const pct = dailyMessages > 0 ? Math.min(100, Math.round((usageToday / dailyMessages) * 100)) : 0;
+      usageBarEl.style.width = `${pct}%`;
+      usageBarEl.style.background = pct >= 80 ? 'var(--neon-magenta)' : 'var(--neon-cyan)';
+    }
+  }
+
+  const expiresAt = status?.expiresAt || null;
+  const expiresRowEl = document.getElementById('accountExpiresRow');
+  const expiresEl = document.getElementById('accountExpires');
+  if (expiresRowEl) expiresRowEl.style.display = expiresAt ? 'block' : 'none';
+  if (expiresEl && expiresAt) {
+    try {
+      const d = new Date(expiresAt);
+      expiresEl.textContent = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    } catch (e) { expiresEl.textContent = String(expiresAt); }
+  }
+
+  const upgradeBtn = document.getElementById('accountUpgradeBtn');
+  if (upgradeBtn) {
+    upgradeBtn.disabled = currentPlan === 'pro';
+    upgradeBtn.textContent = currentPlan === 'pro' ? '已是最高套餐' : '升级套餐';
+  }
+}
+
+// === 我的账号：按钮事件绑定（在 DOMContentLoaded 之后补充绑定）===
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('accountUpgradeBtn')?.addEventListener('click', () => {
+    try { window.PetSubscription?.openWindow?.(); } catch (e) { showToast('打开订阅窗口失败', true); }
+  });
+
+  const logoutBtn = document.getElementById('accountLogoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      if (logoutBtn.dataset.confirm === 'pending') {
+        logoutBtn.dataset.confirm = '';
+        logoutBtn.textContent = '退出登录';
+        try {
+          await window.electron.clearAuthToken();
+          closeWindow();
+          await window.electron.openAuthWindow();
+        } catch (e) {
+          console.error('[Account] 退出登录失败', e);
+          showToast('退出登录失败', true);
+        }
+      } else {
+        logoutBtn.dataset.confirm = 'pending';
+        logoutBtn.textContent = '再点一次确认退出';
+        setTimeout(() => {
+          if (logoutBtn.dataset.confirm === 'pending') {
+            logoutBtn.dataset.confirm = '';
+            logoutBtn.textContent = '退出登录';
+          }
+        }, 3000);
+      }
+    });
+  }
 });

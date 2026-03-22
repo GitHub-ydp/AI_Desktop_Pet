@@ -133,6 +133,7 @@ contextBridge.exposeInMainWorld('PetAgent', {
   approve: (payload) => ipcRenderer.invoke('agent:approve', payload),
   cancel: (payload) => ipcRenderer.invoke('agent:cancel', payload),
   injectMessage: (runId, text) => ipcRenderer.invoke('agent:inject-message', { runId, text }),
+  respondToQuestion: (questionId, answer) => ipcRenderer.invoke('agent:respond-to-question', { questionId, answer }),
   wait: (payload) => ipcRenderer.invoke('agent:wait', payload),
   openStream: async (payload, onEvent) => {
     const clientStreamId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

@@ -141,7 +141,11 @@ const SCENE_METADATA = {
 const DEFAULT_LLM_SCENE_CONFIG = Object.fromEntries(
   Object.keys(SCENE_METADATA).map(scene => [
     scene,
-    { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' }
+    {
+      provider: 'qwen',
+      model: BUILTIN_API.getSceneModel(scene),
+      apiKeyMode: 'builtin'
+    }
   ])
 );
 const SCREENSHOT_TEXT_NONE = '[NO_TEXT]';
@@ -192,7 +196,13 @@ function normalizeLLMSceneConfig(config) {
     const apiKeyMode = raw.apiKeyMode === 'scene'
       ? 'scene'
       : (raw.apiKeyMode === 'builtin' ? 'builtin' : 'provider-fallback');
-    normalized[scene] = { provider, model, apiKeyMode };
+    normalized[scene] = {
+      provider,
+      model: scene === 'vision' && provider === 'qwen' && model === 'qwen3.5-plus'
+        ? BUILTIN_API.getSceneModel('vision')
+        : model,
+      apiKeyMode
+    };
   }
   return normalized;
 }
@@ -200,17 +210,18 @@ function normalizeLLMSceneConfig(config) {
 // 所有场景统一使用内置 API
 function getSceneConfig(scene) {
   const normalizedScene = SCENE_METADATA[scene] ? scene : 'chat';
+  const route = BUILTIN_API.getRoute(normalizedScene);
   return {
     scene: normalizedScene,
-    provider: BUILTIN_API.provider,
-    model: BUILTIN_API.model,
+    provider: route.provider,
+    model: route.model,
     providerMeta: {
-      endpoint: BUILTIN_API.endpoint,
-      defaultModel: BUILTIN_API.model,
-      supportsTools: BUILTIN_API.supportsTools
+      endpoint: route.endpoint,
+      defaultModel: route.model,
+      supportsTools: route.supportsTools
     },
     apiKeyMode: 'builtin',
-    supportsTools: BUILTIN_API.supportsTools
+    supportsTools: route.supportsTools
   };
 }
 
@@ -397,7 +408,7 @@ async function runScreenshotOCR(dataURL) {
   }
 
   // 压缩图片，避免大图超时
-  const compressedDataURL = compressDataURL(dataURL, 1280, 0.85);
+  const compressedDataURL = compressDataURL(dataURL, 1024, 0.78);
 
   const configs = getAvailableTaskSceneConfigs(['ocr', 'vision'], {
     requireImage: true
@@ -427,7 +438,7 @@ async function runScreenshotOCR(dataURL) {
       ], {
         temperature: 0,
         maxTokens: 1800,
-        timeoutMs: 60000
+        timeoutMs: 90000
       });
 
       const normalizedText = text.trim() === SCREENSHOT_TEXT_NONE ? '' : text.trim();
@@ -508,7 +519,7 @@ async function runScreenshotAnalysis(dataURL, prompt) {
     : '请详细描述这张截图的内容，包括文字、图像和界面元素。';
 
   // 压缩图片，避免大图超时
-  const compressedDataURL = compressDataURL(dataURL, 1280, 0.85);
+  const compressedDataURL = compressDataURL(dataURL, 1024, 0.78);
 
   const config = getTaskSceneConfig('vision', {
     fallbackScenes: ['chat'],
@@ -529,8 +540,8 @@ async function runScreenshotAnalysis(dataURL, prompt) {
     }
   ], {
     temperature: 0.3,
-    maxTokens: 1500,
-    timeoutMs: 60000
+    maxTokens: 900,
+    timeoutMs: 120000
   });
 
   return {
@@ -620,6 +631,12 @@ function normalizeAppConfig(data = {}) {
   }
   if (typeof data.authToken === 'string' && data.authToken.trim()) {
     normalized.authToken = data.authToken.trim();
+  }
+  if (data.windowPosition && typeof data.windowPosition === 'object') {
+    const { x, y } = data.windowPosition;
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      normalized.windowPosition = { x: Math.round(x), y: Math.round(y) };
+    }
   }
 
   return normalized;
@@ -978,12 +995,34 @@ function reloadWorkflowManager() {
 
 // API Key 管理函数已移除 — 使用内置 API (builtin-api.js)
 
+// 检查坐标是否在某个可见屏幕的工作区内
+function isPositionOnScreen(x, y, width, height) {
+  const displays = screen.getAllDisplays();
+  return displays.some(display => {
+    const wa = display.workArea;
+    // 宠物至少 50px 在屏幕内即可（允许部分超出边缘）
+    return x + width > wa.x + 50 && x < wa.x + wa.width - 50
+        && y > wa.y - 20 && y < wa.y + wa.height - 50;
+  });
+}
+
 // 创建主窗口（只显示宠物本体）
 function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const workArea = primaryDisplay.workArea;
-  const initialX = workArea.x + workArea.width - WINDOW_SIZES.small.width - 20; // 距离右侧 20px
-  const initialY = workArea.y + 20; // 距离顶部 20px
+
+  // 默认位置：以展开菜单的 medium 尺寸计算，右下角留适当边距
+  const defaultX = workArea.x + workArea.width - WINDOW_SIZES.medium.width - 40;
+  const defaultY = workArea.y + Math.round(workArea.height * 0.3);
+
+  // 尝试从 config.json 恢复上次位置
+  let initialX = defaultX;
+  let initialY = defaultY;
+  const savedPos = readAppConfig().windowPosition;
+  if (savedPos && isPositionOnScreen(savedPos.x, savedPos.y, WINDOW_SIZES.small.width, WINDOW_SIZES.small.height)) {
+    initialX = savedPos.x;
+    initialY = savedPos.y;
+  }
 
   mainWindow = new BrowserWindow({
     title: APP_DISPLAY_NAME,
@@ -1038,6 +1077,22 @@ function createWindow() {
     }
   });
 
+  // 防抖保存窗口位置（移动时 500ms 内只保存一次）
+  let savePositionTimer = null;
+  function saveWindowPosition() {
+    if (savePositionTimer) clearTimeout(savePositionTimer);
+    savePositionTimer = setTimeout(() => {
+      try {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const [x, y] = mainWindow.getPosition();
+          updateAppConfig({ windowPosition: { x, y } });
+        }
+      } catch (e) {
+        // 静默失败，不影响正常使用
+      }
+    }, 500);
+  }
+
   mainWindow.on('move', () => {
     if (menuWindow && menuWindow.isVisible()) {
       const bounds = getMenuWindowBounds();
@@ -1050,10 +1105,27 @@ function createWindow() {
     if (intimacyWindow && intimacyWidgetVisible && intimacyWindow.isVisible()) {
       intimacyWindow.setBounds(getIntimacyWindowBounds(), false);
     }
+    saveWindowPosition();
   });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // 监听显示器变化（拔插外接屏），确保窗口始终可见
+  screen.on('display-removed', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const [x, y] = mainWindow.getPosition();
+    const [w, h] = mainWindow.getSize();
+    if (!isPositionOnScreen(x, y, w, h)) {
+      // 窗口不在任何可见屏幕上，移动到主显示器
+      const primary = screen.getPrimaryDisplay().workArea;
+      const newX = primary.x + primary.width - w - 40;
+      const newY = primary.y + Math.round(primary.height * 0.3);
+      mainWindow.setPosition(newX, newY);
+      console.log(`[Window] 显示器移除，窗口从 (${x},${y}) 恢复到主屏 (${newX},${newY})`);
+      saveWindowPosition();
+    }
   });
 }
 
@@ -1088,8 +1160,8 @@ function createSubscriptionWindow() {
   const subscriptionWindow = createChildWindow({
     id: 'subscription',
     title: '订阅套餐',
-    width: 550,
-    height: 520,
+    width: 910,
+    height: 740,
     html: 'windows/subscription-window.html'
   });
 
@@ -2058,6 +2130,12 @@ app.whenReady().then(async () => {
     if (!agentRuntime) return { ok: false, error: 'agent not ready' };
     const ok = agentRuntime.injectMessage(runId, text);
     return { ok };
+  });
+
+  // ask_user 技能：用户回答提问
+  ipcMain.handle('agent:respond-to-question', async (event, { questionId, answer } = {}) => {
+    if (!agentRuntime) return { ok: false, error: 'agent not ready' };
+    return agentRuntime.respondToQuestion(questionId, answer);
   });
 
   ipcMain.handle('mcp:list', () => {

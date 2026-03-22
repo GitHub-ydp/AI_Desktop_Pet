@@ -57,6 +57,9 @@ class SkillExecutor {
     }
     this.mainWindow = null;
 
+    // ask_user 提问等待队列：questionId → { resolve, timeoutId }
+    this.pendingQuestions = new Map();
+
     // 技能名 → 现有 WorkflowManager 工具名映射（向后兼容）
     this._legacyMapping = {};
 
@@ -78,7 +81,8 @@ class SkillExecutor {
       screenshot_ocr: this._screenshotOCR.bind(this),
       web_fetch: this._webFetch.bind(this),
       web_search: this._webSearch.bind(this),
-      weather_get: this._weatherGet.bind(this)
+      weather_get: this._weatherGet.bind(this),
+      ask_user: this._askUser.bind(this)
     };
   }
 
@@ -1574,6 +1578,67 @@ class SkillExecutor {
         resolve(firstLine || '');
       });
     });
+  }
+  // ========== ask_user 技能：暂停任务向用户提问 ==========
+
+  async _askUser(args, options = {}) {
+    const question = String(args.question || '').trim();
+    if (!question) {
+      return { success: false, error: '缺少 question 参数' };
+    }
+
+    const questionId = `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const timeoutSeconds = Math.min(Math.max(Number(args.timeout_seconds) || 60, 5), 300);
+    const questionOptions = Array.isArray(args.options) ? args.options : null;
+
+    // 通过 options.onAskUser 回调通知外层（agent-runtime → eventBus → 前端）
+    if (typeof options.onAskUser === 'function') {
+      options.onAskUser({
+        questionId,
+        question,
+        options: questionOptions,
+        timeoutSeconds
+      });
+    }
+
+    return new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        this.pendingQuestions.delete(questionId);
+        resolve({
+          success: true,
+          data: { answer: null, timed_out: true },
+          summary: '用户未在规定时间内回答'
+        });
+      }, timeoutSeconds * 1000);
+
+      this.pendingQuestions.set(questionId, {
+        resolve: (answer) => {
+          clearTimeout(timeoutId);
+          this.pendingQuestions.delete(questionId);
+          resolve({
+            success: true,
+            data: { answer: String(answer || '') },
+            summary: `用户回答：${String(answer || '').slice(0, 100)}`
+          });
+        },
+        timeoutId
+      });
+    });
+  }
+
+  /**
+   * 外部调用：用户回答了 ask_user 的提问
+   * @param {string} questionId - 提问 ID
+   * @param {string} answer - 用户的回答
+   * @returns {{ ok: boolean }}
+   */
+  respondToQuestion(questionId, answer) {
+    const pending = this.pendingQuestions.get(questionId);
+    if (!pending) {
+      return { ok: false, error: '提问不存在或已超时' };
+    }
+    pending.resolve(answer);
+    return { ok: true };
   }
 }
 

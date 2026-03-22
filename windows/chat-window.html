@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>瀹犵墿鐨勫皬绐?/title>
+  <title>宠物的小窝</title>
   <script src="../src/theme-manager.js"></script>
   <script src="../src/plan-manager.js"></script>
   <script src="../assets/lib/lottie.min.js"></script>
@@ -213,15 +213,79 @@
     }
     .bubble-image {
       display: block;
-      width: min(280px, 100%);
+      width: min(220px, 100%);
+      height: 156px;
+      object-fit: cover;
       border-radius: 12px;
       border: 1px solid var(--border, rgba(0,255,240,0.3));
       background: var(--bg-surface, rgba(0,15,30,0.98));
+      cursor: zoom-in;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .bubble-image:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-bright, rgba(0,255,240,0.65));
+      box-shadow: 0 10px 22px rgba(0,255,240,0.16);
+    }
+    .bubble-attachment {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--bubble-border, rgba(0,255,240,0.28)) 92%, transparent);
+      background: color-mix(in srgb, var(--bg-card, rgba(0,30,55,0.68)) 90%, transparent);
+    }
+    .bubble-attachment-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--bubble-border, rgba(0,255,240,0.32)) 92%, transparent);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--neon-cyan, #00fff0);
+      background: color-mix(in srgb, var(--accent-bg-dim, rgba(0,255,240,0.08)) 92%, transparent);
+    }
+    .bubble-attachment-copy {
+      min-width: 0;
+      flex: 1;
+    }
+    .bubble-attachment-title {
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bubble-attachment-desc {
+      margin-top: 2px;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--text-muted, rgba(160,220,240,0.8));
     }
     .msg.user .bubble {
       background: var(--neon-cyan, #00fff0);
       color: #020810;
       border-radius: 12px 2px 12px 12px;
+    }
+    .msg.user .bubble-attachment {
+      border-color: rgba(2,8,16,0.12);
+      background: rgba(2,8,16,0.08);
+    }
+    .msg.user .bubble-attachment-badge {
+      border-color: rgba(2,8,16,0.12);
+      background: rgba(2,8,16,0.08);
+      color: #020810;
+    }
+    .msg.user .bubble-attachment-desc {
+      color: rgba(2,8,16,0.72);
     }
     .msg.ai .bubble {
       background: var(--bubble-bg, var(--bg-card, rgba(0,30,55,0.8)));
@@ -353,6 +417,20 @@
       line-height: 1.5;
       color: var(--text, #cff0ff);
     }
+    /* 思考步骤内联提示（typing indicator 下方） */
+    .thinking-step {
+      display: none;
+      font-size: 11px;
+      color: var(--text-muted, rgba(160,220,240,0.6));
+      margin-top: 4px;
+      padding-left: 2px;
+      animation: thinkingFadeIn 0.3s ease;
+    }
+    .thinking-step.show { display: block; }
+    @keyframes thinkingFadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
     .composer {
       flex: 1;
       min-width: 0;
@@ -443,10 +521,33 @@
       backdrop-filter: blur(12px);
       transition: border-color 0.2s, box-shadow 0.2s;
       overflow: hidden;
+      position: relative;
     }
     .input-box:focus-within {
       border-color: var(--border-bright, rgba(0,255,240,0.7));
       box-shadow: var(--glow-sm, 0 0 10px rgba(0,255,240,0.2));
+    }
+    .input-box.drag-active {
+      border-color: var(--neon-cyan, #00fff0);
+      box-shadow: 0 0 0 1px rgba(0,255,240,0.35), 0 0 20px rgba(0,255,240,0.18);
+      background: color-mix(in srgb, var(--bg-card, rgba(0,30,55,0.6)) 82%, rgba(0,255,240,0.08));
+    }
+    .drag-drop-hint {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px dashed var(--border-bright, rgba(0,255,240,0.45));
+      background: rgba(0,255,240,0.08);
+      color: var(--neon-cyan, #00fff0);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+    }
+    .drag-drop-hint.show {
+      display: flex;
     }
     textarea#chatInput {
       width: 100%;
@@ -707,6 +808,51 @@
       pointer-events: none;
     }
     .toast.show { opacity: 1; }
+    .image-lightbox {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(2, 8, 16, 0.84);
+      backdrop-filter: blur(8px);
+      z-index: 12000;
+    }
+    .image-lightbox.show {
+      display: flex;
+    }
+    .image-lightbox-dialog {
+      position: relative;
+      max-width: min(92vw, 1120px);
+      max-height: 88vh;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(0,255,240,0.22);
+      background: rgba(0, 18, 34, 0.96);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
+    }
+    .image-lightbox-img {
+      display: block;
+      max-width: min(88vw, 1080px);
+      max-height: calc(88vh - 28px);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.04);
+    }
+    .image-lightbox-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 34px;
+      height: 34px;
+      border: 1px solid rgba(0,255,240,0.24);
+      border-radius: 999px;
+      background: rgba(2, 8, 16, 0.62);
+      color: var(--text, #cff0ff);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+    }
     @keyframes agentPulse {
       0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(0, 255, 240, 0.35); }
       70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 255, 240, 0); }
@@ -792,6 +938,7 @@
           <div class="typing-dots"><span></span><span></span><span></span></div>
           <span class="typing-label" id="typingLabel">正在想...</span>
         </div>
+        <span class="thinking-step" id="thinkingStep"></span>
         <div class="agent-status" id="agentStatus">
           <div class="agent-status-dot"></div>
           <div class="agent-status-text" id="agentStatusText">&#27491;&#22312;&#20934;&#22791;&#20013;...</div>
@@ -800,6 +947,7 @@
 
       <div class="input-area">
         <div class="input-box">
+          <div class="drag-drop-hint" id="dragDropHint">拖到这里即可添加图片或文本文件</div>
           <div class="composer">
             <div class="attachment-tray" id="attachmentTray">
               <div class="attachment-file-badge" id="attachmentBadge">FILE</div>
@@ -849,6 +997,33 @@
     </div>
   </div>
 
+  <!-- ask_user 提问弹窗 -->
+  <div class="confirm-overlay" id="askUserOverlay">
+    <div class="confirm-dialog" style="max-width: 380px;">
+      <div class="confirm-title" id="askUserTitle">宠物想问你一个问题</div>
+      <div class="confirm-message" id="askUserQuestion"></div>
+      <div id="askUserOptions" style="display:none; margin-top: 10px;"></div>
+      <div id="askUserInputWrap" style="margin-top: 10px;">
+        <textarea id="askUserInput" rows="2" placeholder="在这里输入你的回答..."
+          style="width:100%; box-sizing:border-box; resize:vertical;
+          background: var(--input-bg, rgba(0,30,55,0.4)); color: var(--text-color, #e0e6ed);
+          border: 1px solid var(--input-border, rgba(0,255,240,0.15)); border-radius: 8px;
+          padding: 8px 10px; font-size: 13px; font-family: inherit; outline: none;"></textarea>
+      </div>
+      <div class="confirm-actions">
+        <button class="confirm-btn" onclick="dismissAskUser()">跳过</button>
+        <button class="confirm-btn danger" id="askUserSubmitBtn" onclick="submitAskUser()" style="color: var(--neon-cyan, #00fff0); border-color: var(--neon-cyan, #00fff0);">提交回答</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="image-lightbox" id="imageLightbox">
+    <div class="image-lightbox-dialog">
+      <button class="image-lightbox-close" id="imageLightboxClose" type="button">X</button>
+      <img class="image-lightbox-img" id="imageLightboxImg" alt="full preview">
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -865,6 +1040,7 @@
     let quotaExceededActive = false;
     let quotaPromptWrapper = null;
     let defaultChatPlaceholder = '';
+    let fileDragDepth = 0;
 
     // 鈹€鈹€ 缁堢椋庢牸鎵撳瓧鏈虹姸鎬?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
     // 璁捐锛歴etTimeout 鑷皟搴︼紙闈?rAF锛夛紝22ms/瀛楃 鈮?45瀛?绉?
@@ -905,6 +1081,14 @@
     function getCurrentPetNameSetting() {
       try {
         return JSON.parse(localStorage.getItem('settings') || '{}').petName || '';
+      } catch {
+        return '';
+      }
+    }
+
+    function getCurrentUserNameSetting() {
+      try {
+        return JSON.parse(localStorage.getItem('settings') || '{}').userName || '';
       } catch {
         return '';
       }
@@ -964,6 +1148,45 @@
       return labels[toolName] || toolName || '\u64cd\u4f5c';
     }
 
+    // 工具执行时的思考步骤描述（类人思考可视化）
+    function getThinkingStepText(toolName, args) {
+      const stepMap = {
+        'web_search':     '\u{1F50D} 正在搜索解决方案...',
+        'web_fetch':      '\u{1F4C4} 正在阅读参考资料...',
+        'memory_search':  '\u{1F4AD} 正在回忆相关经验...',
+        'bash_run':       '\u26A1 正在执行操作...',
+        'file_write':     '\u{1F4DD} 正在创建文件...',
+        'file_read':      '\u{1F4D6} 正在查看文件...',
+        'file_edit':      '\u270F\uFE0F 正在编辑文件...',
+        'file_list':      '\u{1F4C2} 正在浏览目录...',
+        'file_search':    '\u{1F50E} 正在搜索文件...',
+        'grep_search':    '\u{1F50E} 正在搜索代码...',
+        'ask_user':       '\u{1F64B} 想问你一个问题...',
+        'open_url':       '\u{1F310} 正在打开链接...',
+        'open_app':       '\u{1F4BB} 正在启动程序...',
+        'screenshot_ocr': '\u{1F441}\uFE0F 正在识别图片...',
+        'weather_get':    '\u{1F324}\uFE0F 正在查询天气...',
+        'reminder_create':'\u23F0 正在设置提醒...',
+        'git_ops':        '\u{1F4E6} 正在操作代码仓库...',
+        'multi_file_edit':'\u270F\uFE0F 正在批量编辑文件...',
+        'clipboard_set':  '\u{1F4CB} 正在复制到剪贴板...',
+      };
+      return stepMap[toolName] || `\u{1F527} 正在使用 ${toolName}...`;
+    }
+
+    // 更新思考步骤内联提示（typing indicator 下方）
+    function updateThinkingStep(text) {
+      const el = document.getElementById('thinkingStep');
+      if (!el) return;
+      if (text) {
+        el.textContent = text;
+        el.classList.add('show');
+      } else {
+        el.classList.remove('show');
+        el.textContent = '';
+      }
+    }
+
     function closeWindow() {
       if (window.electron && window.electron.closeChildWindow) {
         window.electron.closeChildWindow('chat');
@@ -990,6 +1213,23 @@
       toast.classList.add('show');
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+    }
+
+    function openImageLightbox(src, alt = 'preview') {
+      const overlay = document.getElementById('imageLightbox');
+      const image = document.getElementById('imageLightboxImg');
+      if (!overlay || !image || !src) return;
+      image.src = src;
+      image.alt = alt;
+      overlay.classList.add('show');
+    }
+
+    function closeImageLightbox() {
+      const overlay = document.getElementById('imageLightbox');
+      const image = document.getElementById('imageLightboxImg');
+      if (!overlay || !image) return;
+      overlay.classList.remove('show');
+      image.removeAttribute('src');
     }
 
     function autoGrowTextarea() {
@@ -1049,6 +1289,49 @@
       });
     }
 
+    function loadImageElement(dataURL) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('image_load_failed'));
+        image.src = dataURL;
+      });
+    }
+
+    async function buildOptimizedImageAttachment(file) {
+      const originalDataURL = await fileToDataURL(file);
+      const image = await loadImageElement(originalDataURL);
+      const maxSide = 1280;
+      const naturalWidth = image.naturalWidth || image.width || 1;
+      const naturalHeight = image.naturalHeight || image.height || 1;
+      const scale = Math.min(1, maxSide / Math.max(naturalWidth, naturalHeight));
+      const targetWidth = Math.max(1, Math.round(naturalWidth * scale));
+      const targetHeight = Math.max(1, Math.round(naturalHeight * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        return {
+          type: 'image',
+          name: file.name || `pasted-image-${Date.now()}.png`,
+          mimeType: file.type || 'image/png',
+          dataURL: originalDataURL
+        };
+      }
+
+      context.drawImage(image, 0, 0, targetWidth, targetHeight);
+      const preferredMime = /png|webp/i.test(file.type || '') ? 'image/png' : 'image/jpeg';
+      const optimizedDataURL = canvas.toDataURL(preferredMime, preferredMime === 'image/jpeg' ? 0.84 : undefined);
+      return {
+        type: 'image',
+        name: file.name || `pasted-image-${Date.now()}.png`,
+        mimeType: preferredMime,
+        dataURL: optimizedDataURL
+      };
+    }
+
     function fileToText(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1058,10 +1341,34 @@
       });
     }
 
+    function isImageLikeFile(file) {
+      const name = String(file && file.name ? file.name : '');
+      const type = String(file && file.type ? file.type : '').toLowerCase();
+      return type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name);
+    }
+
     function isTextLikeFile(file) {
       const name = String(file && file.name ? file.name : '');
       const type = String(file && file.type ? file.type : '').toLowerCase();
       return type.startsWith('text/') || /\.(txt|md|json|csv|log|js|ts|py)$/i.test(name);
+    }
+
+    function isSupportedAttachmentFile(file) {
+      return isImageLikeFile(file) || isTextLikeFile(file);
+    }
+
+    function isFileDragEvent(event) {
+      const transfer = event && event.dataTransfer;
+      if (!transfer) return false;
+      const types = Array.from(transfer.types || []);
+      return types.includes('Files');
+    }
+
+    function setDragDropActive(active) {
+      const inputBox = document.querySelector('.input-box');
+      const hint = document.getElementById('dragDropHint');
+      if (inputBox) inputBox.classList.toggle('drag-active', !!active);
+      if (hint) hint.classList.toggle('show', !!active);
     }
 
     function buildFileBadgeLabel(name) {
@@ -1073,20 +1380,14 @@
     }
 
     async function handleImagePaste(file) {
-      const dataURL = await fileToDataURL(file);
-      pendingImageAttachment = {
-        type: 'image',
-        name: file.name || `pasted-image-${Date.now()}.png`,
-        mimeType: file.type || 'image/png',
-        dataURL
-      };
+      pendingImageAttachment = await buildOptimizedImageAttachment(file);
       renderAttachmentPreview();
       showToast('\u622a\u56fe\u5df2\u7c98\u8d34');
     }
 
     async function handleFileSelection(file) {
       if (!file) return;
-      if (file.type && file.type.startsWith('image/')) {
+      if (isImageLikeFile(file)) {
         await handleImagePaste(file);
         return;
       }
@@ -1111,6 +1412,26 @@
       showToast('\u6587\u4ef6\u5df2\u6dfb\u52a0');
     }
 
+    async function handleDroppedFiles(fileList) {
+      const files = Array.from(fileList || []).filter((file) => file && file.name);
+      if (files.length === 0) return;
+
+      const selectedFile = files.find(isSupportedAttachmentFile) || files[0];
+      if (!isSupportedAttachmentFile(selectedFile)) {
+        showToast('\u6682\u4ec5\u652f\u6301\u56fe\u7247\u548c\u6587\u672c\u7c7b\u6587\u4ef6');
+        return;
+      }
+
+      try {
+        await handleFileSelection(selectedFile);
+        if (files.length > 1) {
+          showToast(`\u5df2\u9009\u62e9\u7b2c\u4e00\u4e2a\u9644\u4ef6\uff1a${selectedFile.name}`);
+        }
+      } catch (error) {
+        showToast('\u6587\u4ef6\u6dfb\u52a0\u5931\u8d25');
+      }
+    }
+
     function buildEffectiveMessage(message, attachment) {
       if (!attachment || attachment.type === 'image') {
         return message || (attachment ? '\u8bf7\u5e2e\u6211\u770b\u4e00\u4e0b\u8fd9\u5f20\u56fe\u7247\u3002' : '');
@@ -1131,26 +1452,67 @@
       return message || `\u53d1\u9001\u4e86\u6587\u4ef6\uff1a${attachment.name}`;
     }
 
+    function createAttachmentSummaryNode(attachment) {
+      if (!attachment) return null;
+
+      const isImage = attachment.type === 'image';
+      const wrap = document.createElement('div');
+      wrap.className = 'bubble-attachment';
+
+      const badge = document.createElement('div');
+      badge.className = 'bubble-attachment-badge';
+      badge.textContent = isImage ? 'IMG' : buildFileBadgeLabel(attachment.name || 'FILE');
+
+      const copy = document.createElement('div');
+      copy.className = 'bubble-attachment-copy';
+
+      const title = document.createElement('div');
+      title.className = 'bubble-attachment-title';
+      title.textContent = attachment.name || (isImage ? '图片附件' : '文件附件');
+
+      const desc = document.createElement('div');
+      desc.className = 'bubble-attachment-desc';
+      desc.textContent = isImage
+        ? '图片已随本条消息发送'
+        : (attachment.truncated ? '文件内容已附带发送（内容过长，已截断）' : '文件内容已附带发送');
+
+      copy.appendChild(title);
+      copy.appendChild(desc);
+      wrap.appendChild(badge);
+      wrap.appendChild(copy);
+      return wrap;
+    }
+
     function createMessageNode(role, content, attachments = null) {
       const wrapper = document.createElement('div');
       wrapper.className = `msg ${role === 'user' ? 'user' : 'ai'}`;
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      const imageAttachment = Array.isArray(attachments)
-        ? attachments.find((attachment) => attachment && typeof attachment.dataURL === 'string')
-        : null;
+      const normalizedAttachments = Array.isArray(attachments)
+        ? attachments.filter(Boolean)
+        : [];
+      const imageAttachment = normalizedAttachments.find((attachment) => attachment && typeof attachment.dataURL === 'string') || null;
       if (imageAttachment) {
         bubble.classList.add('has-image');
         const image = document.createElement('img');
         image.className = 'bubble-image';
         image.src = imageAttachment.dataURL;
         image.alt = imageAttachment.name || 'attachment';
+        image.addEventListener('click', () => openImageLightbox(imageAttachment.dataURL, image.alt));
         bubble.appendChild(image);
       }
-      const textNode = document.createElement('div');
-      textNode.className = 'bubble-text';
-      setBubbleContent(textNode, content, role === 'assistant');
-      bubble.appendChild(textNode);
+      const shouldRenderTextNode = role === 'assistant' || normalizedAttachments.length === 0 || String(content || '').trim().length > 0;
+      if (shouldRenderTextNode) {
+        const textNode = document.createElement('div');
+        textNode.className = 'bubble-text';
+        setBubbleContent(textNode, content, role === 'assistant');
+        bubble.appendChild(textNode);
+      }
+      const primaryAttachment = normalizedAttachments[0] || null;
+      if (primaryAttachment) {
+        const attachmentNode = createAttachmentSummaryNode(primaryAttachment);
+        if (attachmentNode) bubble.appendChild(attachmentNode);
+      }
       wrapper.appendChild(bubble);
       return { wrapper, bubble };
     }
@@ -1407,9 +1769,12 @@
         throw new Error('PetAgent unavailable');
       }
       console.log('[chat-window] startSession begin');
+      const userName = getCurrentUserNameSetting();
+      // 从 settings 读取用户兴趣标签
+      const interests = JSON.parse(localStorage.getItem('settings') || '{}').interests || [];
       const started = await window.PetAgent.startSession({
         channel: 'chat-window',
-        metadata: { personality, petName }
+        metadata: { personality, petName, userName, interests }
       });
       console.log('[chat-window] startSession result:', started);
       if (!started || started.error || !started.sessionId) {
@@ -1532,29 +1897,44 @@
             break;
           case 'tool.started': {
             const toolName = event.payload && event.payload.toolName ? event.payload.toolName : '';
-            setAgentStatus(`\u6b63\u5728\u6267\u884c${formatToolLabel(toolName)}...`, 'working');
+            const toolArgs = event.payload && event.payload.args ? event.payload.args : {};
+            const stepText = getThinkingStepText(toolName, toolArgs);
+            setAgentStatus(stepText, 'working');
+            updateThinkingStep(stepText);
             break;
           }
           case 'tool.delta': {
             const toolName = event.payload && event.payload.toolName ? event.payload.toolName : '';
-            setAgentStatus(`\u6b63\u5728\u5904\u7406${formatToolLabel(toolName)}\u7684\u8f93\u51fa...`, 'working');
+            const stepText = getThinkingStepText(toolName);
+            setAgentStatus(stepText, 'working');
+            updateThinkingStep(stepText);
             break;
           }
           case 'tool.completed': {
             const toolName = event.payload && event.payload.toolName ? event.payload.toolName : '';
             const ok = !event.payload || event.payload.ok !== false;
             setAgentStatus(ok ? `\u5df2\u5b8c\u6210${formatToolLabel(toolName)}` : `${formatToolLabel(toolName)}\u6267\u884c\u5931\u8d25`, ok ? 'success' : 'attention', ok ? 900 : 0);
+            updateThinkingStep(null);
             break;
           }
           case 'approval.requested':
             showAgentApproval(event.payload || null, runId);
             break;
+          case 'user.question.requested':
+            showAskUserDialog(event.payload || {});
+            break;
+          case 'experience.recorded':
+            // 宠物学到了新经验，暂时只打日志，后续可加 UI 提示
+            console.log('[chat-window] 新经验记录:', event.payload);
+            break;
           case 'run.failed':
             console.error('[chat-window] agent run failed event:', event.payload || null);
             setAgentStatus('\u8fd9\u6b21\u64cd\u4f5c\u6ca1\u6709\u5b8c\u6210', 'attention');
+            updateThinkingStep(null);
             break;
           case 'run.completed':
             setAgentStatus('\u64cd\u4f5c\u5df2\u5b8c\u6210', 'success', 900);
+            updateThinkingStep(null);
             break;
           default:
             break;
@@ -1586,6 +1966,7 @@
       document.getElementById('sendBtn').disabled = false;
       hideTyping();
       clearAgentStatus();
+      updateThinkingStep(null);
     }
 
     async function sendMessage() {
@@ -1594,13 +1975,14 @@
       const message = input.value.trim();
       const attachment = pendingImageAttachment;
       const attachments = attachment && attachment.type === 'image' ? [attachment] : null;
+      const displayAttachments = attachment ? [attachment] : null;
       const previousAttachment = pendingImageAttachment;
       const effectiveMessage = buildEffectiveMessage(message, attachment);
       if ((!effectiveMessage && !attachments) || isProcessing) return;
 
       isProcessing = true;
       document.getElementById('sendBtn').disabled = true;
-      addMessage('user', buildOutgoingPreviewText(message, attachment), attachments);
+      addMessage('user', buildOutgoingPreviewText(message, attachment), displayAttachments);
       input.value = '';
       autoGrowTextarea();
       clearPendingImageAttachment();
@@ -1608,6 +1990,11 @@
       setAgentStatus('\u6b63\u5728\u601d\u8003\u4e2d...', 'working');
 
       try {
+        if (attachment && attachment.type === 'image') {
+          await analyzeImageAttachmentMessage(attachment, message);
+          return;
+        }
+
         if (window.PetAgent) {
           try {
             const sessionId = await ensureAgentSession();
@@ -1732,14 +2119,29 @@
       panel.classList.add('show');
     }
 
-    function showApprovalDialog({ title, message, kind, approvalId = null, runId = null, requestId = null, preview = null }) {
+    function showApprovalDialog({ title, message, kind, approvalId = null, runId = null, requestId = null, preview = null, isDangerous = false }) {
       pendingApprovalDialog = { title, message, kind, approvalId, runId, requestId, preview };
       const overlay = document.getElementById('confirmOverlay');
-      overlay.querySelector('.confirm-title').textContent = title || '\u786e\u8ba4\u6267\u884c\u9ad8\u98ce\u9669\u64cd\u4f5c';
-      document.getElementById('confirmMessage').textContent = message || '\u662f\u5426\u7ee7\u7eed\u6267\u884c\u8be5\u64cd\u4f5c\uff1f';
+      overlay.querySelector('.confirm-title').textContent = title || '确认执行操作';
+      document.getElementById('confirmMessage').textContent = message || '是否继续执行该操作？';
+      // 高风险操作时，确认按钮变红色，文字改为警示文案
+      const approveBtn = overlay.querySelector('.confirm-btn.danger');
+      if (approveBtn) {
+        if (isDangerous) {
+          approveBtn.textContent = '我已知悉风险，确认执行';
+          approveBtn.style.color = 'var(--neon-magenta, #ff2d78)';
+          approveBtn.style.borderColor = 'var(--neon-magenta, #ff2d78)';
+          approveBtn.style.background = 'rgba(255,45,120,0.1)';
+        } else {
+          approveBtn.textContent = '确认执行';
+          approveBtn.style.color = '';
+          approveBtn.style.borderColor = '';
+          approveBtn.style.background = '';
+        }
+      }
       renderApprovalDiff(preview);
       overlay.classList.add('show');
-      setAgentStatus('\u7b49\u5f85\u4f60\u786e\u8ba4\u64cd\u4f5c...', 'attention');
+      setAgentStatus('等待你确认操作...', 'attention');
     }
 
     async function resolveApprovalDialog(approved) {
@@ -1772,16 +2174,98 @@
     function rejectSkillConfirm() { void resolveApprovalDialog(false); }
 
     function showAgentApproval(payload, runId) {
-      const summary = payload && payload.summary ? payload.summary : `\u51c6\u5907\u6267\u884c\u5de5\u5177 ${payload && payload.toolName ? payload.toolName : ''}`.trim();
-      const argsText = payload && payload.args ? `\n\n\u53c2\u6570:\n${JSON.stringify(payload.args, null, 2)}` : '';
+      // 使用 humanizer 生成的自然语言描述，不再显示原始 JSON 参数
+      const title = payload && payload.title ? payload.title : '确认执行操作';
+      const summary = payload && payload.summary ? payload.summary : `准备执行工具 ${payload && payload.toolName ? payload.toolName : ''}`.trim();
+      const isDangerous = payload && payload.isDangerous === true;
       showApprovalDialog({
         kind: 'agent',
         approvalId: payload && payload.approvalId ? payload.approvalId : null,
         runId: runId || null,
-        title: '\u786e\u8ba4\u6267\u884c Agent \u64cd\u4f5c',
-        message: `${summary}${argsText}`,
+        title: title,
+        message: summary,
+        isDangerous: isDangerous,
         preview: payload && payload.preview ? payload.preview : null
       });
+    }
+
+    // ========== ask_user 提问弹窗 ==========
+    let pendingAskUser = null;   // { questionId, timeoutId }
+
+    function showAskUserDialog(payload) {
+      const questionId = payload.questionId || '';
+      const askPetName = getCurrentPetNameSetting() || '宠物';
+      const question = payload.question || `${askPetName}想问你一个问题`;
+      const options = Array.isArray(payload.options) ? payload.options : null;
+      const timeoutSeconds = payload.timeoutSeconds || 60;
+
+      // 显示问题
+      document.getElementById('askUserTitle').textContent = `${askPetName}想问你一个问题`;
+      document.getElementById('askUserQuestion').textContent = question;
+
+      const optionsContainer = document.getElementById('askUserOptions');
+      const inputWrap = document.getElementById('askUserInputWrap');
+
+      if (options && options.length > 0) {
+        // 选项模式：显示选项按钮，隐藏文本输入
+        optionsContainer.innerHTML = options.map(opt => {
+          const label = typeof opt === 'string' ? opt : (opt.label || opt.value || '');
+          const value = typeof opt === 'string' ? opt : (opt.value || opt.label || '');
+          return `<button class="confirm-btn" style="margin: 3px 4px; color: var(--neon-cyan, #00fff0); border-color: var(--neon-cyan, #00fff0);"
+            onclick="submitAskUserOption('${value.replace(/'/g, "\\'")}')">${label}</button>`;
+        }).join('');
+        optionsContainer.style.display = 'flex';
+        optionsContainer.style.flexWrap = 'wrap';
+        inputWrap.style.display = 'none';
+      } else {
+        // 自由文本模式
+        optionsContainer.style.display = 'none';
+        optionsContainer.innerHTML = '';
+        inputWrap.style.display = 'block';
+        document.getElementById('askUserInput').value = '';
+        setTimeout(() => document.getElementById('askUserInput').focus(), 100);
+      }
+
+      // 设置超时自动关闭
+      const timeoutId = setTimeout(() => {
+        dismissAskUser();
+      }, timeoutSeconds * 1000);
+
+      pendingAskUser = { questionId, timeoutId };
+      document.getElementById('askUserOverlay').classList.add('show');
+      setAgentStatus('AI 在等你回答问题...', 'attention');
+    }
+
+    function submitAskUser() {
+      if (!pendingAskUser) return;
+      const answer = document.getElementById('askUserInput').value.trim();
+      if (!answer) return;
+      _resolveAskUser(answer);
+    }
+
+    function submitAskUserOption(value) {
+      if (!pendingAskUser) return;
+      _resolveAskUser(value);
+    }
+
+    function dismissAskUser() {
+      if (!pendingAskUser) return;
+      _resolveAskUser('');   // 空字符串表示跳过
+    }
+
+    function _resolveAskUser(answer) {
+      if (!pendingAskUser) return;
+      const { questionId, timeoutId } = pendingAskUser;
+      pendingAskUser = null;
+      clearTimeout(timeoutId);
+      document.getElementById('askUserOverlay').classList.remove('show');
+
+      if (window.PetAgent && window.PetAgent.respondToQuestion) {
+        window.PetAgent.respondToQuestion(questionId, answer).catch(err => {
+          console.error('[chat-window] respondToQuestion failed:', err);
+        });
+      }
+      setAgentStatus(answer ? '已收到你的回答，继续执行中...' : '已跳过提问，继续执行中...', 'working');
     }
 
     async function loadPetName() {
@@ -1895,6 +2379,33 @@
       }
     }
 
+    async function analyzeImageAttachmentMessage(attachment, message) {
+      if (!attachment || attachment.type !== 'image') {
+        throw new Error('image_attachment_required');
+      }
+      if (!window.ScreenshotBridge || typeof window.ScreenshotBridge.analyze !== 'function') {
+        throw new Error('image_analysis_unavailable');
+      }
+
+      const prompt = message && message.trim()
+        ? message.trim()
+        : '\u8bf7\u6839\u636e\u8fd9\u5f20\u56fe\u7247\u7ed9\u51fa\u6e05\u6670\u3001\u76f4\u63a5\u7684\u89e3\u8bfb\u3002';
+
+      setAgentStatus('\u6b63\u5728\u5206\u6790\u56fe\u7247...', 'working');
+      const result = await window.ScreenshotBridge.analyze(attachment.dataURL, prompt);
+      if (!result || !result.success) {
+        throw new Error((result && result.error) || 'image_analysis_failed');
+      }
+
+      const finalText = typeof result.result === 'string' && result.result.trim()
+        ? result.result.trim()
+        : '\u6211\u770b\u5b8c\u4e86\uff0c\u4f46\u8fd9\u6b21\u6ca1\u6709\u62ff\u5230\u6709\u6548\u7ed3\u679c\u3002';
+      hideTyping();
+      clearAgentStatus();
+      addMessage('assistant', finalText);
+      return finalText;
+    }
+
     function bindEvents() {
       const input = document.getElementById('chatInput');
       const sendBtn = document.getElementById('sendBtn');
@@ -1904,6 +2415,8 @@
       const videoBtn = document.getElementById('videoBtn');
       const fileUploadInput = document.getElementById('fileUploadInput');
       const attachmentRemoveBtn = document.getElementById('attachmentRemoveBtn');
+      const imageLightbox = document.getElementById('imageLightbox');
+      const imageLightboxClose = document.getElementById('imageLightboxClose');
 
       if (!defaultChatPlaceholder) {
         defaultChatPlaceholder = input.getAttribute('placeholder') || '\u548c\u6211\u8bf4\u8bf4\u8bdd\u5427~';
@@ -1945,21 +2458,91 @@
           fileUploadInput.value = '';
         }
       });
+      document.addEventListener('dragenter', (event) => {
+        if (!isFileDragEvent(event)) return;
+        event.preventDefault();
+        fileDragDepth += 1;
+        setDragDropActive(true);
+      });
+      document.addEventListener('dragover', (event) => {
+        if (!isFileDragEvent(event)) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+        if (!fileDragDepth) fileDragDepth = 1;
+        setDragDropActive(true);
+      });
+      document.addEventListener('dragleave', (event) => {
+        if (!isFileDragEvent(event)) return;
+        event.preventDefault();
+        fileDragDepth = Math.max(0, fileDragDepth - 1);
+        if (fileDragDepth === 0) {
+          setDragDropActive(false);
+        }
+      });
+      document.addEventListener('drop', async (event) => {
+        if (!isFileDragEvent(event)) return;
+        event.preventDefault();
+        fileDragDepth = 0;
+        setDragDropActive(false);
+        const files = event.dataTransfer && event.dataTransfer.files ? event.dataTransfer.files : [];
+        await handleDroppedFiles(files);
+      });
+      window.addEventListener('blur', () => {
+        fileDragDepth = 0;
+        setDragDropActive(false);
+      });
       voiceBtn.addEventListener('click', handleVoiceFeature);
       videoBtn.addEventListener('click', handleVideoFeature);
       attachmentRemoveBtn.addEventListener('click', clearPendingImageAttachment);
+      if (imageLightboxClose) {
+        imageLightboxClose.addEventListener('click', closeImageLightbox);
+      }
+      if (imageLightbox) {
+        imageLightbox.addEventListener('click', (event) => {
+          if (event.target === imageLightbox) {
+            closeImageLightbox();
+          }
+        });
+      }
 
       document.addEventListener('keydown', (event) => {
-        if (!pendingApprovalDialog) return;
-        if (event.key === 'Escape') {
+        if (event.key === 'Escape' && imageLightbox && imageLightbox.classList.contains('show')) {
+          event.preventDefault();
+          closeImageLightbox();
+          return;
+        }
+        // 审批弹窗 Esc 取消
+        if (pendingApprovalDialog && event.key === 'Escape') {
           event.preventDefault();
           rejectSkillConfirm();
+          return;
+        }
+        // ask_user 弹窗键盘支持
+        if (pendingAskUser) {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            dismissAskUser();
+          }
         }
       });
+
+      // ask_user 输入框 Enter 提交（Shift+Enter 换行）
+      const askUserInputEl = document.getElementById('askUserInput');
+      if (askUserInputEl) {
+        askUserInputEl.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            submitAskUser();
+          }
+        });
+      }
 
       window.addEventListener('beforeunload', () => {
         if (pendingApprovalDialog) {
           void resolveApprovalDialog(false);
+        }
+        if (pendingAskUser) {
+          dismissAskUser();
         }
       });
 

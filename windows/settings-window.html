@@ -98,6 +98,7 @@
     .active-badge { display: none; position: absolute; top: 10px; right: 10px; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 700; color: var(--neon-cyan); background: var(--accent-bg-faint, rgba(0, 255, 240, 0.08)); border: 1px solid var(--border, rgba(0, 255, 240, 0.28)); z-index: 1; }
     .theme-preview { height: 72px; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; }
     .preview-classic { background: linear-gradient(135deg, #F7F7F7 0%, #EDEDED 100%); }
+    .preview-classic .preview-dot { background: #FFC73D; box-shadow: 0 0 6px rgba(255, 199, 61, 0.6); } .preview-classic .preview-line { background: rgba(255, 199, 61, 0.28); } .preview-classic .preview-text { color: #333333; font-size: 11px; font-weight: 700; } .preview-classic .preview-sub { color: rgba(0, 0, 0, 0.45); font-size: 10px; }
     .preview-cyberpunk { background: linear-gradient(135deg, #020810 0%, #001833 100%); }
     .preview-lazyCat { background: linear-gradient(135deg, #1a0e05 0%, #2e1808 100%); }
     .preview-freshSpring { background: linear-gradient(135deg, #eef8f6 0%, #dff3ee 100%); }
@@ -163,6 +164,25 @@
       .apikey-models-hint { padding-left: 0; }
       .footer { flex-direction: column; align-items: stretch; }
     }
+    /* ===== 我的账号 ===== */
+    .account-user-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+    .account-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--accent-bg-dim); border: 2px solid var(--border-bright); display: flex; align-items: center; justify-content: center; font-size: 30px; line-height: 1; flex-shrink: 0; box-shadow: var(--glow-sm); }
+    .account-info { display: flex; flex-direction: column; gap: 4px; }
+    .account-phone { font-size: 16px; font-weight: 700; color: var(--text); }
+    .account-plan-tag { display: inline-block; font-size: 11px; font-weight: 600; color: var(--neon-cyan); border: 1px solid var(--border-bright); border-radius: 999px; padding: 2px 9px; background: var(--accent-bg-faint); width: fit-content; }
+    .account-usage-section { margin-bottom: 4px; }
+    .account-usage-label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .account-usage-label span { color: var(--text); font-weight: 600; }
+    .account-bar-wrap { width: 100%; height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+    .account-bar-fill { height: 100%; border-radius: 999px; background: var(--neon-cyan); width: 0%; transition: width 0.6s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 0 6px var(--neon-cyan); }
+    .account-expires-row { font-size: 12px; color: var(--text-muted); padding-top: 12px; margin-top: 2px; border-top: 1px solid var(--border); }
+    .account-expires-row span { color: var(--neon-cyan); font-weight: 600; }
+    .account-btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+    .btn-account-upgrade { flex: 1; min-width: 100px; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-bright); background: var(--accent-bg-faint); color: var(--neon-cyan); transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+    .btn-account-upgrade:hover:not(:disabled) { background: var(--accent-bg-dim); box-shadow: var(--glow-sm); border-color: var(--neon-cyan); }
+    .btn-account-upgrade:disabled { opacity: 0.5; cursor: default; }
+    .btn-account-logout { flex: 1; min-width: 100px; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--danger-border); background: transparent; color: var(--neon-magenta); transition: background 0.2s ease, box-shadow 0.2s ease; }
+    .btn-account-logout:hover { background: var(--danger-hover-bg); box-shadow: var(--danger-glow); }
   </style>
 </head>
 <body>
@@ -176,6 +196,7 @@
       <button class="sidebar-item" type="button" data-section="bubble" onclick="switchSection('bubble')">提示框</button>
       <button class="sidebar-item" type="button" data-section="mood" onclick="switchSection('mood')">心情</button>
       <button class="sidebar-item" type="button" data-section="memory" onclick="switchSection('memory')">我的记忆</button>
+      <button class="sidebar-item" type="button" data-section="account" onclick="switchSection('account')">我的账号</button>
       <button class="sidebar-item" type="button" data-section="theme" onclick="switchSection('theme')">外观</button>
       <button class="sidebar-item" type="button" data-section="ritual" onclick="switchSection('ritual')">仪式感</button>
     </nav>
@@ -259,8 +280,37 @@
           </div>
         </div>
       </section>
+      <section class="settings-panel" data-section="account">
+        <div class="panel-shell">
+          <div class="panel-header">
+            <div class="panel-title">我的账号</div>
+            <div class="panel-desc">管理账号信息与订阅套餐，查看今日 AI 用量。</div>
+          </div>
+          <div class="card">
+            <div class="account-user-row">
+              <div class="account-avatar" aria-label="用户头像">🐱</div>
+              <div class="account-info">
+                <div class="account-phone" id="accountPhone">加载中…</div>
+                <div class="account-plan-tag" id="accountPlan">免费版</div>
+              </div>
+            </div>
+            <div class="account-usage-section">
+              <div class="account-usage-label">今日用量：<span id="accountUsageText">-- / -- 次</span></div>
+              <div class="account-bar-wrap"><div class="account-bar-fill" id="accountUsageBar"></div></div>
+            </div>
+            <div class="account-expires-row" id="accountExpiresRow" style="display:none">到期时间：<span id="accountExpires"></span></div>
+          </div>
+          <div class="card">
+            <div class="section-subtitle" style="margin-bottom:14px">账号操作</div>
+            <div class="account-btn-row">
+              <button id="accountUpgradeBtn" class="btn-account-upgrade" type="button">升级套餐</button>
+              <button id="accountLogoutBtn" class="btn-account-logout" type="button">退出登录</button>
+            </div>
+          </div>
+        </div>
+      </section>
       <section class="settings-panel" data-section="theme">
-        <div class="panel-shell"><div class="panel-header"><div class="panel-title">外观主题</div><div class="panel-desc">切换后会立即同步到其他窗口。主题卡片逻辑与原独立主题窗口保持一致。</div></div><div class="theme-cards" id="themeCards"><div class="theme-card" data-theme="classic" onclick="selectTheme('classic')"><span class="active-badge">当前主题</span><div class="theme-preview preview-classic"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#FF9500; box-shadow:0 0 6px #FF9500;"></div></div><div><div class="preview-text">⚪ 经典主题</div><div class="preview-sub">简约 · 时尚 · 经典</div></div></div><div class="theme-info"><div class="theme-icon">⚪</div><div><div class="theme-name">经典主题</div><div class="theme-desc">简约时尚，经典白灰橙，视觉舒缓。</div></div></div></div><div class="theme-card" data-theme="cyberpunk" onclick="selectTheme('cyberpunk')"><span class="active-badge">当前主题</span><div class="theme-preview preview-cyberpunk"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff2d78; box-shadow:0 0 6px #ff2d78;"></div></div><div><div class="preview-text">CYBER PUNK</div><div class="preview-sub">霓虹 · 深夜 · 都市</div></div></div><div class="theme-info"><div class="theme-icon">🎨</div><div><div class="theme-name">赛博朋克</div><div class="theme-desc">冷色霓虹与深色背景，偏都市科技感。</div></div></div></div><div class="theme-card" data-theme="lazyCat" onclick="selectTheme('lazyCat')"><span class="active-badge">当前主题</span><div class="theme-preview preview-lazyCat"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff6b35; box-shadow:0 0 6px #ff6b35;"></div></div><div><div class="preview-text">Lazy Cat</div><div class="preview-sub">暖橘 · 午后 · 放松</div></div></div><div class="theme-info"><div class="theme-icon">🐱</div><div><div class="theme-name">懒猫橘</div><div class="theme-desc">暖色调更柔和，也更贴近宠物陪伴感。</div></div></div></div><div class="theme-card" data-theme="freshSpring" onclick="selectTheme('freshSpring')"><span class="active-badge">当前主题</span><div class="theme-preview preview-freshSpring"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#6fa7d8; box-shadow:0 0 6px rgba(111,167,216,.55);"></div></div><div><div class="preview-text">Fresh Spring</div><div class="preview-sub">浅青 · 清透 · 轻盈</div></div></div><div class="theme-info"><div class="theme-icon">🌿</div><div><div class="theme-name">小清新</div><div class="theme-desc">明亮、干净，适合白天使用和长时间停留。</div></div></div></div><div class="theme-card" data-theme="milkBlush" onclick="selectTheme('milkBlush')"><span class="active-badge">当前主题</span><div class="theme-preview preview-milkBlush"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#e8a0b7; box-shadow:0 0 6px rgba(232,160,183,.55);"></div></div><div><div class="preview-text">Milk Blush</div><div class="preview-sub">奶白 · 柔粉 · 温柔</div></div></div><div class="theme-info"><div class="theme-icon">🫧</div><div><div class="theme-name">奶白轻柔</div><div class="theme-desc">底色更轻，视觉压力小，柔和但不发灰。</div></div></div></div></div></div>
+        <div class="panel-shell"><div class="panel-header"><div class="panel-title">外观主题</div><div class="panel-desc">切换后会立即同步到其他窗口。主题卡片逻辑与原独立主题窗口保持一致。</div></div><div class="theme-cards" id="themeCards"><div class="theme-card" data-theme="classic" onclick="selectTheme('classic')"><span class="active-badge">当前主题</span><div class="theme-preview preview-classic"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#FF9500; box-shadow:0 0 6px #FF9500;"></div></div><div><div class="preview-text">Classic</div><div class="preview-sub">简约 · 时尚 · 经典</div></div></div><div class="theme-info"><div class="theme-icon">⚪</div><div><div class="theme-name">经典主题</div><div class="theme-desc">简约时尚，经典白灰橙，视觉舒缓。</div></div></div></div><div class="theme-card" data-theme="cyberpunk" onclick="selectTheme('cyberpunk')"><span class="active-badge">当前主题</span><div class="theme-preview preview-cyberpunk"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff2d78; box-shadow:0 0 6px #ff2d78;"></div></div><div><div class="preview-text">CYBER PUNK</div><div class="preview-sub">霓虹 · 深夜 · 都市</div></div></div><div class="theme-info"><div class="theme-icon">🎨</div><div><div class="theme-name">赛博朋克</div><div class="theme-desc">冷色霓虹与深色背景，偏都市科技感。</div></div></div></div><div class="theme-card" data-theme="lazyCat" onclick="selectTheme('lazyCat')"><span class="active-badge">当前主题</span><div class="theme-preview preview-lazyCat"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#ff6b35; box-shadow:0 0 6px #ff6b35;"></div></div><div><div class="preview-text">Lazy Cat</div><div class="preview-sub">暖橘 · 午后 · 放松</div></div></div><div class="theme-info"><div class="theme-icon">🐱</div><div><div class="theme-name">懒猫橘</div><div class="theme-desc">暖色调更柔和，也更贴近宠物陪伴感。</div></div></div></div><div class="theme-card" data-theme="freshSpring" onclick="selectTheme('freshSpring')"><span class="active-badge">当前主题</span><div class="theme-preview preview-freshSpring"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#6fa7d8; box-shadow:0 0 6px rgba(111,167,216,.55);"></div></div><div><div class="preview-text">Fresh Spring</div><div class="preview-sub">浅青 · 清透 · 轻盈</div></div></div><div class="theme-info"><div class="theme-icon">🌿</div><div><div class="theme-name">小清新</div><div class="theme-desc">明亮、干净，适合白天使用和长时间停留。</div></div></div></div><div class="theme-card" data-theme="milkBlush" onclick="selectTheme('milkBlush')"><span class="active-badge">当前主题</span><div class="theme-preview preview-milkBlush"><div class="preview-bar"><div class="preview-dot"></div><div class="preview-line"></div><div class="preview-dot" style="background:#e8a0b7; box-shadow:0 0 6px rgba(232,160,183,.55);"></div></div><div><div class="preview-text">Milk Blush</div><div class="preview-sub">奶白 · 柔粉 · 温柔</div></div></div><div class="theme-info"><div class="theme-icon">🫧</div><div><div class="theme-name">奶白轻柔</div><div class="theme-desc">底色更轻，视觉压力小，柔和但不发灰。</div></div></div></div></div></div>
       </section>
       <div class="confirm-dialog" id="resetConfirmDialog"><div class="confirm-text">确定要重置所有数据吗？这会清空聊天历史和本地设置。</div><div class="dialog-btns"><button class="btn btn-danger" type="button" onclick="confirmReset()">确定重置</button><button class="btn btn-primary" type="button" onclick="cancelReset()">取消</button></div></div>
       <section class="settings-panel" data-section="ritual">
@@ -367,7 +417,7 @@
     let bubblePreviewHideTimer = null; let llmSceneConfig = JSON.parse(JSON.stringify(DEFAULT_SCENE_CONFIG)); let providerKeyInfo = {}; let sceneKeyStatusMap = {}; let weatherDefaultCity = ''; let toastTimer = null; let bubbleDebugStates = []; let currentMoodValue = 80; let savedMoodValue = 80;
     function showToast(message, isError = false) { const toast = document.getElementById('messageToast'); if (!toast) return; toast.textContent = message; toast.classList.toggle('error', !!isError); toast.classList.add('show'); if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.classList.remove('show'); }, 2400); }
     function sendSettingsChange(payload) { if (window.electron && window.electron.sendSettingsChange) window.electron.sendSettingsChange(payload); }
-    function switchSection(sectionId) { activeSectionId = sectionId; document.querySelectorAll('.sidebar-item').forEach((item) => item.classList.toggle('active', item.dataset.section === sectionId)); document.querySelectorAll('.settings-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.section === sectionId)); if (sectionId === 'memory') onMemoryPanelOpen(); if (sectionId === 'ritual') loadRitualSettings(); }
+    function switchSection(sectionId) { activeSectionId = sectionId; document.querySelectorAll('.sidebar-item').forEach((item) => item.classList.toggle('active', item.dataset.section === sectionId)); document.querySelectorAll('.settings-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.section === sectionId)); if (sectionId === 'memory') onMemoryPanelOpen(); if (sectionId === 'ritual') loadRitualSettings(); if (sectionId === 'account') loadAccountInfo(); }
     function parseRitualTime(value, fallbackHour, fallbackMinute) { const parts = String(value || '').split(':'); const hour = Number.parseInt(parts[0], 10); const minute = Number.parseInt(parts[1], 10); return { hour: Number.isFinite(hour) ? hour : fallbackHour, minute: Number.isFinite(minute) ? minute : fallbackMinute }; }
     function loadRitualSettings() { try { const raw = localStorage.getItem('ritual_settings'); const settings = raw ? JSON.parse(raw) : {}; const morningEnabled = document.getElementById('morningEnabled'); const morningTime = document.getElementById('morningTime'); const eveningEnabled = document.getElementById('eveningEnabled'); const eveningTime = document.getElementById('eveningTime'); const weeklyEnabled = document.getElementById('weeklyEnabled'); const weeklyDay = document.getElementById('weeklyDay'); const weeklyTime = document.getElementById('weeklyTime'); if (!morningEnabled || !morningTime || !eveningEnabled || !eveningTime || !weeklyEnabled || !weeklyDay || !weeklyTime) return; morningEnabled.checked = settings.morningEnabled !== false; morningTime.value = `${String(settings.morningHour ?? 8).padStart(2, '0')}:${String(settings.morningMinute ?? 0).padStart(2, '0')}`; eveningEnabled.checked = settings.eveningEnabled !== false; eveningTime.value = `${String(settings.eveningHour ?? 22).padStart(2, '0')}:${String(settings.eveningMinute ?? 0).padStart(2, '0')}`; weeklyEnabled.checked = settings.weeklyEnabled !== false; weeklyDay.value = String(settings.weeklyDay ?? 0); weeklyTime.value = `${String(settings.weeklyHour ?? 20).padStart(2, '0')}:${String(settings.weeklyMinute ?? 0).padStart(2, '0')}`; } catch (error) { console.warn('[Settings] Failed to load ritual settings:', error); } }
     function saveRitualSettings() { try { const morning = parseRitualTime(document.getElementById('morningTime')?.value, 8, 0); const evening = parseRitualTime(document.getElementById('eveningTime')?.value, 22, 0); const weekly = parseRitualTime(document.getElementById('weeklyTime')?.value, 20, 0); const settings = { morningEnabled: !!document.getElementById('morningEnabled')?.checked, morningHour: morning.hour, morningMinute: morning.minute, eveningEnabled: !!document.getElementById('eveningEnabled')?.checked, eveningHour: evening.hour, eveningMinute: evening.minute, weeklyEnabled: !!document.getElementById('weeklyEnabled')?.checked, weeklyDay: Number.parseInt(document.getElementById('weeklyDay')?.value || '0', 10), weeklyHour: weekly.hour, weeklyMinute: weekly.minute }; localStorage.setItem('ritual_settings', JSON.stringify(settings)); showToast('仪式感设置已保存'); } catch (error) { console.error('[Settings] Failed to save ritual settings:', error); showToast('仪式感设置保存失败', true); } }
@@ -440,6 +490,7 @@
     window.addEventListener('DOMContentLoaded', () => { loadSettings().catch((error) => { console.error('[Settings] loadSettings failed:', error); showToast('设置加载失败', true); }); });
     window.addEventListener('storage', (event) => { if (event.key === 'pet_theme') updateThemeSelection(); if (event.key === 'pet_data') { const petData = window.PetStorage.getPetData ? window.PetStorage.getPetData() : null; if (petData) syncMoodState(petData.mood); } });
     window.addEventListener('mood-updated', (event) => { const nextMood = typeof event.detail === 'object' ? event.detail?.mood : event.detail; if (event.detail && typeof event.detail === 'object' && event.detail.source === 'settings') return; syncMoodState(nextMood); });
+    // loadAccountInfo 和账号按钮事件绑定已移至 settings-window-runtime.js（唯一实现）
   </script>
   <script src="../src/settings-window-runtime.js"></script>
 </body>

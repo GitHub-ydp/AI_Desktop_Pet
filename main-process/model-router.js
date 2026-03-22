@@ -49,7 +49,7 @@ const PROVIDER_ENDPOINTS = {
 const DEFAULT_SCENE_CONFIG = {
   chat: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
   agent: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
-  vision: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
+  vision: { provider: 'qwen', model: 'qwen3-vl-plus', apiKeyMode: 'builtin' },
   translate: { provider: 'qwen', model: 'qwen3.5-plus', apiKeyMode: 'builtin' },
   ocr: { provider: 'tesseract', model: 'tesseract', apiKeyMode: 'provider-fallback' }
 };
@@ -86,7 +86,13 @@ class ModelRouter {
       const apiKeyMode = raw.apiKeyMode === 'scene'
         ? 'scene'
         : (raw.apiKeyMode === 'builtin' ? 'builtin' : 'provider-fallback');
-      normalized[scene] = { provider, model, apiKeyMode };
+      normalized[scene] = {
+        provider,
+        model: scene === 'vision' && provider === 'qwen' && model === 'qwen3.5-plus'
+          ? DEFAULT_SCENE_CONFIG.vision.model
+          : model,
+        apiKeyMode
+      };
     }
 
     return normalized;

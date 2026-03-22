@@ -858,14 +858,65 @@ LLM tool_call → SkillExecutor（路由）
 
 **Agent 架构关键参数：**
 ```javascript
-MAX_TOOL_ROUNDS_BY_INTENT = { chat:1, vision:1, task:15, code:15 }
+MAX_TOOL_ROUNDS_BY_INTENT = { chat:3, vision:5, search:8, task:15, code:15 }
 MAX_EMPTY_TOOL_ROUNDS = 2        // 连续全失败退出阈值
+AUTO_COMPACT_TOKEN_THRESHOLD = 25000  // Qwen 32K 窗口，预留 7K
+NAG_THRESHOLD = 5                // 连续无实质进展轮次提醒阈值
 _truncateToolContent MAX = 2000  // 工具输出字符上限
 _preFetchFileContext 目录数 = 2  // 最多预读目录数
 _buildFileTree maxItems = 60     // 文件树最多条目
 grep_search max_results = 50     // 搜索结果上限
 multi_file_edit 最大文件数 = 10
 ```
+
+#### 2026-03 Agent 上下文管理与工具优化（借鉴 learn-claude-code）
+
+**改造来源：** 开源项目 [learn-claude-code](https://github.com/shareAI-lab/learn-claude-code) 的 harness engineering 架构
+
+**涉及文件：**
+- `main-process/agent-runtime.js` - 全部改动均在此文件
+
+**4 项功能：**
+
+1. **micro_compact（轮内旧工具结果清理）**
+   - `_microCompact(messages)` 同步方法，while 循环每轮（round > 0）执行
+   - 保留最近 3 个 tool 消息，更旧的连同对应 assistant.tool_calls 条目和紧随 system 验证提示一起成对删除
+   - 从后往前 splice 避免索引偏移，始终保护 messages[0]（system prompt）
+   - **关键约束**：必须保证 Qwen OpenAI 兼容格式中每个 tool_call_id 都有对应 tool 消息
+
+2. **auto_compact（token 超阈值自动压缩）**
+   - `_autoCompactIfNeeded(messages, route, signal)` 异步方法，在 _microCompact 之后调用
+   - 阈值 25000 tokens（Qwen 32K 窗口预留 7K 给输出和工具定义）
+   - 超阈值时保留 system prompt + 最近 4 条消息，中间部分调用 `_summarizeConversation()` 压缩
+   - **降级方案**：LLM 压缩失败时直接丢弃中间消息
+
+3. **意图驱动工具过滤（已移除）**
+   - `TOOL_WHITELIST_BY_INTENT` **已删除**：所有意图均暴露全量 19 个工具
+   - 原因：关键词意图分类不可靠，跟进消息常被误判为 chat 导致关键工具缺失
+   - 19 个工具 ≈ 1900 tokens（仅占 Qwen 32K 的 6%），可接受的开销
+
+4. **Nag Reminder（进度提醒）**
+   - `NAG_THRESHOLD = 5`，`PROGRESS_TOOL_NAMES` = file_write/file_edit/multi_file_edit/bash_run/clipboard_set
+   - 每轮检查是否有成功的变更类工具调用，无则 roundsSinceProgress++
+   - 超过 5 轮无实质进展时注入 `<reminder>` system 消息提醒 LLM，触发后重置计数器
+
+#### 2026-03 Agent 工具调用修复（第二轮对话后不使用工具问题）
+
+**根本原因：** 基于关键词的 `classifyIntent()` 将跟进消息误判为 `chat` 意图，`TOOL_WHITELIST_BY_INTENT` 导致 chat 只有 6 个工具（缺少 bash_run/file_write/file_read 等），agent 无法执行实际操作。
+
+**涉及文件：**
+- `main-process/agent-runtime.js` — 全部改动
+
+**3 项修复：**
+1. **移除 TOOL_WHITELIST_BY_INTENT**：所有意图暴露全量 19 个工具，让 LLM 自主决定
+2. **会话级意图继承**：新增 `classifyIntentWithSession()` 函数，如果上一轮 run 是 task/code 且当前消息匹配跟进模式（<50字或以"好的/继续/再/改一下"等开头），自动继承上一轮意图
+3. **通用工具使用指南**：所有意图（不仅 task/code）都注入简短工具提示，鼓励 LLM 主动使用工具
+
+**参数调整：**
+- `MAX_TOOL_ROUNDS_BY_INTENT.chat`: 3 → 5（聊天中跟进任务可能需要多步操作）
+
+**跟进模式关键词：**
+`好的|好|嗯|对|是的|可以|行|ok|继续|然后呢|接着|再|还有|那|也|帮我|不对|不行|错了|重新|重来|换一个|改一下|试试|这个`
 
 #### 2026-03 聊天窗口重设计（团队协作完善产品）
 
@@ -966,6 +1017,159 @@ html.duckduckgo.com → DDG Instant API → Google News RSS（新闻类）
 - 已有用户的 `api-keys.json` 不会被删除，但不再读取
 - 设置面板 AI Key 管理区域替换为引擎信息展示
 - 初始化向导减少一步，体验更流畅
+
+#### 2026-03 初始化引导页重设计（用户信息全覆盖）
+
+**改造目标：** 确保所有应由用户确认的信息在首次安装时完成采集，避免任何硬编码默认值先于用户选择出现。
+
+**涉及文件：**
+- `windows/init-window.html` - **完全重写**：从 3 步扩展为 4 步向导，增加欢迎页和兴趣/主题选择
+- `src/storage.js` - **更新**：DEFAULTS.settings 新增 `userName`、`userGender`、`interests` 字段
+- `src/prompts.js` - **更新**：所有 4 种性格 systemPrompt 中的硬编码「主人」替换为 `{ownerName}` 占位符；`getPersonalityPrompt()` 新增 `ownerName` 参数
+- `src/app-vanilla.js` - **更新**：`openInitModal()` 窗口尺寸 500×580→520×620；`handleInitCompleted()` 新增保存 userName/userGender/interests/theme；`handleInitSkipped()` 新增安全默认值；`saveData()` 保护 userName 防覆盖
+- `main-process/agent-runtime.js` - **更新**：`_buildMessages()` 从 session metadata 读取 userName 并注入 system prompt
+- `windows/chat-window.html` - **更新**：新增 `getCurrentUserNameSetting()` 函数；`ensureAgentSession()` 传入 userName 到 session metadata
+
+**4 步向导流程：**
+```
+Step 1（欢迎页）→ Step 2（用户信息：昵称*+性别+生日+兴趣标签）→ Step 3（宠物选择）→ Step 4（性格+主题）
+```
+
+**新增动画效果：**
+- `welcomeBounceIn`：弹性入场（0.8s spring）
+- `welcomeFadeUp`：渐入上浮（staggered 0.3-0.9s）
+- `welcomeFloat`：持续浮动（3s infinite）
+- `tagPop`：兴趣标签选中弹出（0.25s）
+- `petSelectPop`：宠物选择弹跳（0.35s）
+- `personalityPop`：性格卡片弹出（0.3s）
+- `completePulse`：完成按钮脉冲（0.3s）
+
+**用户信息采集清单：**
+| 信息 | 必填 | 存储 key | 默认值（跳过时） |
+|------|------|----------|------------------|
+| 昵称 | 是 | userName | '主人' |
+| 性别 | 否 | userGender | '' |
+| 生日 | 否 | (记忆系统) | '' |
+| 兴趣 | 否 | interests | [] |
+| 宠物 | 是 | selectedPet | '🐱' |
+| 宠物名 | 否 | petName | '小伙伴' |
+| 性格 | 是 | personality | 'healing' |
+| 主题 | 是 | (ThemeManager) | 'lazyCat' |
+
+**{ownerName} 注入链路：**
+```
+用户填写昵称 → settings.userName → chat-window 读取 → session metadata → agent-runtime → system prompt
+性格 prompt → getPersonalityPrompt(type, ownerName) → {ownerName} 替换 → AI 使用用户昵称称呼
+```
+
+#### 2026-03 Agent 智能化优化（意图分类弱化 + 审批人性化 + ask_user 技能）
+
+**涉及文件：**
+- `main-process/agent-runtime.js` - 修改：MAX_TOOL_ROUNDS_BY_INTENT chat 1→3、vision 1→5；移除附件时清空工具列表的限制；通用工具使用指南注入所有意图的 system prompt；集成 ApprovalHumanizer；新增 respondToQuestion() 方法；工具执行传递 onAskUser 回调
+- `main-process/humanizer.js` - **新增**：审批弹窗人性化描述生成器，支持 file_write/file_edit/multi_file_edit/bash_run/open_app/git_ops 六种工具的自然语言描述
+- `main-process/skill-executor.js` - 新增：pendingQuestions Map、ask_user 内置处理器、respondToQuestion() 方法
+- `skills/ask-user/SKILL.md` - **新增**：ask_user 技能声明（暂停任务向用户提问）
+- `main.js` - 新增：`agent:respond-to-question` IPC handler
+- `preload.js` - 新增：PetAgent.respondToQuestion 桥接
+- `windows/chat-window.html` - 修改：showAgentApproval 使用 humanized 自然语言描述；showApprovalDialog 支持 isDangerous 高风险样式；新增 ask_user 提问弹窗 UI（选项模式+文本输入模式）；事件处理新增 user.question.requested
+
+**意图分类弱化：**
+- chat: 1→3 轮（允许聊天中调用搜索/天气等工具）
+- vision: 1→5 轮（允许多步视觉分析）
+- 附件不再清空工具列表，LLM 自主决定是否使用工具
+- 所有意图注入通用工具使用指南
+
+**审批弹窗人性化：**
+- 原来显示 `Approve tool file_write` + JSON.stringify(args)
+- 现在显示 `确认创建/覆盖文件` + `AI 想要创建文件：xxx.js（代码）\n12 行，450 字`
+- 高风险命令（bash_run 含 format/diskpart/rm -rf 等）确认按钮变红色，文字改为"我已知悉风险，确认执行"
+
+**ask_user 技能全链路：**
+```
+LLM tool_call ask_user → SkillExecutor._askUser → 创建 Promise 挂起
+  → onAskUser 回调 → eventBus publish 'user.question.requested'
+  → chat-window 显示提问弹窗（选项按钮/文本输入）
+  → 用户回答 → PetAgent.respondToQuestion → IPC → agentRuntime.respondToQuestion
+  → skillExecutor.respondToQuestion → resolve Promise → 工具返回答案给 LLM
+```
+
+**当前内置技能总览（19 个，新增 ask_user）：**
+| 技能 | 层 | 类型 |
+|------|----|------|
+| ask_user | Node 原生 | 安全（无需确认） |
+| （其余 18 个同前） | | |
+
+#### 2026-03 Agent 全模块质量提升（评分 9+ 达标）
+
+**改造目标：** 将 Agent 核心、个性化、后端安全、UI、窗口位置五个模块的评分全部提升至 9/10 以上。
+
+**涉及文件：**
+- `main-process/agent-runtime.js` - 修改：`_microCompact` 从固定保留最近 3 个 tool 消息改为按 assistant 轮次分组保留最近 2 轮的所有 tool 消息（修复并发 4+ 工具时破坏 tool_call_id 对应关系）；`_buildMessages` 新增 interests（兴趣标签）注入 system prompt
+- `src/prompts.js` - 修改：`getPersonalityPrompt` 的 `{ownerName}` 替换从 `replace()` 改为 `split().join()`，避免用户昵称含 `$` 时被解释为替换模式
+- `server/src/index.js` - 修改：CORS 无 Origin 时不再放行 `*`（仅 `/health` 例外）；新增 IP 维度 rate limiting（内存 Map，60 次/分钟，429 响应 + 标准头，/health 豁免，5 分钟自动清理）
+- `windows/settings-window.html` - 修改：删除内联 `loadAccountInfo()` 和账号按钮事件绑定（与 settings-window-runtime.js 重复），消除双重事件绑定
+- `windows/chat-window.html` - 修改：`ensureAgentSession` 传入 interests 到 session metadata
+- `main.js` - 修改：`createWindow()` 末尾新增 `screen.on('display-removed')` 监听，拔掉外接屏时自动将窗口恢复到主显示器
+
+**_microCompact 新算法：**
+```
+1. 扫描所有含 tool_calls 的 assistant 消息
+2. 收集最近 2 个 assistant 的 tool_call_id → keepCallIds Set
+3. 不在 keepCallIds 中的 tool 消息 + 对应 assistant.tool_calls 条目 + 紧随 system 验证消息 → 删除
+4. 从后往前 splice，保护 messages[0]
+```
+
+**Rate Limiting 参数：**
+- 窗口：60 秒，最大 60 次/IP
+- 响应头：`X-RateLimit-Limit` + `X-RateLimit-Remaining`
+- 清理间隔：5 分钟
+
+## 未来创意评估文档索引
+
+| 创意 | 评估文档 | 评分 | 状态 |
+|------|----------|------|------|
+| 宠物云空间 + 专属服务器 | `docs/plans/2026-03-22-cloud-space-implementation-plan.md` | 8/10 | 待 Sprint 3 后启动 |
+| 自学习自进化 Agent | `docs/evaluation-self-evolving-agent.md` | 8.3/10 | 待合适时机 |
+| 类人思考模式 | `docs/evaluation-human-like-thinking.md` | 9.1/10 | **已实施 2026-03-22** |
+
+#### 2026-03 类人思考协议（Agent 不轻言放弃）
+
+**改造目标：** Agent 遇到没有精确匹配工具的任务时，不再直接说"做不到"，而是像人类一样分步思考、组合工具、搜索方案、尝试执行。
+
+**学术基础：** Reflexion (NeurIPS 2023) 自我反思、Voyager (Microsoft) 技能库、EvoSkill (Sentient) 失败驱动进化
+**论文 Prompt 模式提取报告：** `docs/research-prompt-patterns-from-papers.md`
+
+**涉及文件：**
+- `main-process/agent-runtime.js` - 核心改动：HUMAN_THINKING_PROTOCOL 常量 + 经验记忆标记
+- `windows/chat-window.html` - 思考可视化：`getThinkingStepText()` 19 个工具映射 + `updateThinkingStep()` + `.thinking-step` CSS 动画 + `experience.recorded` 事件处理
+
+**3 项功能：**
+
+1. **类人思考协议注入（HUMAN_THINKING_PROTOCOL）**
+   - 文件顶部新增 `HUMAN_THINKING_PROTOCOL` 常量（融合 Reflexion 自我反思 + Voyager 技能检索 + EvoSkill 失败驱动进化）
+   - `_buildMessages()` 中替换原有 `【工具使用指南】`（4 行简单规则）为完整 6 步思考协议
+   - 所有意图均注入（chat/search/task/code/vision），不限于 task/code
+   - 6 步：理解任务 → 能力匹配 → 检索经验 → 搜索合成执行 → 失败自我反思 → 验证总结
+   - 失败反思格式（来自 Reflexion 论文）：具体错误→根本原因→错误假设→改进方向
+   - 核心原则：bash_run + web_search 组合可完成任何命令行任务，至少尝试 2 种方案才可说做不到
+
+2. **经验记忆标记（experience.recorded 事件）**
+   - 工具循环结束后、返回 finalText 之前，检测本次执行是否为多工具成功任务
+   - 条件：`round > 1` 且有成功的工具调用
+   - 通过 `eventBus.publish` 发布 `experience.recorded` 事件
+   - payload 包含：task（前 200 字）、toolsUsed（去重工具名列表）、rounds、success
+   - 静默失败，不影响主流程
+
+3. **意图轮次确认**
+   - 当前值已足够：task/code=15, search=8, chat=3, vision=5
+   - 类人思考协议内置"最多 3 种方案重试"，在 15 轮内绑定足够
+
+**协议注入链路：**
+```
+_buildMessages() → systemPrompt += HUMAN_THINKING_PROTOCOL → 所有意图
+  └── task/code 额外追加工具调用规范（offset/limit/bash_run 验证等）
+  └── search 额外追加搜索强制规范
+```
 
 ### 重要提醒
 - 必须回复我中文

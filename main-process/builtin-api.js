@@ -1,31 +1,42 @@
-// 内置 API 配置
-// 统一管理所有 AI API 调用的凭证和端点
-// 用户无需配置 API Key，开箱即用
+// Built-in gateway route configuration.
+// Chat and agent stay on qwen3.5-plus; image-heavy scenes use a vision-capable model.
+
+const SCENE_MODELS = {
+  chat: 'qwen3.5-plus',
+  agent: 'qwen3.5-plus',
+  vision: 'qwen3-vl-plus',
+  translate: 'qwen3.5-plus',
+  ocr: 'qwen3-vl-plus'
+};
 
 const BUILTIN_API = {
-  // 主模型：Qwen3.5-plus（全模态）
   provider: 'qwen',
-  model: 'qwen3.5-plus',
+  model: SCENE_MODELS.chat,
+  sceneModels: SCENE_MODELS,
   gatewayUrl: 'http://localhost:3000/api/v1',
   endpoint: 'http://localhost:3000/api/v1/chat/completions',
   supportsTools: true,
   supportsVision: true,
 
-  // 事实提取和主对话都通过后端网关
   factExtraction: {
-    model: 'qwen3.5-plus',
+    model: SCENE_MODELS.chat,
     endpoint: 'http://localhost:3000/api/v1/chat/completions'
   },
 
-  // 获取完整路由对象（兼容 agent-runtime 的 route 格式）
+  getSceneModel(scene) {
+    return this.sceneModels[scene] || this.model;
+  },
+
   getRoute(scene) {
+    const resolvedScene = scene || 'chat';
     return {
       provider: this.provider,
-      model: this.model,
+      model: this.getSceneModel(resolvedScene),
       endpoint: this.endpoint,
-      scene: scene || 'chat',
+      scene: resolvedScene,
       credentialSource: 'gateway',
-      supportsTools: this.supportsTools
+      supportsTools: this.supportsTools,
+      supportsVision: this.supportsVision
     };
   }
 };
